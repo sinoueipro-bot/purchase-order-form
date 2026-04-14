@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>発注書入力フォーム</title>
+<style>
+:root {
+  --primary: #1a73e8;
+  --primary-dark: #1557b0;
+  --danger: #d93025;
+  --success: #188038;
+  --warning: #f9ab00;
+  --bg: #f8f9fa;
+  --card: #ffffff;
+  --border: #dadce0;
+  --text: #202124;
+  --text-secondary: #5f6368;
+  --radius: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; padding-bottom: 80px;
+}
+.header { background: var(--primary); color: white; padding: 16px; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.header h1 { font-size: 18px; font-weight: 600; }
+.header p { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+.section { background: var(--card); margin: 12px; border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
+.section-title { background: #e8f0fe; color: var(--primary); padding: 10px 16px; font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--border); }
+.field-group { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; }
+.field-group:last-child { border-bottom: none; }
+.field-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+.required-badge { background: var(--danger); color: white; font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+input, select, textarea { width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 16px; font-family: inherit; background: white; color: var(--text); transition: border-color 0.2s; -webkit-appearance: none; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,115,232,0.15); }
+input.invalid, select.invalid { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(217,48,37,0.1); }
+select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%235f6368' d='M2 4l4 4 4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+textarea { resize: vertical; min-height: 60px; }
+.row { display: flex; gap: 8px; }
+.row > * { flex: 1; }
+.line-item { background: #fafbfc; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin: 8px 16px; position: relative; }
+.line-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.line-item-num { font-weight: 700; color: var(--primary); font-size: 13px; }
+.line-item .row { margin-bottom: 6px; }
+.line-item .field-label { margin-bottom: 3px; font-size: 11px; }
+.line-item input, .line-item select { padding: 8px 10px; font-size: 14px; }
+.amount-display { text-align: right; font-weight: 700; color: var(--primary); font-size: 16px; padding: 8px 0 0; }
+.btn-remove-line { background: none; border: none; color: var(--danger); font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+.btn-add-line { display: flex; align-items: center; justify-content: center; gap: 6px; width: calc(100% - 32px); margin: 8px 16px 16px; padding: 10px; border: 2px dashed var(--border); border-radius: var(--radius); background: none; color: var(--primary); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.btn-add-line:hover { border-color: var(--primary); background: #e8f0fe; }
+.total-bar { background: var(--primary); color: white; margin: 0 12px; padding: 14px 16px; border-radius: var(--radius); display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 16px; box-shadow: 0 2px 6px rgba(26,115,232,0.3); }
+.total-bar .label { font-size: 14px; }
+.total-bar .amount { font-size: 20px; }
+.radio-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.radio-option { flex: 1; min-width: 80px; }
+.radio-option input[type="radio"] { display: none; }
+.radio-option label { display: block; text-align: center; padding: 10px; border: 2px solid var(--border); border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; transition: all 0.2s; }
+.radio-option input:checked + label { border-color: var(--primary); background: #e8f0fe; color: var(--primary); }
+.toggle-wrapper { display: flex; align-items: center; gap: 12px; }
+.toggle { position: relative; width: 50px; height: 28px; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; inset: 0; background: #ccc; border-radius: 28px; cursor: pointer; transition: 0.3s; }
+.toggle-slider::before { content: ''; position: absolute; width: 22px; height: 22px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.3s; }
+.toggle input:checked + .toggle-slider { background: var(--danger); }
+.toggle input:checked + .toggle-slider::before { transform: translateX(22px); }
+.urgent-label { font-weight: 600; color: var(--text-secondary); }
+.urgent-label.active { color: var(--danger); }
+
+/* 送信ボタン（1つに統合） */
+.send-area { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 100; }
+.btn-submit { width: 100%; padding: 14px; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: white; transition: all 0.2s; }
+.btn-submit:disabled { background: #e0e0e0 !important; color: #999 !important; cursor: not-allowed; }
+.btn-submit:not(:disabled):hover { background: var(--primary-dark); }
+.btn-submit.sending { background: var(--warning); }
+
+/* モーダル */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: flex-end; justify-content: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: white; border-radius: 16px 16px 0 0; width: 100%; max-width: 500px; max-height: 85vh; overflow-y: auto; padding: 20px; animation: slideUp 0.3s ease; }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal h2 { font-size: 18px; margin-bottom: 16px; text-align: center; color: var(--primary); }
+.preview-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
+.preview-table th, .preview-table td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; }
+.preview-table th { background: #f0f4f9; font-weight: 600; white-space: nowrap; width: 30%; }
+.preview-detail-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 16px; }
+.preview-detail-table th, .preview-detail-table td { border: 1px solid var(--border); padding: 4px 6px; text-align: center; }
+.preview-detail-table th { background: #e8f0fe; font-weight: 600; }
+.preview-total { text-align: right; font-size: 18px; font-weight: 700; color: var(--primary); margin-bottom: 16px; }
+.btn-confirm { width: 100%; padding: 14px; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; background: var(--success); color: white; margin-bottom: 8px; }
+.btn-confirm:disabled { background: #ccc; cursor: not-allowed; }
+.btn-close-modal { display: block; width: 100%; padding: 12px; border: 2px solid var(--border); border-radius: var(--radius); background: white; font-size: 14px; cursor: pointer; font-family: inherit; color: var(--text-secondary); }
+
+/* トースト */
+.toast { display: none; position: fixed; top: 80px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 8px; font-size: 14px; z-index: 300; font-weight: 600; }
+.toast.show { display: block; animation: fadeInOut 3s ease; }
+.toast.success { background: var(--success); color: white; }
+.toast.error { background: var(--danger); color: white; }
+.toast.info { background: #333; color: white; }
+@keyframes fadeInOut { 0% { opacity: 0; } 10% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 送信完了画面 */
+.success-screen { display: none; text-align: center; padding: 60px 20px; }
+.success-screen.show { display: block; }
+.success-screen .icon { font-size: 64px; margin-bottom: 16px; }
+.success-screen h2 { color: var(--success); margin-bottom: 8px; }
+.success-screen p { color: var(--text-secondary); margin-bottom: 24px; }
+.btn-new { padding: 14px 32px; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; background: var(--primary); color: white; }
+
+.error-summary { display: none; background: #fce8e6; color: var(--danger); padding: 10px 16px; margin: 0 12px; border-radius: var(--radius); font-size: 13px; font-weight: 500; }
+.error-summary.show { display: block; }
+
+/* ローディング */
+.spinner { display: inline-block; width: 18px; height: 18px; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid white; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>発注書入力フォーム</h1>
+  <p>スプレッドシート自動記録 + 承認者メール通知</p>
+</div>
+
+<div id="formArea">
+
+<!-- 基本情報 -->
+<div class="section">
+  <div class="section-title">基本情報</div>
+  <div class="field-group">
+    <div class="row">
+      <div>
+        <div class="field-label"><span class="required-badge">必須</span>発行日</div>
+        <input type="date" id="issueDate" required>
+      </div>
+      <div>
+        <div class="field-label"><span class="required-badge">必須</span>注文No.</div>
+        <input type="text" id="orderNo" placeholder="自動採番" required>
+      </div>
+    </div>
+  </div>
+  <div class="field-group">
+    <div class="field-label"><span class="required-badge">必須</span>仕入先</div>
+    <select id="supplier" required><option value="">選択してください</option></select>
+  </div>
+  <div class="field-group">
+    <div class="field-label"><span class="required-badge">必須</span>事業所</div>
+    <select id="branch" required><option value="">選択してください</option></select>
+  </div>
+  <div class="field-group">
+    <div class="field-label">現場名</div>
+    <input type="text" id="siteName" placeholder="現場名を入力">
+  </div>
+</div>
+
+<!-- 明細行 -->
+<div class="section">
+  <div class="section-title">注文明細</div>
+  <div id="lineItems"></div>
+  <button type="button" class="btn-add-line" onclick="addLineItem()">+ 行を追加</button>
+</div>
+
+<!-- 合計 -->
+<div class="total-bar">
+  <span class="label">合計金額</span>
+  <span class="amount" id="totalAmount">&yen;0</span>
+</div>
+
+
+<!-- その他 -->
+<div class="section">
+  <div class="section-title">その他</div>
+  <div class="field-group">
+    <div class="field-label">特記事項</div>
+    <textarea id="notes" placeholder="特記事項があれば入力"></textarea>
+  </div>
+  <div class="field-group">
+    <div class="field-label"><span class="required-badge">必須</span>注文者</div>
+    <select id="orderer" required><option value="">選択してください</option></select>
+  </div>
+  <div class="field-group">
+    <div class="field-label">緊急</div>
+    <div class="toggle-wrapper">
+      <label class="toggle"><input type="checkbox" id="urgent"><span class="toggle-slider"></span></label>
+      <span class="urgent-label" id="urgentLabel">PASS</span>
+    </div>
+  </div>
+</div>
+
+<!-- 承認者選択 -->
+<div class="section">
+  <div class="section-title">送信先</div>
+  <div class="field-group">
+    <div class="field-label"><span class="required-badge">必須</span>承認者</div>
+    <select id="approver" required><option value="">選択してください</option></select>
+  </div>
+</div>
+
+<div class="error-summary" id="errorSummary"></div>
+
+</div><!-- /formArea -->
+
+<!-- 送信完了画面 -->
+<div class="success-screen" id="successScreen">
+  <div class="icon">&#10004;&#65039;</div>
+  <h2>発注書を送信しました</h2>
+  <p id="successMessage">スプレッドシートに記録し、承認者にメールを送信しました。</p>
+  <button class="btn-new" onclick="resetForm()">新しい発注書を作成</button>
+</div>
+
+<!-- 送信ボタン -->
+<div class="send-area" id="sendArea">
+  <button type="button" class="btn-submit" id="btnSubmit" onclick="handleSend()" disabled>
+    <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    送信（スプシ記録 + メール通知）
+  </button>
+</div>
+
+<!-- プレビューモーダル -->
+<div class="modal-overlay" id="previewModal">
+  <div class="modal">
+    <h2>発注書プレビュー</h2>
+    <div id="previewContent"></div>
+    <button class="btn-confirm" id="btnConfirm" onclick="executeSend()">
+      この内容で送信する
+    </button>
+    <button class="btn-close-modal" onclick="closeModal()">戻って修正する</button>
+  </div>
+</div>
+
+<!-- トースト -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// ★★★ GASデプロイ後に↓のURLを書き換えてください ★★★
+// ============================================================
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzqBN_Kj3hMVwrSBo7tF_B2hq6oU3uugBUGbj0Gf1-cBHs4vzDR5koS-5KRwCMFUcAO0Q/exec';
+
+// ============ マスターデータ ============
+const SUPPLIERS = [
+  { name: '愛知時計電機株式会社' }, { name: '岩谷産業株式会社' },
+  { name: '株式会社栄智機器' }, { name: 'セントラル石油瓦斯株式会社' },
+  { name: '中国工業株式会社' }, { name: '株式会社長府製作所' },
+  { name: '千代田エル・ピー・ジー機器株式会社' }, { name: '日通商事株式会社' },
+  { name: 'ノーリツ九州販売株式会社' }, { name: '株式会社パロマ' },
+  { name: '株式会社マルゼン' }, { name: 'タニコー株式会社' },
+  { name: '渡辺パイプ株式会社' }
+];
+const BRANCHES = [
+  { name: '本社' }, { name: '福岡店' }, { name: '飯塚ガスセンター' }
+];
+const MAKERS = [
+  'I・T・O','TOTO','愛知時計電機','カグラベーパーテック','桂精機',
+  '新コスモス電機','大栄産業','タカギ','タカラスタンダード','タニコー',
+  '中国工業','長府製作所','ノーリツ','パーパス','初田製作所',
+  'パロマ','ホクエイ','ホシザキ','マルゼン','宮入バルブ製作所',
+  '矢崎','リコーエレメックス','リンナイ'
+];
+const PRODUCTS = [
+  '鋳物コンロ','ガス栓','給湯器','給湯暖房機','テーブルコンロ',
+  'ビルトインコンロ','リモコン','配管カバー','調整器','ボンベック'
+];
+const STAFF = [
+  '亀谷','原田','川口','三浦','渡邊','入江','松永','川上',
+  '辻塚','三井','中嶋','岩﨑','久我','脇村','井上将','井上雅',
+  '井上純','城丸','麻生','青栁','吉村'
+];
+// ★ 承認者リスト（メールアドレスを実際のものに変更してください）
+const APPROVERS = [
+  { name: '原田', email: 'harada@example.com' },
+  { name: '岩﨑', email: 'iwasaki@example.com' },
+  { name: '脇村', email: 'wakimura@example.com' },
+  { name: '川口', email: 'kawaguchi@example.com' }
+];
+const FORM_TYPES = [
+  { value: 'U', label: 'U：売上あり' },
+  { value: 'M', label: 'M：無償' }
+];
+
+// ============ 初期化 ============
+let lineItemCount = 0;
+
+document.addEventListener('DOMContentLoaded', () => {
+  initDropdowns();
+  setDefaultDate();
+  generateOrderNo();
+  addLineItem();
+  setupValidation();
+});
+
+function initDropdowns() {
+  const sup = document.getElementById('supplier');
+  SUPPLIERS.forEach(s => sup.add(new Option(s.name, s.name)));
+  const br = document.getElementById('branch');
+  BRANCHES.forEach(b => br.add(new Option(b.name, b.name)));
+  const ord = document.getElementById('orderer');
+  STAFF.forEach(s => ord.add(new Option(s, s)));
+  const app = document.getElementById('approver');
+  APPROVERS.forEach(a => app.add(new Option(a.name + '（' + a.email + '）', a.email)));
+}
+
+function setDefaultDate() {
+  document.getElementById('issueDate').value = new Date().toISOString().split('T')[0];
+}
+
+function generateOrderNo() {
+  const n = new Date();
+  document.getElementById('orderNo').value =
+    n.getFullYear() + String(n.getMonth()+1).padStart(2,'0') + String(n.getDate()).padStart(2,'0') + '001';
+}
+
+// ============ 明細行 ============
+function addLineItem() {
+  lineItemCount++;
+  const num = lineItemCount;
+  const c = document.getElementById('lineItems');
+  const d = document.createElement('div');
+  d.className = 'line-item'; d.id = 'line-' + num;
+  d.innerHTML = '<div class="line-item-header"><span class="line-item-num">No.' + num + '</span>' +
+    (num > 1 ? '<button type="button" class="btn-remove-line" onclick="removeLineItem(' + num + ')">&times;</button>' : '') +
+    '</div>' +
+    '<div class="row"><div><div class="field-label"><span class="required-badge">必須</span>メーカー</div>' +
+    '<select id="maker-' + num + '" onchange="validate()"><option value="">選択</option>' +
+    MAKERS.map(m => '<option value="' + m + '">' + m + '</option>').join('') + '</select></div>' +
+    '<div><div class="field-label"><span class="required-badge">必須</span>形態</div>' +
+    '<select id="type-' + num + '" onchange="validate()"><option value="">選択</option>' +
+    FORM_TYPES.map(t => '<option value="' + t.value + '">' + t.label + '</option>').join('') + '</select></div></div>' +
+    '<div><div class="field-label"><span class="required-badge">必須</span>商品名</div>' +
+    '<input type="text" id="product-' + num + '" list="productList" placeholder="商品名を入力/選択" oninput="validate()"></div>' +
+    '<div><div class="field-label">型式</div><input type="text" id="model-' + num + '" placeholder="型式"></div>' +
+    '<div class="row"><div><div class="field-label"><span class="required-badge">必須</span>数量</div>' +
+    '<input type="number" id="qty-' + num + '" min="1" placeholder="0" oninput="calcLineAmount(' + num + ')"></div>' +
+    '<div><div class="field-label"><span class="required-badge">必須</span>単価</div>' +
+    '<input type="number" id="price-' + num + '" min="0" placeholder="0" oninput="calcLineAmount(' + num + ')"></div></div>' +
+    '<div class="amount-display" id="amount-' + num + '">&yen;0</div>' +
+    '<div><div class="field-label">備考</div><input type="text" id="remark-' + num + '" placeholder="備考"></div>';
+  c.appendChild(d);
+  validate();
+}
+
+function removeLineItem(num) {
+  const el = document.getElementById('line-' + num);
+  if (el) { el.remove(); calcTotal(); validate(); }
+}
+
+function calcLineAmount(num) {
+  const q = parseInt(document.getElementById('qty-' + num)?.value) || 0;
+  const p = parseInt(document.getElementById('price-' + num)?.value) || 0;
+  const el = document.getElementById('amount-' + num);
+  if (el) el.textContent = '\u00a5' + (q * p).toLocaleString();
+  calcTotal(); validate();
+}
+
+function calcTotal() {
+  let total = 0;
+  document.querySelectorAll('.line-item').forEach(item => {
+    const n = item.id.replace('line-', '');
+    total += (parseInt(document.getElementById('qty-' + n)?.value) || 0) *
+             (parseInt(document.getElementById('price-' + n)?.value) || 0);
+  });
+  document.getElementById('totalAmount').textContent = '\u00a5' + total.toLocaleString();
+}
+
+// ============ バリデーション ============
+function validate() {
+  const ok = getValidationErrors().length === 0;
+  document.getElementById('btnSubmit').disabled = !ok;
+  return ok;
+}
+
+function getValidationErrors() {
+  const e = [];
+  if (!document.getElementById('issueDate').value) e.push('発行日');
+  if (!document.getElementById('orderNo').value) e.push('注文No.');
+  if (!document.getElementById('supplier').value) e.push('仕入先');
+  if (!document.getElementById('branch').value) e.push('事業所');
+  const lines = document.querySelectorAll('.line-item');
+  if (lines.length === 0) e.push('明細行');
+  lines.forEach(item => {
+    const n = item.id.replace('line-', '');
+    if (!document.getElementById('maker-' + n)?.value) e.push('明細' + n + ':メーカー');
+    if (!document.getElementById('product-' + n)?.value) e.push('明細' + n + ':商品名');
+    if (!document.getElementById('qty-' + n)?.value) e.push('明細' + n + ':数量');
+    if (!document.getElementById('price-' + n)?.value) e.push('明細' + n + ':単価');
+    if (!document.getElementById('type-' + n)?.value) e.push('明細' + n + ':形態');
+  });
+  if (!document.getElementById('orderer').value) e.push('注文者');
+  if (!document.getElementById('approver').value) e.push('承認者');
+  return e;
+}
+
+function setupValidation() {
+  document.querySelectorAll('input,select,textarea').forEach(el => {
+    el.addEventListener('change', validate);
+    el.addEventListener('input', validate);
+  });
+  document.getElementById('urgent').addEventListener('change', function() {
+    document.getElementById('urgentLabel').textContent = this.checked ? '緊急' : 'PASS';
+    document.getElementById('urgentLabel').classList.toggle('active', this.checked);
+  });
+}
+
+// ============ データ収集 ============
+function collectFormData() {
+  const lines = [];
+  document.querySelectorAll('.line-item').forEach(item => {
+    const n = item.id.replace('line-', '');
+    const q = parseInt(document.getElementById('qty-' + n)?.value) || 0;
+    const p = parseInt(document.getElementById('price-' + n)?.value) || 0;
+    lines.push({
+      maker: document.getElementById('maker-' + n)?.value || '',
+      product: document.getElementById('product-' + n)?.value || '',
+      model: document.getElementById('model-' + n)?.value || '',
+      qty: q, price: p, amount: q * p,
+      remark: document.getElementById('remark-' + n)?.value || '',
+      type: document.getElementById('type-' + n)?.value || ''
+    });
+  });
+  const total = lines.reduce((s, l) => s + l.amount, 0);
+  const email = document.getElementById('approver').value;
+  const approver = APPROVERS.find(a => a.email === email);
+  return {
+    issueDate: document.getElementById('issueDate').value,
+    orderNo: document.getElementById('orderNo').value,
+    supplier: document.getElementById('supplier').value,
+    branch: document.getElementById('branch').value,
+    lines, total,
+    siteName: document.getElementById('siteName').value,
+    notes: document.getElementById('notes').value,
+    orderer: document.getElementById('orderer').value,
+    urgent: document.getElementById('urgent').checked,
+    approverEmail: email,
+    approverName: approver ? approver.name : ''
+  };
+}
+
+// ============ 送信処理 ============
+function handleSend() {
+  if (getValidationErrors().length > 0) return;
+  showPreview();
+}
+
+function showPreview() {
+  const data = collectFormData();
+  let rows = '';
+  data.lines.forEach((l, i) => {
+    rows += '<tr><td>' + (i+1) + '</td><td>' + l.maker + '</td><td>' + l.product + '</td><td>' +
+      (l.model||'-') + '</td><td class="text-right">' + l.qty + '</td><td class="text-right">&yen;' +
+      l.price.toLocaleString() + '</td><td class="text-right">&yen;' + l.amount.toLocaleString() +
+      '</td><td>' + l.type + '</td></tr>';
+  });
+  document.getElementById('previewContent').innerHTML =
+    '<table class="preview-table">' +
+    '<tr><th>発行日</th><td>' + data.issueDate + '</td></tr>' +
+    '<tr><th>注文No.</th><td>' + data.orderNo + '</td></tr>' +
+    '<tr><th>仕入先</th><td>' + data.supplier + '</td></tr>' +
+    '<tr><th>事業所</th><td>' + data.branch + '</td></tr></table>' +
+    '<table class="preview-detail-table"><thead><tr><th>No</th><th>メーカー</th><th>商品名</th><th>型式</th><th>数量</th><th>単価</th><th>金額</th><th>形態</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<div class="preview-total">合計: &yen;' + data.total.toLocaleString() + '</div>' +
+    '<table class="preview-table">' +
+    (data.siteName ? '<tr><th>現場名</th><td>' + data.siteName + '</td></tr>' : '') +
+    (data.notes ? '<tr><th>特記</th><td>' + data.notes + '</td></tr>' : '') +
+    '<tr><th>注文者</th><td>' + data.orderer + '</td></tr>' +
+    '<tr><th>状態</th><td>' + (data.urgent ? '<span style="color:red;font-weight:bold">緊急</span>' : 'PASS') + '</td></tr>' +
+    '<tr><th>承認者</th><td>' + data.approverName + '</td></tr></table>';
+  document.getElementById('previewModal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('previewModal').classList.remove('active');
+}
+
+async function executeSend() {
+  const btn = document.getElementById('btnConfirm');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 送信中...';
+
+  const data = collectFormData();
+
+  // GAS URLが未設定の場合はフォールバック（mailto）
+  if (!GAS_URL || GAS_URL === 'YOUR_GAS_WEB_APP_URL_HERE') {
+    // フォールバック: mailtoで送信
+    const subject = encodeURIComponent((data.urgent ? '【緊急】' : '') + '発注承認依頼: ' + data.supplier + ' / ' + data.orderNo);
+    const body = encodeURIComponent(buildTextMessage(data));
+    window.location.href = 'mailto:' + data.approverEmail + '?subject=' + subject + '&body=' + body;
+    closeModal();
+    btn.disabled = false;
+    btn.textContent = 'この内容で送信する';
+    showToast('GAS未設定のためメーラーで送信します', 'info');
+    return;
+  }
+
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'text/plain' }
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      closeModal();
+      document.getElementById('formArea').style.display = 'none';
+      document.getElementById('sendArea').style.display = 'none';
+      document.getElementById('successScreen').classList.add('show');
+      document.getElementById('successMessage').textContent =
+        '注文No.' + data.orderNo + ' をスプレッドシートに記録し、' + data.approverName + 'さんにメール通知しました。';
+      showToast('送信完了', 'success');
+    } else {
+      throw new Error(result.error || '送信に失敗しました');
+    }
+  } catch (err) {
+    showToast('エラー: ' + err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'この内容で送信する';
+  }
+}
+
+function buildTextMessage(data) {
+  let m = (data.urgent ? '【緊急】' : '') + '発注承認依頼\n\n';
+  m += '発行日: ' + data.issueDate + '\n注文No.: ' + data.orderNo + '\n';
+  m += '仕入先: ' + data.supplier + '\n事業所: ' + data.branch + '\n\n【注文明細】\n';
+  data.lines.forEach((l, i) => {
+    m += (i+1) + '. ' + l.maker + ' / ' + l.product;
+    if (l.model) m += ' (' + l.model + ')';
+    m += '  数量:' + l.qty + ' 金額:' + l.amount.toLocaleString() + '円\n';
+  });
+  m += '\n合計: ' + data.total.toLocaleString() + '円\n\n';
+  if (data.siteName) m += '現場名: ' + data.siteName + '\n';
+  m += '注文者: ' + data.orderer + '\n状態: ' + (data.urgent ? '緊急' : 'PASS') + '\n';
+  return m;
+}
+
+function resetForm() {
+  document.getElementById('formArea').style.display = '';
+  document.getElementById('sendArea').style.display = '';
+  document.getElementById('successScreen').classList.remove('show');
+  // フォームリセット
+  document.getElementById('supplier').value = '';
+  document.getElementById('branch').value = '';
+  document.getElementById('siteName').value = '';
+  document.getElementById('notes').value = '';
+  document.getElementById('orderer').value = '';
+  document.getElementById('approver').value = '';
+  document.getElementById('urgent').checked = false;
+  document.getElementById('urgentLabel').textContent = 'PASS';
+  // 明細リセット
+  document.getElementById('lineItems').innerHTML = '';
+  lineItemCount = 0;
+  setDefaultDate();
+  generateOrderNo();
+  addLineItem();
+  validate();
+  window.scrollTo(0, 0);
+}
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (type || 'info');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// 商品名datalist
+(function() {
+  const dl = document.createElement('datalist'); dl.id = 'productList';
+  PRODUCTS.forEach(p => { const o = document.createElement('option'); o.value = p; dl.appendChild(o); });
+  document.body.appendChild(dl);
+})();
+</script>
+</body>
+</html>
