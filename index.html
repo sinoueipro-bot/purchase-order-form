@@ -898,23 +898,11 @@ async function loadEstimateList() {
   }
 }
 
-// ============ メーカー別一括発注 ============
-let batchPOEstimateId = null;
-
-function initBatchDropdowns() {
-  const ba = document.getElementById('batchApprover');
-  if (ba.options.length <= 1) {
-    APPROVERS.forEach(a => ba.add(new Option(a.name + '（' + a.email + '）', a.email)));
-    const bo = document.getElementById('batchOrderer');
-    STAFF.forEach(s => bo.add(new Option(s, s)));
-    const bb = document.getElementById('batchBranch');
-    BRANCHES.forEach(b => bb.add(new Option(b, b)));
-    document.getElementById('batchUrgent').addEventListener('change', function() {
-      document.getElementById('batchUrgentLabel').textContent = this.checked ? '緊急' : 'PASS';
-      document.getElementById('batchUrgentLabel').classList.toggle('active', this.checked);
-    });
-  }
-}
+// ============ メーカー別ステップ発注 ============
+// キュー: [{maker, supplier, lines, estimateNo}] を1件ずつ発注書タブに転記→確認→送信→次へ
+let poQueue = [];          // 残りのメーカーキュー
+let poQueueEstimateId = null;
+let poQueueDone = 0;       // 完了件数
 
 async function showBatchPOModal(estimateId) {
   showToast('見積データを取得中...', 'info');
@@ -923,53 +911,64 @@ async function showBatchPOModal(estimateId) {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || '取得失敗');
 
-    batchPOEstimateId = estimateId;
-    initBatchDropdowns();
+    poQueueEstimateId = estimateId;
+    poQueueDone = 0;
 
     // メーカーごとにグルーピング
     const groups = {};
-    const skipped = { '発注なし': [], '工事': [] };
+    const skipped = [];
     data.lines.forEach(ln => {
-      if (ln.maker === '発注なし' || ln.maker === '工事') {
-        skipped[ln.maker].push(ln);
-      } else if (ln.maker) {
+      if (!ln.maker || ln.maker === '発注なし' || ln.maker === '工事') {
+        skipped.push(ln);
+      } else {
         if (!groups[ln.maker]) groups[ln.maker] = [];
         groups[ln.maker].push(ln);
       }
     });
 
-    // 情報ヘッダー
-    document.getElementById('batchPOInfo').innerHTML =
-      '<div style="background:#f0f4f9;padding:10px 12px;border-radius:8px;font-size:13px">' +
-      '<strong style="color:var(--primary)">見積No. ' + (data.estimateNo || '') + '</strong>' +
-      (data.customerName ? ' / ' + data.customerName : '') + '</div>';
+    // キューを構築
+    poQueue = Object.keys(groups).map(maker => ({
+      maker,
+      supplier: MAKER_TO_SUPPLIER[maker] || maker,
+      lines: groups[maker],
+      estimateNo: data.estimateNo || ''
+    }));
 
-    // メーカーグループ表示
-    let html = '';
-    const makers = Object.keys(groups);
-    makers.forEach(maker => {
-      const lines = groups[maker];
-      const total = lines.reduce((s, l) => s + (l.qty || 0) * (l.price || 0), 0);
-      const supplier = MAKER_TO_SUPPLIER[maker] || maker;
+    if (poQueue.length === 0) {
+      showToast('発注対象のメーカーがありません', 'error');
+      return;
+    }
+
+    // モーダルで概要を表示
+    let html = '<div style="margin-bottom:12px">' +
+      '<div style="background:#f0f4f9;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:12px">' +
+      '<strong style="color:var(--primary)">見積No. ' + (data.estimateNo || '') + '</strong>' +
+      (data.customerName ? ' / ' + data.customerName : '') +
+      '<div style="color:var(--text-secondary);font-size:12px;margin-top:4px">メーカーごとに1枚ずつ発注書を確認・送信します</div></div>';
+
+    poQueue.forEach((q, i) => {
+      const total = q.lines.reduce((s, l) => s + (l.qty || 0) * (l.price || 0), 0);
       html += '<div style="background:#e8f0fe;border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:13px">' +
         '<div style="display:flex;justify-content:space-between;align-items:center">' +
-        '<div>✅ <strong>' + maker + '</strong> → ' + supplier + '</div>' +
+        '<div>📦 ' + (i+1) + '. <strong>' + q.maker + '</strong> → ' + q.supplier + '</div>' +
         '<div style="font-weight:700">¥' + total.toLocaleString() + '</div></div>' +
-        '<div style="color:var(--text-secondary);font-size:12px">' + lines.length + '行</div></div>';
+        '<div style="color:var(--text-secondary);font-size:12px">' + q.lines.length + '行</div></div>';
     });
-    // スキップ表示
-    ['発注なし', '工事'].forEach(key => {
-      if (skipped[key].length > 0) {
-        html += '<div style="background:#f1f3f4;border-radius:6px;padding:6px 12px;margin-bottom:4px;font-size:12px;color:#999">' +
-          '⛔ ' + key + ' (' + skipped[key].length + '行) → スキップ</div>';
-      }
+    skipped.forEach(ln => {
+      html += '<div style="background:#f1f3f4;border-radius:6px;padding:4px 12px;margin-bottom:3px;font-size:11px;color:#999">' +
+        '⛔ ' + (ln.maker || '未指定') + ': ' + (ln.product || '') + ' → スキップ</div>';
     });
-    if (makers.length === 0) {
-      html = '<div style="text-align:center;color:var(--danger);padding:16px">発注対象のメーカーがありません</div>';
-    }
+    html += '</div>';
+
     document.getElementById('batchPOGroups').innerHTML = html;
-    document.getElementById('btnBatchPO').textContent = '📦 ' + makers.length + '件の発注書を一括作成';
-    document.getElementById('btnBatchPO').disabled = makers.length === 0;
+    document.getElementById('batchPOInfo').innerHTML = '';
+    document.getElementById('btnBatchPO').textContent = '📦 1件目: ' + poQueue[0].maker + ' の発注書を作成開始';
+    document.getElementById('btnBatchPO').disabled = false;
+
+    // ドロップダウン初期化は不要（このモーダルは概要表示のみ）
+    // 承認者・注文者のフィールドを非表示に
+    document.querySelectorAll('#batchPOModal .field-group').forEach(el => el.style.display = 'none');
+
     document.getElementById('batchPOModal').classList.add('active');
   } catch (err) {
     showToast('エラー: ' + err.message, 'error');
@@ -978,45 +977,85 @@ async function showBatchPOModal(estimateId) {
 
 function closeBatchPO() {
   document.getElementById('batchPOModal').classList.remove('active');
-  batchPOEstimateId = null;
+  // フィールドを復帰
+  document.querySelectorAll('#batchPOModal .field-group').forEach(el => el.style.display = '');
 }
 
-async function executeBatchPO() {
-  const approver = document.getElementById('batchApprover').value;
-  const orderer = document.getElementById('batchOrderer').value;
-  if (!approver) { showToast('承認者を選択してください', 'error'); return; }
-  if (!orderer) { showToast('注文者を選択してください', 'error'); return; }
+// 「開始」ボタン → 1件目を発注書タブに転記
+function executeBatchPO() {
+  closeBatchPO();
+  processNextPOQueue();
+}
 
-  const btn = document.getElementById('btnBatchPO');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> 発注書作成中...';
-
-  try {
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        formType: 'batchPO',
-        estimateId: batchPOEstimateId,
-        approverEmail: approver,
-        orderer: orderer,
-        branch: document.getElementById('batchBranch').value,
-        urgent: document.getElementById('batchUrgent').checked
-      }),
-      headers: { 'Content-Type': 'text/plain' }
-    });
-    const result = await res.json();
-    if (result.success) {
-      closeBatchPO();
-      showToast('✅ ' + result.message + '（承認メールを確認してください）', 'success');
-      loadEstimateList();
-    } else {
-      throw new Error(result.error || '発注に失敗しました');
+// キューの先頭を発注書タブに転記
+function processNextPOQueue() {
+  if (poQueue.length === 0) {
+    // 全件完了 → 見積ステータスを「発注済」に更新
+    if (poQueueEstimateId && poQueueDone > 0) {
+      fetch(GAS_URL + '?action=markTransferred&id=' + poQueueEstimateId).catch(() => {});
     }
-  } catch (err) {
-    showToast('エラー: ' + err.message, 'error');
+    showToast('✅ ' + poQueueDone + '件の発注書を全て送信しました', 'success');
+    poQueueEstimateId = null;
+    poQueueDone = 0;
+    loadEstimateList();
+    switchTab('list');
+    // 転記情報バーを削除
+    const bar = document.getElementById('transferInfo');
+    if (bar) bar.remove();
+    return;
   }
-  btn.disabled = false;
-  btn.textContent = '📦 一括発注を実行';
+
+  const current = poQueue[0];
+  const remaining = poQueue.length;
+
+  // 発注書タブに切替
+  switchTab('order');
+
+  // 転記情報バー
+  let infoBar = document.getElementById('transferInfo');
+  if (!infoBar) {
+    infoBar = document.createElement('div');
+    infoBar.id = 'transferInfo';
+    document.getElementById('formArea').insertBefore(infoBar, document.getElementById('formArea').firstChild);
+  }
+  infoBar.style.cssText = 'background:#e8f0fe;border:2px solid var(--primary);border-radius:8px;padding:12px 16px;margin:12px';
+  infoBar.innerHTML =
+    '<div style="font-weight:700;color:var(--primary);font-size:15px;margin-bottom:4px">' +
+    '📦 発注 ' + (poQueueDone + 1) + '/' + (poQueueDone + remaining) +
+    ': ' + current.maker + ' → ' + current.supplier + '</div>' +
+    '<div style="color:var(--text-secondary);font-size:12px">見積No. ' + current.estimateNo + '</div>' +
+    (remaining > 1 ? '<div style="color:var(--success);font-size:12px;margin-top:4px">残り ' + (remaining - 1) + '件は送信後に自動で表示されます</div>' : '') +
+    '<div style="color:var(--danger);font-size:12px;margin-top:2px">⚠️ 内容を確認してから送信してください（単価は原価ベース）</div>';
+
+  // 仕入先を自動セット
+  document.getElementById('supplier').value = current.supplier;
+
+  // 現場名に見積情報
+  document.getElementById('siteName').value = current.estimateNo ? '見積No.' + current.estimateNo : '';
+
+  // 明細をクリアしてセット
+  document.getElementById('lineItems').innerHTML = '';
+  lineItemCount = 0;
+  current.lines.forEach(ln => {
+    addLineItem();
+    const n = lineItemCount;
+    document.getElementById('maker-' + n).value = ln.maker || '';
+    document.getElementById('product-' + n).value = ln.product || '';
+    document.getElementById('model-' + n).value = ln.model || '';
+    document.getElementById('qty-' + n).value = ln.qty || 0;
+    document.getElementById('price-' + n).value = ln.price || 0;
+    const remarkEl = document.getElementById('remark-' + n);
+    if (remarkEl) remarkEl.value = '見積No.' + current.estimateNo;
+    calcLineAmount(n);
+  });
+
+  // 転記元情報を記録（送信成功後にキューを進める）
+  transferredEstimateId = null; // 個別転記ではなくキュー管理
+  window._poQueueActive = true;
+
+  validate();
+  window.scrollTo(0, 0);
+  showToast(current.maker + ' の発注書を確認してください', 'info');
 }
 
 
@@ -1250,14 +1289,25 @@ async function executeSend() {
     const result = await res.json();
     if (result.success) {
       closeModal();
-      // 見積から転記された発注の場合、見積ステータスを「発注済」に更新
+
+      // キューモードの場合: 完了画面を表示せず次のメーカーへ
+      if (window._poQueueActive && poQueue.length > 0) {
+        poQueue.shift(); // 先頭を削除
+        poQueueDone++;
+        showToast('✅ ' + data.supplier + ' の発注書を送信しました（' + poQueueDone + '件完了）', 'success');
+        // フォームをリセットして次のキューへ
+        setTimeout(() => processNextPOQueue(), 500);
+        return;
+      }
+
+      // 通常の個別転記の場合
       if (transferredEstimateId) {
         fetch(GAS_URL + '?action=markTransferred&id=' + transferredEstimateId).catch(()=>{});
         transferredEstimateId = null;
-        // 転記情報バーを削除
         const infoBar = document.getElementById('transferInfo');
         if (infoBar) infoBar.remove();
       }
+      window._poQueueActive = false;
       document.getElementById('formArea').style.display = 'none';
       document.getElementById('btnSubmit').style.display = 'none';
       document.getElementById('successScreen').classList.add('show');
