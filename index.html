@@ -147,7 +147,7 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge">必須</span>仕入先</div>
-    <select id="supplier" required><option value="">選択してください</option></select>
+    <input type="text" id="supplier" list="supplierList" placeholder="仕入先を入力/選択" required>
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge">必須</span>事業所</div>
@@ -307,12 +307,21 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initDropdowns() {
-  const sup = document.getElementById('supplier');
-  SUPPLIERS.forEach(s => sup.add(new Option(s.name, s.name)));
+  // 仕入先 datalist
+  const supList = document.createElement('datalist'); supList.id = 'supplierList';
+  SUPPLIERS.forEach(s => { const o = document.createElement('option'); o.value = s.name; supList.appendChild(o); });
+  document.body.appendChild(supList);
+  // メーカー datalist
+  const mkList = document.createElement('datalist'); mkList.id = 'makerList';
+  MAKERS.forEach(m => { const o = document.createElement('option'); o.value = m; mkList.appendChild(o); });
+  document.body.appendChild(mkList);
+  // 事業所（選択肢固定のためselectのまま）
   const br = document.getElementById('branch');
   BRANCHES.forEach(b => br.add(new Option(b.name, b.name)));
+  // 注文者
   const ord = document.getElementById('orderer');
   STAFF.forEach(s => ord.add(new Option(s, s)));
+  // 承認者
   const app = document.getElementById('approver');
   APPROVERS.forEach(a => app.add(new Option(a.name + '（' + a.email + '）', a.email)));
 }
@@ -338,8 +347,7 @@ function addLineItem() {
     (num > 1 ? '<button type="button" class="btn-remove-line" onclick="removeLineItem(' + num + ')">&times;</button>' : '') +
     '</div>' +
     '<div class="row"><div><div class="field-label"><span class="required-badge">必須</span>メーカー</div>' +
-    '<select id="maker-' + num + '" onchange="validate()"><option value="">選択</option>' +
-    MAKERS.map(m => '<option value="' + m + '">' + m + '</option>').join('') + '</select></div>' +
+    '<input type="text" id="maker-' + num + '" list="makerList" placeholder="メーカーを入力/選択" oninput="validate()"></div>' +
     '<div><div class="field-label"><span class="required-badge">必須</span>形態</div>' +
     '<select id="type-' + num + '" onchange="validate()"><option value="">選択</option>' +
     FORM_TYPES.map(t => '<option value="' + t.value + '">' + t.label + '</option>').join('') + '</select></div></div>' +
@@ -584,7 +592,7 @@ function showToast(msg, type) {
   setTimeout(() => t.className = 'toast', 3000);
 }
 
-// 商品名datalist
+// 商品名datalist（initDropdownsに移動しなかったのでここに残す）
 (function() {
   const dl = document.createElement('datalist'); dl.id = 'productList';
   PRODUCTS.forEach(p => { const o = document.createElement('option'); o.value = p; dl.appendChild(o); });

@@ -102,6 +102,11 @@ function doGet(e) {
   if (action === 'approve') {
     if (currentStatus !== '申請中') return HtmlService.createHtmlOutput(resultPage('処理済', 'この発注書は既に処理済みです（' + currentStatus + '）', '#5f6368'));
     applyStatusColor(sheet, rowIdx, '承認済');
+
+    // ★ 発注書シートの承認欄に承認者名を書き込む
+    var approverName = data[rowIdx-1][9]; // J列: 承認者名
+    writeApproverToOrderSheet(ss, sheetUrl, approverName);
+
     notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl);
     return HtmlService.createHtmlOutput(resultPage('承認しました',
       '注文No.: ' + orderNo + '<br>仕入先: ' + supplier + '<br>金額: &yen;' + Number(total).toLocaleString() +
@@ -363,4 +368,28 @@ function notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl) {
     body: '承認済: ' + supplier + ' / ' + orderNo + '\nスプレッドシート: ' + ss.getUrl(),
     htmlBody: hb
   });
+}
+
+// ============ 承認者名を発注書シートに書き込む ============
+function writeApproverToOrderSheet(ss, sheetUrl, approverName) {
+  try {
+    // sheetUrlからgidを取得してシートを特定
+    var match = sheetUrl.match(/gid=(\d+)/);
+    if (!match) return;
+    var gid = parseInt(match[1]);
+    var sheets = ss.getSheets();
+    for (var i = 0; i < sheets.length; i++) {
+      if (sheets[i].getSheetId() === gid) {
+        var orderSheet = sheets[i];
+        // 承認欄に承認者名を書き込む（AE60セル付近）
+        orderSheet.getRange('AE60').setValue(approverName);
+        // 承認日を記録
+        var now = new Date();
+        orderSheet.getRange('AE62').setValue((now.getMonth()+1) + '/' + now.getDate());
+        break;
+      }
+    }
+  } catch (e) {
+    Logger.log('承認者名書き込みエラー: ' + e.toString());
+  }
 }
