@@ -382,7 +382,7 @@ function writeApproverToOrderSheet(ss, sheetUrl, approverName) {
       if (sheets[i].getSheetId() === gid) {
         var orderSheet = sheets[i];
         // 承認欄に承認者名を書き込む（AE60セル付近）
-        orderSheet.getRange('AE60').setValue(approverName);
+        orderSheet.getRange('AF60').setValue(approverName);
         // 承認日を記録
         var now = new Date();
         orderSheet.getRange('AE62').setValue((now.getMonth()+1) + '/' + now.getDate());
