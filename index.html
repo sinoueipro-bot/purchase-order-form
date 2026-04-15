@@ -526,11 +526,11 @@ document.addEventListener('DOMContentLoaded', () => {
   addLineItem();
   addEstLine();
   setupValidation();
-  // URLパラメータ ?quickPO=<estimateId> → 発注書タブに自動転記
+  // URLパラメータ ?quickPO=<estimateId> → メーカー別発注モーダルを表示
   const params = new URLSearchParams(window.location.search);
   const qpId = params.get('quickPO');
   if (qpId) {
-    setTimeout(() => transferToPO(qpId), 500);
+    setTimeout(() => showBatchPOModal(qpId), 500);
   }
   loadEstimateList();
 });
