@@ -861,6 +861,8 @@ async function transferToPO(estimateId) {
 
     // 転記元を記録（発注送信成功後にステータス更新する）
     transferredEstimateId = estimateId;
+    // 見積No.も記録（発注シートを見積の隣に配置するため）
+    window._transferredEstNo = data.estimateNo || '';
 
     // 発注書タブに切替
     switchTab('order');
@@ -1026,7 +1028,8 @@ function collectFormData() {
     orderer: document.getElementById('orderer').value,
     urgent: document.getElementById('urgent').checked,
     approverEmail: email,
-    approverName: approver ? approver.name : ''
+    approverName: approver ? approver.name : '',
+    sourceEstimateNo: window._transferredEstNo || ''
   };
 }
 
