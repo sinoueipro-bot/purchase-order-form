@@ -8,7 +8,7 @@
  *             緊急の場合: 緊急承認済（自動）
  */
 var INDEX_SHEET = '発注一覧';
-var TEMPLATE_SHEET = '20260415001_4';
+var TEMPLATE_SHEET = 'テンプレート';
 
 // ★ メールアドレス設定
 // テスト: 全て井上将吾に送信。本番時は各担当者のアドレスに変更
@@ -24,7 +24,48 @@ function initSheet() {
   s.getRange(1,1,1,13).setValues([['受付日時','注文No.','発行日','仕入先','事業所','現場名','合計金額','注文者','緊急','承認者','ステータス','シートリンク','ID']]);
   s.getRange(1,1,1,13).setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
   s.setFrozenRows(1);
-  SpreadsheetApp.getUi().alert('OK');
+  Logger.log('initSheet完了');
+}
+
+// ============ 発注一覧を修正（1回だけ実行） ============
+function fixIndexSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(INDEX_SHEET);
+  if (!s) { initSheet(); return; }
+
+  // 既存データを取得
+  var data = s.getDataRange().getValues();
+
+  // ヘッダーにステータス列があるか確認
+  var header = data[0];
+  var hasStatus = header.indexOf('ステータス') !== -1;
+
+  if (!hasStatus) {
+    // ステータス列がない場合: K列に挿入
+    // 現在: A〜J(承認者), K(シートリンク), L以降
+    // 修正: A〜J(承認者), K(ステータス), L(シートリンク), M(ID)
+    s.insertColumnAfter(10); // J列の後にK列を挿入
+
+    // K1にヘッダー設定
+    s.getRange(1, 11).setValue('ステータス');
+
+    // 既存データ行にステータスを追加
+    for (var i = 1; i < data.length; i++) {
+      var cell = s.getRange(i + 1, 11);
+      cell.setValue('申請中');
+      cell.setFontWeight('bold').setFontColor('#b06000').setBackground('#fef7e0');
+    }
+  }
+
+  // ヘッダー行のスタイルを再設定
+  var lastCol = s.getLastColumn();
+  s.getRange(1, 1, 1, lastCol).setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
+  s.setFrozenRows(1);
+
+  // 列幅調整
+  s.setColumnWidth(11, 100); // ステータス
+
+  Logger.log('fixIndexSheet完了: ステータス列追加');
 }
 
 // ============ POST ============
