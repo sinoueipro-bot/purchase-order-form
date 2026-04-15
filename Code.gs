@@ -1,14 +1,18 @@
 /**
- * 発注書フォーム - GAS v8 (メール承認 + 緊急バイパス)
+ * 発注書・見積書フォーム - GAS v9 (見積書機能追加)
  *
+ * 【発注書】
  * 通常(PASS): フォーム → 承認者メール(承認/却下リンク) → 承認後 → 発注担当者へ通知
  * 緊急:       フォーム → 承認者+発注担当者に同時メール → 即発注可能
  *
- * ステータス: 申請中 → 承認済 → 発注済 / 却下
- *             緊急の場合: 緊急承認済（自動）
+ * 【見積書】
+ * フォーム → スプシに見積書シート生成 + 見積一覧に記録
+ * → 印刷してお客さんに提出（社内承認不要）
+ * → 合意後、見積一覧から「発注書に転記」ボタン
  */
 var INDEX_SHEET = '発注一覧';
 var TEMPLATE_SHEET = 'テンプレート';
+var EST_INDEX_SHEET = '見積一覧';
 
 // ★ メールアドレス設定
 // テスト: 全て井上将吾に送信。本番時は各担当者のアドレスに変更
@@ -71,17 +75,39 @@ function fixIndexSheet() {
 // ============ POST ============
 function doPost(e) {
   try {
-    return ContentService.createTextOutput(JSON.stringify(processOrder(JSON.parse(e.postData.contents)))).setMimeType(ContentService.MimeType.JSON);
+    var data = JSON.parse(e.postData.contents);
+    var result;
+    if (data.formType === 'estimate') {
+      result = processEstimate(data);
+    } else if (data.formType === 'quickPO') {
+      result = quickTransferToPO(data);
+    } else if (data.formType === 'batchPO') {
+      result = batchTransferToPO(data);
+    } else {
+      result = processOrder(data);
+    }
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
   } catch (er) {
     return ContentService.createTextOutput(JSON.stringify({success:false,error:er.toString()})).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
-// ============ GET: 承認/却下アクション ============
+// ============ JSON応答ヘルパー ============
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ============ GET: 承認/却下 + 見積API ============
 function doGet(e) {
   var action = e.parameter.action;
   var id = e.parameter.id;
-  if (!action || !id) return HtmlService.createHtmlOutput('<h2>発注書APIは稼働中です</h2>');
+
+  // 見積書API（JSON応答）
+  if (action === 'listEstimates') return jsonResponse(getEstimateList());
+  if (action === 'getEstimateData') return jsonResponse(getEstimateData(id));
+  if (action === 'markTransferred') return jsonResponse(markEstimateTransferred(id));
+
+  if (!action || !id) return HtmlService.createHtmlOutput('<h2>発注書・見積書APIは稼働中です</h2>');
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(INDEX_SHEET);
@@ -110,12 +136,12 @@ function doGet(e) {
     notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl);
     return HtmlService.createHtmlOutput(resultPage('承認しました',
       '注文No.: ' + orderNo + '<br>仕入先: ' + supplier + '<br>金額: &yen;' + Number(total).toLocaleString() +
-      '<br><br>発注担当者に通知しました。', '#188038', ss.getUrl()));
+      '<br><br>発注担当者に通知しました。', '#188038', sheetUrl));
 
   } else if (action === 'reject') {
     if (currentStatus !== '申請中') return HtmlService.createHtmlOutput(resultPage('処理済', 'この発注書は既に処理済みです', '#5f6368'));
     applyStatusColor(sheet, rowIdx, '却下');
-    return HtmlService.createHtmlOutput(resultPage('却下しました', '注文No.: ' + orderNo, '#d93025', ss.getUrl()));
+    return HtmlService.createHtmlOutput(resultPage('却下しました', '注文No.: ' + orderNo, '#d93025', sheetUrl));
   }
 
   return HtmlService.createHtmlOutput(resultPage('エラー', '不明なアクション', '#d93025'));
@@ -143,6 +169,20 @@ function processOrder(data) {
   var os = createFromTemplate(ss, tabName, data);
   addToIndex(ss, data, os, uniqueId);
 
+  // ★ 見積書から転記された場合、発注シートを見積シートの隣に配置
+  if (data.sourceEstimateNo) {
+    try {
+      var allSheets = ss.getSheets();
+      for (var si = 0; si < allSheets.length; si++) {
+        if (allSheets[si].getName().indexOf('見積_') === 0 && allSheets[si].getName().indexOf(data.sourceEstimateNo) !== -1) {
+          ss.setActiveSheet(os);
+          ss.moveActiveSheet(si + 2); // 見積シートの直後
+          break;
+        }
+      }
+    } catch(e) { /* 移動失敗は無視 */ }
+  }
+
   if (data.urgent) {
     // ★ 緊急: 承認者＋発注担当者に同時メール → ステータスは「緊急承認済」
     var sheet = ss.getSheetByName(INDEX_SHEET);
@@ -169,6 +209,7 @@ function createFromTemplate(ss, tabName, data) {
   while (ss.getSheetByName(name)) { name = tabName + '_' + i; i++; }
   sh.setName(name);
   sh.setHiddenGridlines(true);
+  sh.setTabColor('#1a73e8'); // ★ 発注書タブ = 青
 
   var bi = getBranchInfo(data.branch);
   var d = data.issueDate.split('-');
@@ -359,13 +400,13 @@ function notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl) {
     '<tr><td style="padding:8px;font-weight:bold;background:#f8f9fa">仕入先</td><td style="padding:8px">'+supplier+'</td></tr>' +
     '<tr><td style="padding:8px;font-weight:bold;background:#f8f9fa">注文者</td><td style="padding:8px">'+orderer+'</td></tr>' +
     '<tr><td style="padding:8px;font-weight:bold;background:#f8f9fa">合計</td><td style="padding:8px">&yen;'+Number(total).toLocaleString()+'</td></tr></table>' +
-    '<a href="'+ss.getUrl()+'" style="display:block;text-align:center;padding:14px;background:#1a73e8;color:white;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;margin:16px 0">スプレッドシートを開く</a>' +
+    '<a href="'+sheetUrl+'" style="display:block;text-align:center;padding:14px;background:#1a73e8;color:white;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;margin:16px 0">発注書シートを開く</a>' +
     '</div></div>';
 
   MailApp.sendEmail({
     to: PURCHASER.email,
     subject: '【発注依頼】' + supplier + ' / ' + orderNo,
-    body: '承認済: ' + supplier + ' / ' + orderNo + '\nスプレッドシート: ' + ss.getUrl(),
+    body: '承認済: ' + supplier + ' / ' + orderNo + '\n発注書: ' + sheetUrl,
     htmlBody: hb
   });
 }
@@ -373,7 +414,6 @@ function notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl) {
 // ============ 承認者名を発注書シートに書き込む ============
 function writeApproverToOrderSheet(ss, sheetUrl, approverName) {
   try {
-    // sheetUrlからgidを取得してシートを特定
     var match = sheetUrl.match(/gid=(\d+)/);
     if (!match) return;
     var gid = parseInt(match[1]);
@@ -381,9 +421,7 @@ function writeApproverToOrderSheet(ss, sheetUrl, approverName) {
     for (var i = 0; i < sheets.length; i++) {
       if (sheets[i].getSheetId() === gid) {
         var orderSheet = sheets[i];
-        // 承認欄に承認者名を書き込む（AE60セル付近）
         orderSheet.getRange('AF60').setValue(approverName);
-        // 承認日を記録
         var now = new Date();
         orderSheet.getRange('AE62').setValue((now.getMonth()+1) + '/' + now.getDate());
         break;
@@ -392,4 +430,597 @@ function writeApproverToOrderSheet(ss, sheetUrl, approverName) {
   } catch (e) {
     Logger.log('承認者名書き込みエラー: ' + e.toString());
   }
+}
+
+
+// ================================================================
+// ============ 見積書機能 ============
+// ================================================================
+
+// ============ 見積一覧初期化 ============
+function initEstimateSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(EST_INDEX_SHEET);
+  if (!s) s = ss.insertSheet(EST_INDEX_SHEET);
+  var headers = ['受付日時','見積No.','見積日','お客様名','件名','担当者','合計(税込)','合計(税抜)','原価合計','粗利率','ステータス','シートリンク','ID','発注申請'];
+  s.getRange(1,1,1,headers.length).setValues([headers]);
+  s.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#0f9d58').setFontColor('#fff');
+  s.setFrozenRows(1);
+  s.setColumnWidth(1, 140);
+  s.setColumnWidth(2, 120);
+  s.setColumnWidth(4, 120);
+  s.setColumnWidth(7, 100);
+  s.setColumnWidth(11, 80);
+  s.setColumnWidth(14, 100); // 発注申請
+  Logger.log('initEstimateSheet完了');
+}
+
+// ============ 見積一覧に発注申請リンク列を追加（既存データ補修） ============
+function fixEstimateLinks() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(EST_INDEX_SHEET);
+  if (!s) return;
+  // ヘッダーにN列がなければ追加
+  if (s.getRange(1, 14).getValue() !== '発注申請') {
+    s.getRange(1, 14).setValue('発注申請').setFontWeight('bold').setBackground('#0f9d58').setFontColor('#fff');
+    s.setColumnWidth(14, 100);
+  }
+  // 既存行にリンクを追加
+  var data = s.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    var uid = data[i][12]; // M列: ID
+    var status = data[i][10]; // K列: ステータス
+    if (uid && status === '作成済' && !data[i][13]) {
+      var formUrl = 'https://sinoueipro-bot.github.io/purchase-order-form/?quickPO=' + uid;
+      s.getRange(i + 1, 14).setFormula('=HYPERLINK("' + formUrl + '","📦発注申請")').setFontColor('#1a73e8').setFontWeight('bold');
+    }
+  }
+  Logger.log('fixEstimateLinks完了: ' + (data.length - 1) + '行処理');
+}
+
+// ============ シート整理（1回実行後に削除してOK） ============
+function cleanupSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var keep = ['テンプレート', '発注一覧', '見積一覧'];
+  var sheets = ss.getSheets();
+  var deleted = [];
+  for (var i = sheets.length - 1; i >= 0; i--) {
+    var name = sheets[i].getName();
+    if (keep.indexOf(name) === -1) {
+      ss.deleteSheet(sheets[i]);
+      deleted.push(name);
+    }
+  }
+  // タブ並び順: 発注一覧→見積一覧→テンプレート
+  var order = ['発注一覧', '見積一覧', 'テンプレート'];
+  for (var j = 0; j < order.length; j++) {
+    var s = ss.getSheetByName(order[j]);
+    if (s) { ss.setActiveSheet(s); ss.moveActiveSheet(j + 1); }
+  }
+  // タブ色設定
+  var orderSheet = ss.getSheetByName('発注一覧');
+  if (orderSheet) orderSheet.setTabColor('#1a73e8');
+  var estSheet = ss.getSheetByName('見積一覧');
+  if (estSheet) estSheet.setTabColor('#0f9d58');
+  var tplSheet = ss.getSheetByName('テンプレート');
+  if (tplSheet) tplSheet.setTabColor('#5f6368');
+
+  Logger.log('削除: ' + deleted.join(', '));
+  Logger.log('残り: ' + order.join(', '));
+}
+
+// ============ 売値計算（Excelの丸めロジック再現） ============
+// Excel: =IF(LEFT(J,1)="8",ROUNDDOWN(K/(1-L),LEN(J)*-1)+J,ROUNDUP(K/(1-L),-LEN(J)))
+// K=原価, L=粗利率(小数), J=丸めパターン
+function calcSellingPrice(cost, marginRate, roundingStr) {
+  if (!cost || !marginRate) return 0;
+  var raw = cost / (1 - marginRate);
+  var rStr = String(roundingStr || '0');
+  var digits = rStr.length;
+  var factor = Math.pow(10, digits);
+
+  if (rStr.charAt(0) === '8') {
+    // ROUNDDOWN + 丸め値を加算 (例: 14286 → 14280 + 8 = 14288)
+    return Math.floor(raw / factor) * factor + parseInt(rStr);
+  } else {
+    // ROUNDUP (例: 14286 → 14290)
+    return Math.ceil(raw / factor) * factor;
+  }
+}
+
+// ============ 見積書処理 ============
+function processEstimate(data) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tabName = '見積_' + data.estimateDate.replace(/-/g, '');
+  if (data.customerName) tabName += '_' + data.customerName.substring(0, 10);
+  var uniqueId = Utilities.getUuid();
+
+  // 明細の売値・金額を計算
+  var lines = data.lines || [];
+  var subtotal = 0;   // 税抜合計(売値)
+  var costTotal = 0;   // 原価合計
+  for (var i = 0; i < lines.length; i++) {
+    var ln = lines[i];
+    var marginDec = (ln.marginRate || 0) / 100; // %→小数
+    var selling = calcSellingPrice(ln.cost || 0, marginDec, ln.rounding || '0');
+    ln.sellingPrice = selling;
+    ln.amount = selling * (ln.qty || 0);
+    var lineCost = (ln.zeroCost === true) ? 0 : ((ln.cost || 0) * (ln.qty || 0));
+    if ((ln.cost || 0) < 0) lineCost = 0;
+    ln.costAmount = lineCost;
+    ln.actualMargin = ln.amount > 0 ? Math.round((1 - lineCost / ln.amount) * 1000) / 1000 : 0;
+    ln.profit = ln.amount - lineCost;
+    subtotal += ln.amount;
+    costTotal += lineCost;
+  }
+  var tax = Math.floor(subtotal * 0.1);  // 消費税10%（切り捨て）
+  var grandTotal = subtotal + tax;
+  var overallMargin = subtotal > 0 ? Math.round((subtotal - costTotal) / subtotal * 1000) / 1000 : 0;
+
+  data.subtotal = subtotal;
+  data.tax = tax;
+  data.grandTotal = grandTotal;
+  data.costTotal = costTotal;
+  data.overallMargin = overallMargin;
+
+  var sheet = createEstimateSheet(ss, tabName, data);
+  addToEstimateIndex(ss, data, sheet, uniqueId);
+
+  var sheetUrl = ss.getUrl() + '#gid=' + sheet.getSheetId();
+  return {
+    success: true,
+    message: '見積書を作成しました',
+    estimateNo: data.estimateNo,
+    spreadsheetUrl: ss.getUrl(),
+    sheetUrl: sheetUrl
+  };
+}
+
+// ============ 見積書シート作成（Excelレイアウト再現・改良版） ============
+function createEstimateSheet(ss, tabName, data) {
+  var sh = ss.insertSheet();
+  var name = tabName; var i = 1;
+  while (ss.getSheetByName(name)) { name = tabName + '_' + i; i++; }
+  sh.setName(name);
+  sh.setHiddenGridlines(true);
+  sh.setTabColor('#0f9d58'); // ★ 見積書タブ = 緑
+
+  // 列幅設定 (A-P)
+  var widths = [35,80,120,100,40,35,75,85,70,45,70,50,40,70,55,70];
+  for (var w = 0; w < widths.length; w++) sh.setColumnWidth(w + 1, widths[w]);
+
+  var d = data.estimateDate.split('-');
+  var bi = getBranchInfo(data.branch || '本社');
+  var BS = SpreadsheetApp.BorderStyle;
+
+  // ==== ヘッダー部 (行1-13) ====
+  sh.setRowHeight(1, 28); sh.setRowHeight(2, 20); sh.setRowHeight(3, 8); sh.setRowHeight(4, 30);
+
+  // 行1-2: 御見積書 + 発行日/見積No.
+  sh.getRange('A1:E2').merge().setValue('御見積書').setFontSize(20).setFontWeight('bold').setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sh.getRange('G1').setValue('発行日').setFontSize(9).setFontColor('#666');
+  sh.getRange('H1:I1').merge().setValue(parseInt(d[0]) + '年' + parseInt(d[1]) + '月' + parseInt(d[2]) + '日').setHorizontalAlignment('right');
+  sh.getRange('G2').setValue('見積No.').setFontSize(9).setFontColor('#666');
+  sh.getRange('H2:I2').merge().setValue(data.estimateNo || '').setHorizontalAlignment('right').setFontWeight('bold');
+
+  // 行4: お客様名（下線付き）
+  sh.getRange('A4:D4').merge().setValue(data.customerName || '').setFontSize(14).setFontWeight('bold');
+  sh.getRange('E4').setValue('様').setFontSize(14);
+  sh.getRange('A4:E4').setBorder(null, null, true, null, null, null, '#333', BS.SOLID_MEDIUM);
+
+  // 行5: 事業所・会社情報
+  sh.getRange('F5').setValue('株式会社アイプロ').setFontWeight('bold');
+  sh.getRange('I5').setValue(data.branch || '本社');
+
+  // 行6-7: 挨拶文 + 事業所住所
+  sh.getRange('A6:E6').merge().setValue('下記の通り御見積申し上げます。\n何卒ご用命くださいます様お願い申し上げます。').setWrap(true).setFontSize(10).setVerticalAlignment('top');
+  sh.getRange('F6:I7').merge().setValue(bi.zip + '\n' + bi.addr + '\n' + bi.tel + ' ' + bi.fax).setWrap(true).setFontSize(9);
+
+  // 行7-8: 見積金額（枠付き）
+  sh.getRange('A7:B7').merge().setValue('御見積金額').setFontWeight('bold').setFontSize(11);
+  sh.getRange('C7:D8').merge().setValue(data.grandTotal || 0).setNumberFormat('#,##0"円"').setFontSize(16).setFontWeight('bold').setHorizontalAlignment('right').setVerticalAlignment('middle').setBackground('#f0f7ff');
+  sh.getRange('C7:D8').setBorder(true, true, true, true, null, null, '#1a73e8', BS.SOLID_MEDIUM);
+  sh.getRange('A8:B8').merge().setValue('（消費税込）').setFontSize(9).setFontColor('#666');
+  sh.getRange('F8:I8').merge().setValue('登録番号：T2290001045807').setFontSize(9).setFontColor('#666');
+
+  // 行9-12: 件名等（罫線付きテーブル）
+  var infoLabels = [['件名：','A9:B9',data.subject||'','C9:D9'],['納期：','A10:B10',data.delivery||'','C10:D10'],['受渡場所：','A11:B11',data.deliveryPlace||'','C11:D11'],['支払条件：','A12:B12',data.paymentTerms||'','C12:D12']];
+  for (var il = 0; il < infoLabels.length; il++) {
+    sh.getRange(infoLabels[il][1]).merge().setValue(infoLabels[il][0]).setFontWeight('bold').setFontSize(10).setBackground('#f8f9fa');
+    sh.getRange(infoLabels[il][3]).merge().setValue(infoLabels[il][2]).setFontSize(10);
+  }
+  sh.getRange('A9:D12').setBorder(true, true, true, true, true, true, '#bbb', BS.SOLID);
+  sh.getRange('I9').setValue('担当').setFontWeight('bold').setFontSize(9).setFontColor('#666');
+  sh.getRange('I10:I11').merge().setValue(data.staff || '').setFontWeight('bold');
+  sh.getRange('E12:I13').merge().setValue(data.paymentDetail || '');
+  sh.getRange('J13').setValue('粗利益設定入力(黄色部分)※税別').setFontSize(8).setFontColor('#b06000');
+
+  // ==== 明細ヘッダー (行14) ====
+  sh.setRowHeight(14, 28);
+  var hdrA = ['No.', 'メーカー', '品名', '型式・仕様', '数量', '単位', '単価', '金額'];
+  var hdrB = ['定価(税別)', '丸め', '原価(単価)', '設定粗利率', '原価0対象', '原価(金額)', '実粗利率', '粗利益高'];
+  sh.getRange(14, 1, 1, 8).setValues([hdrA]).setFontWeight('bold').setFontSize(9).setBackground('#d9e2f3').setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sh.getRange(14, 9, 1, 8).setValues([hdrB]).setFontWeight('bold').setFontSize(8).setBackground('#fff2cc').setHorizontalAlignment('center').setVerticalAlignment('middle');
+  sh.getRange(14, 1, 1, 16).setBorder(true, true, true, true, true, true, '#666', BS.SOLID);
+
+  // ==== 明細行 (行15-32) ====
+  var lines = data.lines || [];
+  var lastDataRow = 14; // 最後にデータがある行
+  for (var idx = 0; idx < 18; idx++) {
+    var r = 15 + idx;
+    sh.setRowHeight(r, 22);
+    var ln = lines[idx];
+    if (ln && ln.cost) {
+      lastDataRow = r;
+      sh.getRange(r, 1).setValue(idx + 1).setHorizontalAlignment('center');
+      sh.getRange(r, 2).setValue(ln.maker || '');
+      sh.getRange(r, 3).setValue(ln.product || '');
+      sh.getRange(r, 4).setValue(ln.model || '');
+      sh.getRange(r, 5).setValue(ln.qty || 0).setHorizontalAlignment('center');
+      sh.getRange(r, 6).setValue(ln.unit || '台').setHorizontalAlignment('center');
+      sh.getRange(r, 7).setValue(ln.sellingPrice || 0).setNumberFormat('#,##0').setHorizontalAlignment('right');
+      sh.getRange(r, 8).setValue(ln.amount || 0).setNumberFormat('#,##0').setHorizontalAlignment('right').setFontWeight('bold');
+      sh.getRange(r, 9).setValue(ln.listPrice || '').setNumberFormat('#,##0');
+      sh.getRange(r, 10).setNumberFormat('@').setValue(String(ln.rounding || '0'));
+      sh.getRange(r, 11).setValue(ln.cost || 0).setNumberFormat('#,##0');
+      sh.getRange(r, 12).setValue((ln.marginRate || 0) / 100).setNumberFormat('0.0%');
+      sh.getRange(r, 13).setValue(ln.zeroCost ? '○' : '').setHorizontalAlignment('center');
+      sh.getRange(r, 14).setValue(ln.costAmount || 0).setNumberFormat('#,##0');
+      sh.getRange(r, 15).setValue(ln.actualMargin || 0).setNumberFormat('0.0%');
+      sh.getRange(r, 16).setValue(ln.profit || 0).setNumberFormat('#,##0');
+      sh.getRange(r, 9, 1, 8).setBackground('#fffde7');
+      // 偶数行にストライプ
+      if (idx % 2 === 1) sh.getRange(r, 1, 1, 8).setBackground('#f8fafd');
+    }
+    // 顧客用列の罫線
+    sh.getRange(r, 1, 1, 8).setBorder(null, true, true, true, true, null, '#bbb', BS.SOLID);
+    sh.getRange(r, 9, 1, 8).setBorder(null, null, true, null, true, null, '#ddd', BS.DOTTED);
+  }
+  // 明細全体の外枠（太線）
+  sh.getRange(14, 1, lastDataRow - 13, 8).setBorder(true, true, true, true, null, null, '#333', BS.SOLID_MEDIUM);
+
+  // ==== 集計部 (行33-35) ====
+  sh.getRange('A33:B33').merge().setValue('税率区分').setFontWeight('bold').setBackground('#e8eaed').setFontSize(9);
+  sh.getRange('C33').setValue('金額(税抜)').setFontSize(9).setBackground('#e8eaed');
+  sh.getRange('D33').setValue('消費税').setFontSize(9).setBackground('#e8eaed');
+  sh.getRange('G33').setValue('小計').setFontWeight('bold').setHorizontalAlignment('right');
+  sh.getRange('H33').setValue(data.subtotal || 0).setNumberFormat('#,##0').setFontWeight('bold').setHorizontalAlignment('right');
+  sh.getRange('N33').setValue(data.costTotal || 0).setNumberFormat('#,##0');
+  sh.getRange('O33').setValue(data.overallMargin || 0).setNumberFormat('0.0%');
+  sh.getRange('P33').setValue((data.subtotal || 0) - (data.costTotal || 0)).setNumberFormat('#,##0');
+
+  sh.getRange('A34:B34').merge().setValue('10％対象').setBackground('#e8eaed').setFontSize(9);
+  sh.getRange('C34').setValue(data.subtotal || 0).setNumberFormat('#,##0');
+  sh.getRange('D34').setValue(data.tax || 0).setNumberFormat('#,##0');
+  sh.getRange('G34').setValue('消費税').setFontWeight('bold').setHorizontalAlignment('right');
+  sh.getRange('H34').setValue(data.tax || 0).setNumberFormat('#,##0').setFontWeight('bold').setHorizontalAlignment('right');
+
+  sh.getRange('A35:B35').merge().setValue('8％対象').setBackground('#e8eaed').setFontSize(9);
+  sh.setRowHeight(35, 30);
+  sh.getRange('G35').setValue('合計').setFontWeight('bold').setFontSize(12).setHorizontalAlignment('right');
+  sh.getRange('H35').setValue(data.grandTotal || 0).setNumberFormat('#,##0').setFontSize(14).setFontWeight('bold').setHorizontalAlignment('right').setBackground('#e8f0fe');
+  sh.getRange('A33:D35').setBorder(true, true, true, true, true, true, '#999', BS.SOLID);
+  sh.getRange('G33:H35').setBorder(true, true, true, true, true, true, '#333', BS.SOLID_MEDIUM);
+
+  // ==== 特記事項 (行36-38) ====
+  sh.getRange('A36:A38').merge().setValue('特記事項').setFontWeight('bold').setVerticalAlignment('top').setBackground('#f8f9fa');
+  sh.getRange('B36:I36').merge().setValue(data.notes || '');
+  sh.getRange('B37:I37').merge();
+  sh.getRange('B38:I38').merge();
+  sh.getRange('A36:I38').setBorder(true, true, true, true, null, null, '#999', BS.SOLID);
+
+  // 社内列は非表示
+  try { sh.hideColumns(9, 8); } catch(e) {}
+
+  return sh;
+}
+
+// ============ ワンクリック発注申請（見積→発注を直接処理） ============
+function quickTransferToPO(data) {
+  // data: { estimateId, approverEmail, urgent, orderer }
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // 1. 見積データを取得
+  var estResult = getEstimateData(data.estimateId);
+  if (!estResult.success) return estResult;
+
+  // 2. 発注書データを構築
+  var today = new Date();
+  var dateStr = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyy-MM-dd');
+  var orderNo = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyyMMdd') + '001';
+
+  // 仕入先: 見積書の明細から推定（最初のメーカー名 or 手動で後から修正）
+  var supplier = estResult.lines.length > 0 ? estResult.lines[0].maker : '';
+
+  var poLines = [];
+  for (var li = 0; li < estResult.lines.length; li++) {
+    var el = estResult.lines[li];
+    poLines.push({
+      maker: el.maker,
+      product: el.product,
+      model: el.model || '',
+      qty: el.qty,
+      price: el.price, // 原価
+      amount: el.qty * el.price,
+      remark: '見積No.' + estResult.estimateNo,
+      type: 'U'
+    });
+  }
+  var total = 0;
+  for (var t = 0; t < poLines.length; t++) total += poLines[t].amount;
+
+  var approver = data.urgent ? APPROVER_URGENT : APPROVER_PASS;
+
+  var poData = {
+    issueDate: dateStr,
+    orderNo: orderNo,
+    supplier: supplier,
+    branch: data.branch || '本社',
+    lines: poLines,
+    total: total,
+    siteName: estResult.subject || '',
+    notes: '見積No.' + estResult.estimateNo + 'からの発注',
+    orderer: data.orderer || '',
+    urgent: data.urgent || false,
+    approverName: approver.name,
+    approverEmail: approver.email
+  };
+
+  // 3. 既存の発注処理を実行
+  var result = processOrder(poData);
+
+  // 4. 見積書のステータスを「発注済」に更新
+  if (result.success) {
+    markEstimateTransferred(data.estimateId);
+  }
+
+  return result;
+}
+
+// ============ 見積一覧に追加 ============
+function addToEstimateIndex(ss, data, sheet, uniqueId) {
+  var s = ss.getSheetByName(EST_INDEX_SHEET);
+  if (!s) { initEstimateSheet(); s = ss.getSheetByName(EST_INDEX_SHEET); }
+  var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
+  var url = ss.getUrl() + '#gid=' + sheet.getSheetId();
+  // 発注申請リンク（スプシからワンクリックでWebフォームに転記）
+  var formUrl = 'https://sinoueipro-bot.github.io/purchase-order-form/?quickPO=' + uniqueId;
+
+  s.appendRow([
+    now,                          // A: 受付日時
+    data.estimateNo || '',        // B: 見積No.
+    data.estimateDate || '',      // C: 見積日
+    data.customerName || '',      // D: お客様名
+    data.subject || '',           // E: 件名
+    data.staff || '',             // F: 担当者
+    data.grandTotal || 0,         // G: 合計(税込)
+    data.subtotal || 0,           // H: 合計(税抜)
+    data.costTotal || 0,          // I: 原価合計
+    data.overallMargin || 0,      // J: 粗利率
+    '作成済',                      // K: ステータス
+    url,                          // L: シートリンク
+    uniqueId,                     // M: ID
+    ''                            // N: 発注申請リンク（HYPERLINK数式で上書き）
+  ]);
+  var lr = s.getLastRow();
+  s.getRange(lr, 7).setNumberFormat('#,##0');
+  s.getRange(lr, 8).setNumberFormat('#,##0');
+  s.getRange(lr, 9).setNumberFormat('#,##0');
+  s.getRange(lr, 10).setNumberFormat('0.0%');
+  // N列: 発注申請リンク
+  s.getRange(lr, 14).setFormula('=HYPERLINK("' + formUrl + '","📦発注申請")').setFontColor('#1a73e8').setFontWeight('bold');
+  // ステータス色
+  applyEstimateStatus(s, lr, '作成済');
+}
+
+// ============ 見積ステータス色分け ============
+function applyEstimateStatus(sheet, row, status) {
+  var cell = sheet.getRange(row, 11);
+  cell.setValue(status).setFontWeight('bold');
+  switch (status) {
+    case '作成済':
+      cell.setFontColor('#0f9d58').setBackground('#e6f4ea'); break;
+    case '発注済':
+      cell.setFontColor('#1a73e8').setBackground('#e8f0fe'); break;
+    case '失注':
+      cell.setFontColor('#5f6368').setBackground('#f1f3f4'); break;
+  }
+}
+
+// ============ API: 見積一覧取得 ============
+function getEstimateList() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(EST_INDEX_SHEET);
+  if (!s) return { success: true, estimates: [] };
+
+  var data = s.getDataRange().getValues();
+  var estimates = [];
+  for (var i = 1; i < data.length; i++) {
+    estimates.push({
+      timestamp: data[i][0],
+      estimateNo: data[i][1],
+      estimateDate: data[i][2],
+      customerName: data[i][3],
+      subject: data[i][4],
+      staff: data[i][5],
+      grandTotal: data[i][6],
+      subtotal: data[i][7],
+      costTotal: data[i][8],
+      margin: data[i][9],
+      status: data[i][10],
+      sheetUrl: data[i][11],
+      id: data[i][12]
+    });
+  }
+  return { success: true, estimates: estimates };
+}
+
+// ============ API: 見積データ取得（転記用） ============
+function getEstimateData(id) {
+  if (!id) return { success: false, error: 'IDが必要です' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(EST_INDEX_SHEET);
+  if (!s) return { success: false, error: '見積一覧がありません' };
+
+  var data = s.getDataRange().getValues();
+  var rowIdx = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][12] === id) { rowIdx = i; break; }
+  }
+  if (rowIdx === -1) return { success: false, error: '見積書が見つかりません' };
+
+  // 見積書シートから明細を読み取る
+  var sheetUrl = data[rowIdx][11];
+  var match = sheetUrl.match(/gid=(\d+)/);
+  if (!match) return { success: false, error: 'シートURLが不正です' };
+  var gid = parseInt(match[1]);
+  var estSheet = null;
+  var sheets = ss.getSheets();
+  for (var j = 0; j < sheets.length; j++) {
+    if (sheets[j].getSheetId() === gid) { estSheet = sheets[j]; break; }
+  }
+  if (!estSheet) return { success: false, error: '見積書シートが見つかりません' };
+
+  // 明細行を読み取り（行15-32, K列=原価, E列=数量 etc）
+  var lines = [];
+  for (var r = 15; r <= 32; r++) {
+    var maker = estSheet.getRange(r, 2).getValue();
+    if (!maker) continue;
+    lines.push({
+      maker: maker,
+      product: estSheet.getRange(r, 3).getValue(),
+      model: estSheet.getRange(r, 4).getValue(),
+      qty: estSheet.getRange(r, 5).getValue(),
+      price: estSheet.getRange(r, 11).getValue(),  // K列=原価 → 発注書の単価
+      remark: ''
+    });
+  }
+
+  return {
+    success: true,
+    estimateNo: data[rowIdx][1],
+    customerName: data[rowIdx][3],
+    subject: data[rowIdx][4],
+    lines: lines
+  };
+}
+
+// ============ API: 見積書を発注済みに ============
+function markEstimateTransferred(id) {
+  if (!id) return { success: false, error: 'IDが必要です' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(EST_INDEX_SHEET);
+  if (!s) return { success: false, error: '見積一覧がありません' };
+
+  var data = s.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][12] === id) {
+      applyEstimateStatus(s, i + 1, '発注済');
+      return { success: true, message: '発注済に更新しました' };
+    }
+  }
+  return { success: false, error: '見積書が見つかりません' };
+}
+
+// ============ メーカー→仕入先マッピング ============
+var MAKER_TO_SUPPLIER = {
+  'パロマ':'株式会社パロマ','リンナイ':'NX商事株式会社','ノーリツ':'ノーリツリビングクリエイト株式会社',
+  'パーパス':'千代田エル・ピー・ジー機器株式会社','長府製作所':'株式会社長府製作所',
+  'LIXIL':'渡辺パイプ株式会社','TOTO':'渡辺パイプ株式会社','タカラスタンダード':'渡辺パイプ株式会社',
+  'KVK':'渡辺パイプ株式会社','カクダイ':'渡辺パイプ株式会社','タカギ':'渡辺パイプ株式会社',
+  'マルゼン':'株式会社マルゼン','ホシザキ':'株式会社栄智機器','タニコー':'株式会社栄智機器',
+  '桂精機':'中国工業株式会社','新コスモス電機':'中国工業株式会社','大栄産業':'東洋アルチタイト株式会社',
+  '初田製作所':'愛知時計電機株式会社','ホクエイ':'矢崎エナジーシステム株式会社',
+  '矢崎':'矢崎エナジーシステム株式会社','I・T・O':'エヌ・ティ・ティテレコン株式会社',
+  '中国工業':'中国工業株式会社','宮入バルブ製作所':'中国工業株式会社'
+};
+
+// ============ メーカー別一括発注 ============
+function batchTransferToPO(data) {
+  // data: { estimateId, approverEmail, orderer, branch, urgent }
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var estResult = getEstimateData(data.estimateId);
+  if (!estResult.success) return estResult;
+
+  // メーカーごとにグループ化（発注なし・工事は除外）
+  var groups = {};
+  for (var i = 0; i < estResult.lines.length; i++) {
+    var ln = estResult.lines[i];
+    if (ln.maker === '発注なし' || ln.maker === '工事' || !ln.maker) continue;
+    if (!groups[ln.maker]) groups[ln.maker] = [];
+    groups[ln.maker].push(ln);
+  }
+
+  var makerNames = Object.keys(groups);
+  if (makerNames.length === 0) return { success: false, error: '発注対象のメーカーがありません' };
+
+  var today = new Date();
+  var dateStr = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyy-MM-dd');
+  var approver = data.urgent ? APPROVER_URGENT : APPROVER_PASS;
+  var created = [];
+
+  // 各メーカーごとに発注書を作成
+  for (var m = 0; m < makerNames.length; m++) {
+    var maker = makerNames[m];
+    var lines = groups[maker];
+    var supplier = MAKER_TO_SUPPLIER[maker] || maker;
+
+    var poLines = [];
+    var total = 0;
+    for (var li = 0; li < lines.length; li++) {
+      var el = lines[li];
+      var amount = (el.qty || 0) * (el.price || 0);
+      poLines.push({
+        maker: el.maker,
+        product: el.product,
+        model: el.model || '',
+        qty: el.qty,
+        price: el.price,
+        amount: amount,
+        remark: '見積No.' + estResult.estimateNo,
+        type: 'U'
+      });
+      total += amount;
+    }
+
+    var orderNo = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyyMMdd') + String(m + 1).padStart(3, '0');
+
+    var poData = {
+      issueDate: dateStr,
+      orderNo: orderNo,
+      supplier: supplier,
+      branch: data.branch || '本社',
+      lines: poLines,
+      total: total,
+      siteName: estResult.subject || '',
+      notes: '見積No.' + estResult.estimateNo + ' / メーカー: ' + maker,
+      orderer: data.orderer || '',
+      urgent: data.urgent || false,
+      approverName: approver.name,
+      approverEmail: approver.email,
+      sourceEstimateNo: estResult.estimateNo
+    };
+
+    try {
+      var result = processOrder(poData);
+      if (result.success) {
+        created.push({ maker: maker, supplier: supplier, orderNo: orderNo, lines: lines.length });
+      }
+    } catch (e) {
+      Logger.log('発注作成エラー (' + maker + '): ' + e.toString());
+    }
+  }
+
+  // 見積ステータスを「発注済」に更新
+  if (created.length > 0) {
+    markEstimateTransferred(data.estimateId);
+  }
+
+  return {
+    success: true,
+    message: created.length + '件の発注書を作成しました',
+    created: created,
+    total: makerNames.length,
+    skipped: makerNames.length - created.length
+  };
 }
