@@ -389,6 +389,34 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
 </div>
 
+<!-- ワンクリック発注申請モーダル -->
+<div class="modal-overlay" id="quickPOModal">
+  <div class="modal">
+    <h2 style="color:var(--primary)">📦 ワンクリック発注申請</h2>
+    <div id="quickPOInfo" style="margin-bottom:16px"></div>
+    <div class="field-group">
+      <div class="field-label"><span class="required-badge">必須</span>承認者</div>
+      <select id="quickApprover" style="font-size:16px"></select>
+    </div>
+    <div class="field-group">
+      <div class="field-label"><span class="required-badge">必須</span>注文者</div>
+      <select id="quickOrderer" style="font-size:16px"></select>
+    </div>
+    <div class="field-group">
+      <div class="field-label">事業所</div>
+      <select id="quickBranch" style="font-size:16px"></select>
+    </div>
+    <div class="field-group">
+      <div class="toggle-wrapper">
+        <label class="toggle"><input type="checkbox" id="quickUrgent"><span class="toggle-slider"></span></label>
+        <span class="urgent-label" id="quickUrgentLabel">PASS（通常承認）</span>
+      </div>
+    </div>
+    <button class="btn-confirm" id="btnQuickPO" onclick="executeQuickPO()" style="background:var(--primary)">📦 発注申請を送信</button>
+    <button class="btn-close-modal" onclick="closeQuickPO()">キャンセル</button>
+  </div>
+</div>
+
 <!-- トースト -->
 <div class="toast" id="toast"></div>
 
@@ -815,7 +843,7 @@ async function loadEstimateList() {
         '<div class="est-amount">¥' + Number(est.grandTotal || 0).toLocaleString() + '</div>' +
         '<div class="est-actions">' +
         '<a class="btn-view" href="' + (est.sheetUrl || '#') + '" target="_blank">📄 開く</a>' +
-        (est.status === '作成済' ? '<button class="btn-transfer" onclick="transferToPO(\'' + est.id + '\')">📦 発注書に転記</button>' : '') +
+        (est.status === '作成済' ? '<button class="btn-transfer" onclick="showQuickPO(\'' + est.id + '\',\'' + (est.estimateNo||'') + '\',\'' + (est.customerName||'') + '\',' + (est.grandTotal||0) + ')">📦 発注申請</button>' : '') +
         '</div></div>';
     });
     area.innerHTML = html;
@@ -863,6 +891,79 @@ async function transferToPO(estimateId) {
   } catch (err) {
     showToast('転記エラー: ' + err.message, 'error');
   }
+}
+
+
+// ============ ワンクリック発注申請 ============
+let quickPOEstimateId = null;
+
+function showQuickPO(estId, estNo, customer, total) {
+  quickPOEstimateId = estId;
+  // モーダル内のドロップダウンを初期化
+  const qa = document.getElementById('quickApprover');
+  const qo = document.getElementById('quickOrderer');
+  const qb = document.getElementById('quickBranch');
+  if (qa.options.length <= 1) {
+    qa.innerHTML = '<option value="">選択してください</option>';
+    APPROVERS.forEach(a => qa.add(new Option(a.name + '（' + a.email + '）', a.email)));
+    qo.innerHTML = '<option value="">選択してください</option>';
+    STAFF.forEach(s => qo.add(new Option(s, s)));
+    qb.innerHTML = '';
+    BRANCHES.forEach(b => qb.add(new Option(b, b)));
+  }
+  document.getElementById('quickUrgent').addEventListener('change', function() {
+    document.getElementById('quickUrgentLabel').textContent = this.checked ? '緊急（即発注）' : 'PASS（通常承認）';
+    document.getElementById('quickUrgentLabel').classList.toggle('active', this.checked);
+  });
+  document.getElementById('quickPOInfo').innerHTML =
+    '<div style="background:#f0f4f9;padding:12px;border-radius:8px;font-size:13px">' +
+    '<div style="font-weight:700;color:var(--primary);margin-bottom:4px">見積No. ' + estNo + '</div>' +
+    '<div>' + customer + ' / 合計 ¥' + Number(total).toLocaleString() + '</div>' +
+    '<div style="color:var(--text-secondary);font-size:12px;margin-top:4px">→ 原価ベースで発注書を自動作成し、承認フローに乗せます</div></div>';
+  document.getElementById('quickPOModal').classList.add('active');
+}
+
+function closeQuickPO() {
+  document.getElementById('quickPOModal').classList.remove('active');
+  quickPOEstimateId = null;
+}
+
+async function executeQuickPO() {
+  const approver = document.getElementById('quickApprover').value;
+  const orderer = document.getElementById('quickOrderer').value;
+  if (!approver) { showToast('承認者を選択してください', 'error'); return; }
+  if (!orderer) { showToast('注文者を選択してください', 'error'); return; }
+
+  const btn = document.getElementById('btnQuickPO');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 発注処理中...';
+
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        formType: 'quickPO',
+        estimateId: quickPOEstimateId,
+        approverEmail: approver,
+        orderer: orderer,
+        branch: document.getElementById('quickBranch').value,
+        urgent: document.getElementById('quickUrgent').checked
+      }),
+      headers: { 'Content-Type': 'text/plain' }
+    });
+    const result = await res.json();
+    if (result.success) {
+      closeQuickPO();
+      showToast('発注申請を送信しました！承認メールを確認してください', 'success');
+      loadEstimateList();
+    } else {
+      throw new Error(result.error || '発注申請に失敗しました');
+    }
+  } catch (err) {
+    showToast('エラー: ' + err.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = '📦 発注申請を送信';
 }
 
 
