@@ -177,7 +177,7 @@ function createFromTemplate(ss, tabName, data) {
   sh.getRange('AL1').setValue(parseInt(d[1]));
   sh.getRange('AO1').setValue(parseInt(d[2]));
   sh.getRange('AH3').setValue(data.orderNo);
-  sh.getRange('A10').setValue(data.supplier);
+  sh.getRange('A9').setValue(data.supplier);  // A9:H10結合セル
   sh.getRange('AL12').setValue(data.branch);
   sh.getRange('AB13').setValue(bi.zip);
   sh.getRange('AB14').setValue(bi.addr);
