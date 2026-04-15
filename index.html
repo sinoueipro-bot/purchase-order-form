@@ -807,6 +807,7 @@ function showEstPreview() {
 
   document.getElementById('btnConfirm').textContent = 'この内容で見積書を作成';
   document.getElementById('btnConfirm').style.background = 'var(--estimate)';
+  document.getElementById('btnConfirm').disabled = false;
   document.getElementById('previewModal').classList.add('active');
 }
 
@@ -1234,6 +1235,7 @@ function showPreview() {
     '<tr><th>承認者</th><td>' + data.approverName + '</td></tr></table>';
   document.getElementById('btnConfirm').textContent = 'この内容で送信する';
   document.getElementById('btnConfirm').style.background = 'var(--success)';
+  document.getElementById('btnConfirm').disabled = false;
   document.getElementById('previewModal').classList.add('active');
 }
 function closeModal() { document.getElementById('previewModal').classList.remove('active'); }
