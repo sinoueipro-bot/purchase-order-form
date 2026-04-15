@@ -100,11 +100,17 @@ textarea { resize: vertical; min-height: 60px; }
 @keyframes fadeInOut { 0% { opacity: 0; } 10% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
 
 /* 送信完了画面 */
-.success-screen { display: none; text-align: center; padding: 60px 20px; }
+.success-screen { display: none; text-align: center; padding: 40px 20px; }
 .success-screen.show { display: block; }
 .success-screen .icon { font-size: 64px; margin-bottom: 16px; }
 .success-screen h2 { color: var(--success); margin-bottom: 8px; }
-.success-screen p { color: var(--text-secondary); margin-bottom: 24px; }
+.success-screen p { color: var(--text-secondary); margin-bottom: 20px; }
+.success-links { display: flex; flex-direction: column; gap: 10px; margin: 0 auto 24px; max-width: 320px; }
+.success-links a { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; border-radius: var(--radius); font-size: 14px; font-weight: 600; text-decoration: none; transition: all 0.2s; }
+.link-spreadsheet { background: #e8f0fe; color: var(--primary); border: 1.5px solid var(--primary); }
+.link-spreadsheet:hover { background: var(--primary); color: white; }
+.link-edit { background: #fef7e0; color: #b06000; border: 1.5px solid var(--warning); }
+.link-edit:hover { background: var(--warning); color: white; }
 .btn-new { padding: 14px 32px; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; background: var(--primary); color: white; }
 
 .error-summary { display: none; background: #fce8e6; color: var(--danger); padding: 10px 16px; margin: 0 12px; border-radius: var(--radius); font-size: 13px; font-weight: 500; }
@@ -205,6 +211,16 @@ textarea { resize: vertical; min-height: 60px; }
   <div class="icon">&#10004;&#65039;</div>
   <h2>発注書を送信しました</h2>
   <p id="successMessage">スプレッドシートに記録し、承認者にメールを送信しました。</p>
+  <div class="success-links">
+    <a id="linkSpreadsheet" class="link-spreadsheet" href="#" target="_blank">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
+      スプレッドシートを開く
+    </a>
+    <a id="linkEditSheet" class="link-edit" href="#" target="_blank">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+      修正はこちらから
+    </a>
+  </div>
   <button class="btn-new" onclick="resetForm()">新しい発注書を作成</button>
 </div>
 
@@ -262,12 +278,13 @@ const PRODUCTS = [
   'ビルトインコンロ','リモコン','配管カバー','調整器','ボンベック'
 ];
 const STAFF = [
+  '井上将吾',
   '亀谷','原田','川口','三浦','渡邊','入江','松永','川上',
   '辻塚','三井','中嶋','岩﨑','久我','脇村','井上将','井上雅',
   '井上純','城丸','麻生','青栁','吉村'
 ];
-// ★ 承認者リスト（メールアドレスを実際のものに変更してください）
 const APPROVERS = [
+  { name: '井上将吾', email: 's.inoue.ipro@gmail.com' },
   { name: '原田', email: 'harada@example.com' },
   { name: '岩﨑', email: 'iwasaki@example.com' },
   { name: '脇村', email: 'wakimura@example.com' },
@@ -504,8 +521,13 @@ async function executeSend() {
       document.getElementById('formArea').style.display = 'none';
       document.getElementById('sendArea').style.display = 'none';
       document.getElementById('successScreen').classList.add('show');
-      document.getElementById('successMessage').textContent =
-        '注文No.' + data.orderNo + ' をスプレッドシートに記録し、' + data.approverName + 'さんにメール通知しました。';
+      document.getElementById('successMessage').textContent = data.urgent
+        ? '【緊急】注文No.' + data.orderNo + ' を登録し、' + data.approverName + 'さん＋発注担当者に同時メール通知しました。即発注扱いです。'
+        : '注文No.' + data.orderNo + ' をスプレッドシートに記録し、' + data.approverName + 'さんに承認依頼メールを送信しました。';
+      // スプシリンク設定
+      var ssBase = result.spreadsheetUrl || 'https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit';
+      document.getElementById('linkSpreadsheet').href = ssBase;
+      document.getElementById('linkEditSheet').href = result.sheetUrl || ssBase;
       showToast('送信完了', 'success');
     } else {
       throw new Error(result.error || '送信に失敗しました');
