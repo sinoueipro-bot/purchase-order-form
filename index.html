@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>発注書入力フォーム</title>
+<title>見積書・発注書フォーム</title>
 <style>
 :root {
   --primary: #1a73e8;
@@ -11,6 +11,7 @@
   --danger: #d93025;
   --success: #188038;
   --warning: #f9ab00;
+  --estimate: #0f9d58;
   --bg: #f8f9fa;
   --card: #ffffff;
   --border: #dadce0;
@@ -23,11 +24,22 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
   background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; padding-bottom: 80px;
 }
-.header { background: var(--primary); color: white; padding: 16px; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.header { background: var(--primary); color: white; padding: 16px 16px 0; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 .header h1 { font-size: 18px; font-weight: 600; }
 .header p { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+
+/* タブ */
+.tab-bar { display: flex; margin-top: 12px; }
+.tab-btn { flex: 1; padding: 10px; border: none; background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.2s; border-bottom: 3px solid transparent; }
+.tab-btn.active { background: rgba(255,255,255,0.25); color: white; border-bottom-color: white; }
+.tab-btn:first-child { border-radius: 8px 0 0 0; }
+.tab-btn:last-child { border-radius: 0 8px 0 0; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
 .section { background: var(--card); margin: 12px; border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
 .section-title { background: #e8f0fe; color: var(--primary); padding: 10px 16px; font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--border); }
+.section-title.est { background: #e6f4ea; color: var(--estimate); }
 .field-group { padding: 12px 16px; border-bottom: 1px solid #f0f0f0; }
 .field-group:last-child { border-bottom: none; }
 .field-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
@@ -39,6 +51,7 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 textarea { resize: vertical; min-height: 60px; }
 .row { display: flex; gap: 8px; }
 .row > * { flex: 1; }
+.row-3 > * { flex: 1; min-width: 0; }
 .line-item { background: #fafbfc; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin: 8px 16px; position: relative; }
 .line-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .line-item-num { font-weight: 700; color: var(--primary); font-size: 13px; }
@@ -50,6 +63,7 @@ textarea { resize: vertical; min-height: 60px; }
 .btn-add-line { display: flex; align-items: center; justify-content: center; gap: 6px; width: calc(100% - 32px); margin: 8px 16px 16px; padding: 10px; border: 2px dashed var(--border); border-radius: var(--radius); background: none; color: var(--primary); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .btn-add-line:hover { border-color: var(--primary); background: #e8f0fe; }
 .total-bar { background: var(--primary); color: white; margin: 0 12px; padding: 14px 16px; border-radius: var(--radius); display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 16px; box-shadow: 0 2px 6px rgba(26,115,232,0.3); }
+.total-bar.est { background: var(--estimate); box-shadow: 0 2px 6px rgba(15,157,88,0.3); }
 .total-bar .label { font-size: 14px; }
 .total-bar .amount { font-size: 20px; }
 .radio-group { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -67,19 +81,17 @@ textarea { resize: vertical; min-height: 60px; }
 .urgent-label { font-weight: 600; color: var(--text-secondary); }
 .urgent-label.active { color: var(--danger); }
 
-/* 送信ボタン（1つに統合） */
 .send-area { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 100; }
 .btn-submit { width: 100%; padding: 14px; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: white; transition: all 0.2s; }
+.btn-submit.est-btn { background: var(--estimate); }
 .btn-submit:disabled { background: #e0e0e0 !important; color: #999 !important; cursor: not-allowed; }
-.btn-submit:not(:disabled):hover { background: var(--primary-dark); }
-.btn-submit.sending { background: var(--warning); }
+.btn-submit:not(:disabled):hover { opacity: 0.9; }
 
-/* モーダル */
 .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: flex-end; justify-content: center; }
 .modal-overlay.active { display: flex; }
 .modal { background: white; border-radius: 16px 16px 0 0; width: 100%; max-width: 500px; max-height: 85vh; overflow-y: auto; padding: 20px; animation: slideUp 0.3s ease; }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-.modal h2 { font-size: 18px; margin-bottom: 16px; text-align: center; color: var(--primary); }
+.modal h2 { font-size: 18px; margin-bottom: 16px; text-align: center; }
 .preview-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
 .preview-table th, .preview-table td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; }
 .preview-table th { background: #f0f4f9; font-weight: 600; white-space: nowrap; width: 30%; }
@@ -91,7 +103,6 @@ textarea { resize: vertical; min-height: 60px; }
 .btn-confirm:disabled { background: #ccc; cursor: not-allowed; }
 .btn-close-modal { display: block; width: 100%; padding: 12px; border: 2px solid var(--border); border-radius: var(--radius); background: white; font-size: 14px; cursor: pointer; font-family: inherit; color: var(--text-secondary); }
 
-/* トースト */
 .toast { display: none; position: fixed; top: 80px; left: 50%; transform: translateX(-50%); padding: 12px 24px; border-radius: 8px; font-size: 14px; z-index: 300; font-weight: 600; }
 .toast.show { display: block; animation: fadeInOut 3s ease; }
 .toast.success { background: var(--success); color: white; }
@@ -99,7 +110,6 @@ textarea { resize: vertical; min-height: 60px; }
 .toast.info { background: #333; color: white; }
 @keyframes fadeInOut { 0% { opacity: 0; } 10% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
 
-/* 送信完了画面 */
 .success-screen { display: none; text-align: center; padding: 40px 20px; }
 .success-screen.show { display: block; }
 .success-screen .icon { font-size: 64px; margin-bottom: 16px; }
@@ -112,24 +122,170 @@ textarea { resize: vertical; min-height: 60px; }
 .link-edit { background: #fef7e0; color: #b06000; border: 1.5px solid var(--warning); }
 .link-edit:hover { background: var(--warning); color: white; }
 .btn-new { padding: 14px 32px; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; background: var(--primary); color: white; }
-
 .error-summary { display: none; background: #fce8e6; color: var(--danger); padding: 10px 16px; margin: 0 12px; border-radius: var(--radius); font-size: 13px; font-weight: 500; }
 .error-summary.show { display: block; }
-
-/* ローディング */
 .spinner { display: inline-block; width: 18px; height: 18px; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid white; border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* 見積書固有 */
+.profit-display { display: flex; gap: 8px; margin-top: 6px; font-size: 12px; }
+.profit-chip { padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+.profit-chip.cost { background: #fce8e6; color: var(--danger); }
+.profit-chip.margin { background: #e6f4ea; color: var(--success); }
+.est-summary { background: var(--card); margin: 8px 12px; border-radius: var(--radius); padding: 12px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.est-summary .row { font-size: 13px; padding: 4px 0; display: flex; justify-content: space-between; }
+.est-summary .row.total { font-size: 15px; font-weight: 700; border-top: 2px solid var(--estimate); padding-top: 8px; margin-top: 4px; }
+
+/* 見積一覧 */
+.est-list-section { margin: 12px; }
+.est-list-card { background: var(--card); border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 12px 16px; margin-bottom: 8px; }
+.est-list-card .est-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.est-list-card .est-no { font-weight: 700; color: var(--estimate); }
+.est-list-card .est-status { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+.est-list-card .est-detail { font-size: 13px; color: var(--text-secondary); }
+.est-list-card .est-amount { font-size: 16px; font-weight: 700; text-align: right; margin-top: 4px; }
+.est-list-card .est-actions { display: flex; gap: 8px; margin-top: 8px; }
+.est-list-card .est-actions button, .est-list-card .est-actions a { flex: 1; padding: 8px; border-radius: 6px; font-size: 13px; font-weight: 600; text-align: center; cursor: pointer; font-family: inherit; text-decoration: none; }
+.btn-transfer { background: var(--primary); color: white; border: none; }
+.btn-view { background: white; color: var(--primary); border: 1.5px solid var(--primary); display: block; }
+.btn-reload { display: block; width: 100%; padding: 10px; border: 2px dashed var(--border); border-radius: var(--radius); background: none; color: var(--text-secondary); font-size: 13px; cursor: pointer; font-family: inherit; margin-top: 8px; }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>発注書入力フォーム</h1>
-  <p>スプレッドシート自動記録 + 承認者メール通知</p>
+  <h1>見積書・発注書フォーム</h1>
+  <p>スプレッドシート自動記録</p>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('estimate')">📝 見積書</button>
+    <button class="tab-btn" onclick="switchTab('order')">📦 発注書</button>
+  </div>
 </div>
 
-<div id="formArea">
+<!-- ============================================================ -->
+<!-- 見積書タブ -->
+<!-- ============================================================ -->
+<div class="tab-content active" id="tab-estimate">
 
+<div id="estFormArea">
+<!-- 見積書 基本情報 -->
+<div class="section">
+  <div class="section-title est">基本情報</div>
+  <div class="field-group">
+    <div class="row">
+      <div>
+        <div class="field-label"><span class="required-badge">必須</span>見積日</div>
+        <input type="date" id="estDate" required>
+      </div>
+      <div>
+        <div class="field-label">日付連番</div>
+        <input type="text" id="estSeq" placeholder="空欄可">
+      </div>
+    </div>
+  </div>
+  <div class="field-group">
+    <div class="field-label"><span class="required-badge">必須</span>お客様名</div>
+    <input type="text" id="estCustomer" placeholder="お客様名を入力" required>
+  </div>
+  <div class="field-group">
+    <div class="field-label">件名</div>
+    <input type="text" id="estSubject" placeholder="件名を入力">
+  </div>
+  <div class="field-group">
+    <div class="row">
+      <div>
+        <div class="field-label"><span class="required-badge">必須</span>事業所</div>
+        <select id="estBranch" required><option value="">選択</option></select>
+      </div>
+      <div>
+        <div class="field-label"><span class="required-badge">必須</span>担当者</div>
+        <select id="estStaff" required><option value="">選択</option></select>
+      </div>
+    </div>
+  </div>
+  <div class="field-group">
+    <div class="row">
+      <div>
+        <div class="field-label">納期</div>
+        <input type="text" id="estDelivery" placeholder="例: 1週間">
+      </div>
+      <div>
+        <div class="field-label">受渡場所</div>
+        <input type="text" id="estPlace" placeholder="例: 現場">
+      </div>
+    </div>
+  </div>
+  <div class="field-group">
+    <div class="row">
+      <div>
+        <div class="field-label">支払条件</div>
+        <select id="estPayment"><option value="">選択</option></select>
+      </div>
+      <div>
+        <div class="field-label">支払日数</div>
+        <input type="number" id="estPayDays" placeholder="例: 60">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 見積書 明細行 -->
+<div class="section">
+  <div class="section-title est">見積明細</div>
+  <div id="estLineItems"></div>
+  <button type="button" class="btn-add-line" onclick="addEstLine()">+ 行を追加</button>
+</div>
+
+<!-- 見積 集計 -->
+<div class="est-summary" id="estSummaryBlock">
+  <div class="row"><span>小計（税抜）</span><span id="estSubtotal">&yen;0</span></div>
+  <div class="row"><span>消費税（10%）</span><span id="estTax">&yen;0</span></div>
+  <div class="row total"><span>合計（税込）</span><span id="estGrandTotal">&yen;0</span></div>
+  <div class="row" style="color:var(--danger);font-size:12px;margin-top:6px"><span>原価合計</span><span id="estCostTotal">&yen;0</span></div>
+  <div class="row" style="color:var(--success);font-size:12px"><span>粗利益高</span><span id="estProfitTotal">&yen;0</span></div>
+  <div class="row" style="color:var(--success);font-size:12px"><span>粗利率</span><span id="estMarginRate">0.0%</span></div>
+</div>
+
+<!-- 特記事項 -->
+<div class="section">
+  <div class="section-title est">特記事項</div>
+  <div class="field-group">
+    <textarea id="estNotes" placeholder="特記事項があれば入力"></textarea>
+  </div>
+</div>
+
+</div><!-- /estFormArea -->
+
+<!-- 見積 完了画面 -->
+<div class="success-screen" id="estSuccessScreen">
+  <div class="icon">&#10004;&#65039;</div>
+  <h2>見積書を作成しました</h2>
+  <p id="estSuccessMsg"></p>
+  <div class="success-links">
+    <a id="estLinkSheet" class="link-spreadsheet" href="#" target="_blank">📊 スプレッドシートを開く</a>
+    <a id="estLinkDirect" class="link-edit" href="#" target="_blank">📄 見積書シートを開く</a>
+  </div>
+  <button class="btn-new" style="background:var(--estimate)" onclick="resetEstForm()">新しい見積書を作成</button>
+</div>
+
+<!-- 見積一覧（下部） -->
+<div class="section" style="margin-top:20px">
+  <div class="section-title est">📋 見積一覧</div>
+  <div id="estListArea" style="padding:12px 16px">
+    <p style="color:var(--text-secondary);font-size:13px;text-align:center">読み込み中...</p>
+  </div>
+  <button type="button" class="btn-reload" onclick="loadEstimateList()">🔄 一覧を更新</button>
+</div>
+
+</div><!-- /tab-estimate -->
+
+
+<!-- ============================================================ -->
+<!-- 発注書タブ -->
+<!-- ============================================================ -->
+<div class="tab-content" id="tab-order">
+
+<div id="formArea">
 <!-- 基本情報 -->
 <div class="section">
   <div class="section-title">基本情報</div>
@@ -158,21 +314,17 @@ textarea { resize: vertical; min-height: 60px; }
     <input type="text" id="siteName" placeholder="現場名を入力">
   </div>
 </div>
-
 <!-- 明細行 -->
 <div class="section">
   <div class="section-title">注文明細</div>
   <div id="lineItems"></div>
   <button type="button" class="btn-add-line" onclick="addLineItem()">+ 行を追加</button>
 </div>
-
 <!-- 合計 -->
 <div class="total-bar">
   <span class="label">合計金額</span>
   <span class="amount" id="totalAmount">&yen;0</span>
 </div>
-
-
 <!-- その他 -->
 <div class="section">
   <div class="section-title">その他</div>
@@ -192,7 +344,6 @@ textarea { resize: vertical; min-height: 60px; }
     </div>
   </div>
 </div>
-
 <!-- 承認者選択 -->
 <div class="section">
   <div class="section-title">送信先</div>
@@ -201,45 +352,39 @@ textarea { resize: vertical; min-height: 60px; }
     <select id="approver" required><option value="">選択してください</option></select>
   </div>
 </div>
-
 <div class="error-summary" id="errorSummary"></div>
-
 </div><!-- /formArea -->
 
-<!-- 送信完了画面 -->
+<!-- 発注 完了画面 -->
 <div class="success-screen" id="successScreen">
   <div class="icon">&#10004;&#65039;</div>
   <h2>発注書を送信しました</h2>
-  <p id="successMessage">スプレッドシートに記録し、承認者にメールを送信しました。</p>
+  <p id="successMessage"></p>
   <div class="success-links">
-    <a id="linkSpreadsheet" class="link-spreadsheet" href="#" target="_blank">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
-      スプレッドシートを開く
-    </a>
-    <a id="linkEditSheet" class="link-edit" href="#" target="_blank">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-      修正はこちらから
-    </a>
+    <a id="linkSpreadsheet" class="link-spreadsheet" href="#" target="_blank">📊 スプレッドシートを開く</a>
+    <a id="linkEditSheet" class="link-edit" href="#" target="_blank">✏️ 修正はこちらから</a>
   </div>
   <button class="btn-new" onclick="resetForm()">新しい発注書を作成</button>
 </div>
+</div><!-- /tab-order -->
 
-<!-- 送信ボタン -->
+
+<!-- 送信ボタン（タブで切替） -->
 <div class="send-area" id="sendArea">
-  <button type="button" class="btn-submit" id="btnSubmit" onclick="handleSend()" disabled>
-    <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-    送信（スプシ記録 + メール通知）
+  <button type="button" class="btn-submit est-btn" id="btnEstSubmit" onclick="handleEstSend()">
+    📝 見積書を作成（スプシに記録）
+  </button>
+  <button type="button" class="btn-submit" id="btnSubmit" onclick="handleSend()" disabled style="display:none">
+    📦 送信（スプシ記録 + メール通知）
   </button>
 </div>
 
 <!-- プレビューモーダル -->
 <div class="modal-overlay" id="previewModal">
   <div class="modal">
-    <h2>発注書プレビュー</h2>
+    <h2 id="previewTitle">プレビュー</h2>
     <div id="previewContent"></div>
-    <button class="btn-confirm" id="btnConfirm" onclick="executeSend()">
-      この内容で送信する
-    </button>
+    <button class="btn-confirm" id="btnConfirm" onclick="executeCurrentSend()">この内容で実行</button>
     <button class="btn-close-modal" onclick="closeModal()">戻って修正する</button>
   </div>
 </div>
@@ -249,39 +394,42 @@ textarea { resize: vertical; min-height: 60px; }
 
 <script>
 // ============================================================
-// ★★★ GASデプロイ後に↓のURLを書き換えてください ★★★
-// ============================================================
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbzqBN_Kj3hMVwrSBo7tF_B2hq6oU3uugBUGbj0Gf1-cBHs4vzDR5koS-5KRwCMFUcAO0Q/exec';
 
 // ============ マスターデータ ============
 const SUPPLIERS = [
-  { name: '愛知時計電機株式会社' }, { name: '岩谷産業株式会社' },
-  { name: '株式会社栄智機器' }, { name: 'セントラル石油瓦斯株式会社' },
-  { name: '中国工業株式会社' }, { name: '株式会社長府製作所' },
-  { name: '千代田エル・ピー・ジー機器株式会社' }, { name: '日通商事株式会社' },
-  { name: 'ノーリツ九州販売株式会社' }, { name: '株式会社パロマ' },
-  { name: '株式会社マルゼン' }, { name: 'タニコー株式会社' },
-  { name: '渡辺パイプ株式会社' }
+  '愛知時計電機株式会社','NX商事株式会社','株式会社栄智機器',
+  '中国工業株式会社','株式会社長府製作所','千代田エル・ピー・ジー機器株式会社',
+  'ノーリツリビングクリエイト株式会社','株式会社パロマ','株式会社マルゼン',
+  '渡辺パイプ株式会社','矢崎エナジーシステム株式会社','エヌ・ティ・ティテレコン株式会社',
+  '東洋アルチタイト株式会社'
 ];
-const BRANCHES = [
-  { name: '本社' }, { name: '福岡店' }, { name: '飯塚ガスセンター' }
-];
+const BRANCHES = ['本社','福岡店','飯塚ガスセンター'];
 const MAKERS = [
-  'I・T・O','TOTO','愛知時計電機','カグラベーパーテック','桂精機',
-  '新コスモス電機','大栄産業','タカギ','タカラスタンダード','タニコー',
-  '中国工業','長府製作所','ノーリツ','パーパス','初田製作所',
-  'パロマ','ホクエイ','ホシザキ','マルゼン','宮入バルブ製作所',
-  '矢崎','リコーエレメックス','リンナイ'
+  'I・T・O','TOTO','LIXIL','KVK','カクダイ','タカギ','タカラスタンダード',
+  'タニコー','ノーリツ','パーパス','パロマ','ホクエイ','ホシザキ',
+  'マルゼン','リンナイ','長府製作所','大栄産業','初田製作所',
+  '桂精機','新コスモス電機','中国工業','矢崎','宮入バルブ製作所'
 ];
 const PRODUCTS = [
-  '鋳物コンロ','ガス栓','給湯器','給湯暖房機','テーブルコンロ',
-  'ビルトインコンロ','リモコン','配管カバー','調整器','ボンベック'
+  'ガス風呂給湯器','ガス給湯器','リモコンセット','台所リモコン','風呂リモコン',
+  '配管カバー','バスアダプター','テーブルコンロ','ビルトインコンロ','1口コンロ',
+  '鋳物コンロ','ガス衣類乾燥機','ガスファンヒーター','ガスコード','ガス栓',
+  '取付工事','取替工事','ガス配管工事','給湯配管工事'
 ];
+const UNITS = ['台','個','ヶ','式','m','㎥','ヶ所','本','セット'];
+const ROUNDING_OPTIONS = [
+  { value: '0', label: '0 (十の位切上)', desc: '¥XX0' },
+  { value: '00', label: '00 (百の位切上)', desc: '¥X00' },
+  { value: '000', label: '000 (千の位切上)', desc: '¥000' },
+  { value: '8', label: '8 (末尾8)', desc: '¥XX8' },
+  { value: '80', label: '80 (末尾80)', desc: '¥X80' },
+  { value: '800', label: '800 (末尾800)', desc: '¥800' }
+];
+const PAYMENT_TERMS = ['ご相談の上','現金','振込','口座振替','リース'];
 const STAFF = [
-  '井上将吾',
-  '亀谷','原田','川口','三浦','渡邊','入江','松永','川上',
-  '辻塚','三井','中嶋','岩﨑','久我','脇村','井上将','井上雅',
-  '井上純','城丸','麻生','青栁','吉村'
+  '亀谷','原田','川口','三浦','渡邊','入江','松永','辻塚',
+  '三井','中嶋','岩﨑','久我','脇村','真鍋','井上将吾'
 ];
 const APPROVERS = [
   { name: '井上将吾', email: 's.inoue.ipro@gmail.com' },
@@ -295,48 +443,432 @@ const FORM_TYPES = [
   { value: 'M', label: 'M：無償' }
 ];
 
-// ============ 初期化 ============
+// ============ 状態 ============
+let currentTab = 'estimate';
 let lineItemCount = 0;
+let estLineCount = 0;
+let pendingSendType = null; // 'estimate' or 'order'
 
+// ============ 初期化 ============
 document.addEventListener('DOMContentLoaded', () => {
-  initDropdowns();
+  initAllDropdowns();
   setDefaultDate();
   generateOrderNo();
   addLineItem();
+  addEstLine();
   setupValidation();
+  loadEstimateList();
 });
 
-function initDropdowns() {
-  // 仕入先 datalist
-  const supList = document.createElement('datalist'); supList.id = 'supplierList';
-  SUPPLIERS.forEach(s => { const o = document.createElement('option'); o.value = s.name; supList.appendChild(o); });
-  document.body.appendChild(supList);
-  // メーカー datalist
-  const mkList = document.createElement('datalist'); mkList.id = 'makerList';
-  MAKERS.forEach(m => { const o = document.createElement('option'); o.value = m; mkList.appendChild(o); });
-  document.body.appendChild(mkList);
-  // 事業所（選択肢固定のためselectのまま）
-  const br = document.getElementById('branch');
-  BRANCHES.forEach(b => br.add(new Option(b.name, b.name)));
-  // 注文者
-  const ord = document.getElementById('orderer');
-  STAFF.forEach(s => ord.add(new Option(s, s)));
-  // 承認者
+// ============ タブ切替 ============
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  if (tab === 'estimate') {
+    document.querySelectorAll('.tab-btn')[0].classList.add('active');
+    document.getElementById('tab-estimate').classList.add('active');
+    document.getElementById('btnEstSubmit').style.display = '';
+    document.getElementById('btnSubmit').style.display = 'none';
+  } else {
+    document.querySelectorAll('.tab-btn')[1].classList.add('active');
+    document.getElementById('tab-order').classList.add('active');
+    document.getElementById('btnEstSubmit').style.display = 'none';
+    document.getElementById('btnSubmit').style.display = '';
+  }
+  validateEst();
+  validate();
+}
+
+// ============ ドロップダウン初期化 ============
+function initAllDropdowns() {
+  // datalist
+  addDatalist('supplierList', SUPPLIERS);
+  addDatalist('makerList', MAKERS);
+  addDatalist('productList', PRODUCTS);
+  // 発注書
+  fillSelect('branch', BRANCHES);
+  fillSelect('orderer', STAFF);
   const app = document.getElementById('approver');
   APPROVERS.forEach(a => app.add(new Option(a.name + '（' + a.email + '）', a.email)));
+  // 見積書
+  fillSelect('estBranch', BRANCHES);
+  fillSelect('estStaff', STAFF);
+  fillSelect('estPayment', PAYMENT_TERMS);
+}
+function addDatalist(id, items) {
+  const dl = document.createElement('datalist'); dl.id = id;
+  items.forEach(v => { const o = document.createElement('option'); o.value = typeof v === 'object' ? v.name : v; dl.appendChild(o); });
+  document.body.appendChild(dl);
+}
+function fillSelect(id, items) {
+  const sel = document.getElementById(id);
+  items.forEach(v => sel.add(new Option(typeof v === 'object' ? v.name : v, typeof v === 'object' ? v.name : v)));
 }
 
 function setDefaultDate() {
-  document.getElementById('issueDate').value = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('issueDate').value = today;
+  document.getElementById('estDate').value = today;
 }
-
 function generateOrderNo() {
   const n = new Date();
   document.getElementById('orderNo').value =
     n.getFullYear() + String(n.getMonth()+1).padStart(2,'0') + String(n.getDate()).padStart(2,'0') + '001';
 }
 
-// ============ 明細行 ============
+// ============================================================
+// ============ 見積書 明細行 ============
+// ============================================================
+function addEstLine() {
+  estLineCount++;
+  const num = estLineCount;
+  const c = document.getElementById('estLineItems');
+  const d = document.createElement('div');
+  d.className = 'line-item'; d.id = 'est-line-' + num;
+  d.innerHTML =
+    '<div class="line-item-header"><span class="line-item-num">No.' + num + '</span>' +
+    (num > 1 ? '<button type="button" class="btn-remove-line" onclick="removeEstLine(' + num + ')">&times;</button>' : '') +
+    '</div>' +
+    '<div class="row"><div style="flex:2"><div class="field-label"><span class="required-badge">必須</span>メーカー</div>' +
+    '<input type="text" id="est-maker-' + num + '" list="makerList" placeholder="メーカー" oninput="validateEst()"></div>' +
+    '<div style="flex:3"><div class="field-label"><span class="required-badge">必須</span>品名</div>' +
+    '<input type="text" id="est-product-' + num + '" list="productList" placeholder="品名" oninput="validateEst()"></div></div>' +
+    '<div class="row"><div style="flex:2"><div class="field-label">型式・仕様</div>' +
+    '<input type="text" id="est-model-' + num + '" placeholder="型式"></div>' +
+    '<div><div class="field-label"><span class="required-badge">必須</span>数量</div>' +
+    '<input type="number" id="est-qty-' + num + '" min="1" value="1" oninput="calcEstLine(' + num + ')"></div>' +
+    '<div><div class="field-label">単位</div>' +
+    '<select id="est-unit-' + num + '">' + UNITS.map(u => '<option value="' + u + '">' + u + '</option>').join('') + '</select></div></div>' +
+    '<div class="row row-3"><div><div class="field-label"><span class="required-badge">必須</span>原価(税別)</div>' +
+    '<input type="number" id="est-cost-' + num + '" min="0" placeholder="0" oninput="calcEstLine(' + num + ')"></div>' +
+    '<div><div class="field-label"><span class="required-badge">必須</span>粗利率%</div>' +
+    '<input type="number" id="est-margin-' + num + '" min="0" max="99" step="1" value="30" oninput="calcEstLine(' + num + ')"></div>' +
+    '<div><div class="field-label">丸め</div>' +
+    '<select id="est-round-' + num + '" onchange="calcEstLine(' + num + ')">' +
+    ROUNDING_OPTIONS.map(r => '<option value="' + r.value + '">' + r.label + '</option>').join('') + '</select></div></div>' +
+    '<div class="row" style="margin-top:4px"><div><div class="field-label">定価(税別)</div>' +
+    '<input type="number" id="est-listprice-' + num + '" min="0" placeholder="参考"></div>' +
+    '<div style="display:flex;align-items:flex-end;padding-bottom:2px"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">' +
+    '<input type="checkbox" id="est-zerocost-' + num + '" onchange="calcEstLine(' + num + ')" style="width:auto"> 原価0対象</label></div></div>' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid #eee;margin-top:8px">' +
+    '<div style="font-size:12px;color:var(--text-secondary)">売値: <span id="est-selling-' + num + '" style="font-weight:700">-</span></div>' +
+    '<div class="amount-display" id="est-amount-' + num + '" style="padding:0;font-size:18px">&yen;0</div></div>' +
+    '<div class="profit-display"><span class="profit-chip cost" id="est-costdisp-' + num + '">原価: &yen;0</span>' +
+    '<span class="profit-chip margin" id="est-margindisp-' + num + '">粗利: 0%</span></div>';
+  c.appendChild(d);
+  calcEstLine(num);
+  validateEst();
+}
+
+function removeEstLine(num) {
+  const el = document.getElementById('est-line-' + num);
+  if (el) { el.remove(); calcEstTotal(); validateEst(); }
+}
+
+// ============ 売値計算（Excelの丸めロジック再現） ============
+function calcSellingPriceJS(cost, marginPct, roundingStr) {
+  if (!cost || !marginPct || marginPct >= 100) return 0;
+  const marginDec = marginPct / 100;
+  const raw = cost / (1 - marginDec);
+  const rStr = String(roundingStr || '0');
+  const digits = rStr.length;
+  const factor = Math.pow(10, digits);
+  if (rStr.charAt(0) === '8') {
+    return Math.floor(raw / factor) * factor + parseInt(rStr);
+  } else {
+    return Math.ceil(raw / factor) * factor;
+  }
+}
+
+function calcEstLine(num) {
+  const cost = parseInt(document.getElementById('est-cost-' + num)?.value) || 0;
+  const margin = parseFloat(document.getElementById('est-margin-' + num)?.value) || 0;
+  const rounding = document.getElementById('est-round-' + num)?.value || '0';
+  const qty = parseInt(document.getElementById('est-qty-' + num)?.value) || 0;
+  const zeroCost = document.getElementById('est-zerocost-' + num)?.checked || false;
+
+  const selling = calcSellingPriceJS(cost, margin, rounding);
+  const amount = selling * qty;
+  const costAmount = zeroCost ? 0 : (cost < 0 ? 0 : cost * qty);
+  const actualMargin = amount > 0 ? ((1 - costAmount / amount) * 100).toFixed(1) : '0.0';
+
+  document.getElementById('est-selling-' + num).textContent = '¥' + selling.toLocaleString();
+  document.getElementById('est-amount-' + num).textContent = '¥' + amount.toLocaleString();
+  document.getElementById('est-costdisp-' + num).textContent = '原価: ¥' + costAmount.toLocaleString();
+  document.getElementById('est-margindisp-' + num).textContent = '粗利: ' + actualMargin + '%';
+
+  calcEstTotal();
+  validateEst();
+}
+
+function calcEstTotal() {
+  let subtotal = 0, costTotal = 0;
+  document.querySelectorAll('[id^="est-line-"]').forEach(item => {
+    const num = item.id.replace('est-line-', '');
+    const cost = parseInt(document.getElementById('est-cost-' + num)?.value) || 0;
+    const margin = parseFloat(document.getElementById('est-margin-' + num)?.value) || 0;
+    const rounding = document.getElementById('est-round-' + num)?.value || '0';
+    const qty = parseInt(document.getElementById('est-qty-' + num)?.value) || 0;
+    const zeroCost = document.getElementById('est-zerocost-' + num)?.checked || false;
+    const selling = calcSellingPriceJS(cost, margin, rounding);
+    subtotal += selling * qty;
+    costTotal += zeroCost ? 0 : (cost < 0 ? 0 : cost * qty);
+  });
+  const tax = Math.floor(subtotal * 0.1);
+  const grand = subtotal + tax;
+  const profit = subtotal - costTotal;
+  const marginRate = subtotal > 0 ? (profit / subtotal * 100).toFixed(1) : '0.0';
+  document.getElementById('estSubtotal').textContent = '¥' + subtotal.toLocaleString();
+  document.getElementById('estTax').textContent = '¥' + tax.toLocaleString();
+  document.getElementById('estGrandTotal').textContent = '¥' + grand.toLocaleString();
+  document.getElementById('estCostTotal').textContent = '¥' + costTotal.toLocaleString();
+  document.getElementById('estProfitTotal').textContent = '¥' + profit.toLocaleString();
+  document.getElementById('estMarginRate').textContent = marginRate + '%';
+}
+
+// ============ 見積バリデーション ============
+function validateEst() {
+  const errs = getEstErrors();
+  const btn = document.getElementById('btnEstSubmit');
+  btn.disabled = errs.length > 0;
+  return errs.length === 0;
+}
+function getEstErrors() {
+  const e = [];
+  if (!document.getElementById('estDate').value) e.push('見積日');
+  if (!document.getElementById('estCustomer').value) e.push('お客様名');
+  if (!document.getElementById('estBranch').value) e.push('事業所');
+  if (!document.getElementById('estStaff').value) e.push('担当者');
+  document.querySelectorAll('[id^="est-line-"]').forEach(item => {
+    const n = item.id.replace('est-line-', '');
+    if (!document.getElementById('est-maker-' + n)?.value) e.push('明細:メーカー');
+    if (!document.getElementById('est-product-' + n)?.value) e.push('明細:品名');
+    if (!(parseInt(document.getElementById('est-cost-' + n)?.value) > 0)) e.push('明細:原価');
+  });
+  return e;
+}
+
+// ============ 見積データ収集 ============
+function collectEstData() {
+  const lines = [];
+  document.querySelectorAll('[id^="est-line-"]').forEach(item => {
+    const n = item.id.replace('est-line-', '');
+    const cost = parseInt(document.getElementById('est-cost-' + n)?.value) || 0;
+    const margin = parseFloat(document.getElementById('est-margin-' + n)?.value) || 0;
+    const rounding = document.getElementById('est-round-' + n)?.value || '0';
+    const qty = parseInt(document.getElementById('est-qty-' + n)?.value) || 0;
+    lines.push({
+      maker: document.getElementById('est-maker-' + n)?.value || '',
+      product: document.getElementById('est-product-' + n)?.value || '',
+      model: document.getElementById('est-model-' + n)?.value || '',
+      qty: qty,
+      unit: document.getElementById('est-unit-' + n)?.value || '台',
+      cost: cost,
+      marginRate: margin,
+      rounding: rounding,
+      listPrice: parseInt(document.getElementById('est-listprice-' + n)?.value) || 0,
+      zeroCost: document.getElementById('est-zerocost-' + n)?.checked || false
+    });
+  });
+
+  const staffName = document.getElementById('estStaff').value;
+  // 担当記号（Excelの担当記号テーブルに相当）
+  const staffCodes = { '亀谷':'KAM','原田':'HAR','川口':'KAW','三浦':'MIU','渡邊':'WAT','入江':'IRI','松永':'MAT','辻塚':'TSU','三井':'MIT','中嶋':'NAK','岩﨑':'IWA','久我':'KUG','脇村':'WAK','真鍋':'MAN','井上将吾':'INO' };
+  const code = staffCodes[staffName] || '';
+  const dateStr = document.getElementById('estDate').value.replace(/-/g, '');
+  const seq = document.getElementById('estSeq').value;
+  const estNo = code + (seq ? dateStr + '_' + seq : dateStr);
+
+  return {
+    formType: 'estimate',
+    estimateDate: document.getElementById('estDate').value,
+    estimateNo: estNo,
+    customerName: document.getElementById('estCustomer').value,
+    subject: document.getElementById('estSubject').value,
+    branch: document.getElementById('estBranch').value,
+    staff: staffName,
+    delivery: document.getElementById('estDelivery').value,
+    deliveryPlace: document.getElementById('estPlace').value,
+    paymentTerms: document.getElementById('estPayment').value,
+    paymentDetail: document.getElementById('estPayDays').value ? document.getElementById('estPayDays').value + '日' : '',
+    notes: document.getElementById('estNotes').value,
+    lines: lines
+  };
+}
+
+// ============ 見積送信 ============
+function handleEstSend() {
+  if (!validateEst()) return;
+  pendingSendType = 'estimate';
+  showEstPreview();
+}
+
+function showEstPreview() {
+  const data = collectEstData();
+  let rows = '';
+  data.lines.forEach((l, i) => {
+    const selling = calcSellingPriceJS(l.cost, l.marginRate, l.rounding);
+    const amount = selling * l.qty;
+    rows += '<tr><td>' + (i+1) + '</td><td>' + l.maker + '</td><td>' + l.product + '</td>' +
+      '<td>' + l.qty + '</td><td>¥' + selling.toLocaleString() + '</td><td>¥' + amount.toLocaleString() + '</td>' +
+      '<td style="color:#999;font-size:11px">¥' + l.cost.toLocaleString() + ' / ' + l.marginRate + '%</td></tr>';
+  });
+
+  // 集計
+  let sub = 0;
+  data.lines.forEach(l => { sub += calcSellingPriceJS(l.cost, l.marginRate, l.rounding) * l.qty; });
+  const tax = Math.floor(sub * 0.1);
+
+  document.getElementById('previewTitle').textContent = '見積書プレビュー';
+  document.getElementById('previewContent').innerHTML =
+    '<table class="preview-table">' +
+    '<tr><th>見積日</th><td>' + data.estimateDate + '</td></tr>' +
+    '<tr><th>見積No.</th><td>' + data.estimateNo + '</td></tr>' +
+    '<tr><th>お客様</th><td>' + data.customerName + '</td></tr>' +
+    '<tr><th>事業所</th><td>' + data.branch + '</td></tr>' +
+    '<tr><th>担当</th><td>' + data.staff + '</td></tr></table>' +
+    '<table class="preview-detail-table"><thead><tr><th>No</th><th>メーカー</th><th>品名</th><th>数量</th><th>売値</th><th>金額</th><th>原価/粗利</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<div style="text-align:right;font-size:14px;color:var(--text-secondary);margin-bottom:4px">小計(税抜): ¥' + sub.toLocaleString() + ' ＋ 消費税: ¥' + tax.toLocaleString() + '</div>' +
+    '<div class="preview-total" style="color:var(--estimate)">合計(税込): ¥' + (sub + tax).toLocaleString() + '</div>';
+
+  document.getElementById('btnConfirm').textContent = 'この内容で見積書を作成';
+  document.getElementById('btnConfirm').style.background = 'var(--estimate)';
+  document.getElementById('previewModal').classList.add('active');
+}
+
+function executeCurrentSend() {
+  if (pendingSendType === 'estimate') executeEstSend();
+  else executeSend();
+}
+
+async function executeEstSend() {
+  const btn = document.getElementById('btnConfirm');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 作成中...';
+  const data = collectEstData();
+  try {
+    const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'text/plain' } });
+    const result = await res.json();
+    if (result.success) {
+      closeModal();
+      document.getElementById('estFormArea').style.display = 'none';
+      document.getElementById('estSummaryBlock').style.display = 'none';
+      document.getElementById('btnEstSubmit').style.display = 'none';
+      document.getElementById('estSuccessScreen').classList.add('show');
+      document.getElementById('estSuccessMsg').textContent = '見積No.' + result.estimateNo + ' をスプレッドシートに記録しました。';
+      document.getElementById('estLinkSheet').href = result.spreadsheetUrl || '#';
+      document.getElementById('estLinkDirect').href = result.sheetUrl || '#';
+      showToast('見積書作成完了', 'success');
+      loadEstimateList();
+    } else {
+      throw new Error(result.error || '作成に失敗しました');
+    }
+  } catch (err) {
+    showToast('エラー: ' + err.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'この内容で見積書を作成';
+  }
+}
+
+function resetEstForm() {
+  document.getElementById('estFormArea').style.display = '';
+  document.getElementById('estSummaryBlock').style.display = '';
+  document.getElementById('btnEstSubmit').style.display = '';
+  document.getElementById('estSuccessScreen').classList.remove('show');
+  document.getElementById('estCustomer').value = '';
+  document.getElementById('estSubject').value = '';
+  document.getElementById('estDelivery').value = '';
+  document.getElementById('estPlace').value = '';
+  document.getElementById('estPayDays').value = '';
+  document.getElementById('estNotes').value = '';
+  document.getElementById('estSeq').value = '';
+  document.getElementById('estLineItems').innerHTML = '';
+  estLineCount = 0;
+  document.getElementById('estDate').value = new Date().toISOString().split('T')[0];
+  addEstLine();
+  validateEst();
+  window.scrollTo(0, 0);
+}
+
+// ============ 見積一覧 ============
+async function loadEstimateList() {
+  const area = document.getElementById('estListArea');
+  area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center">読み込み中...</p>';
+  try {
+    const res = await fetch(GAS_URL + '?action=listEstimates');
+    const data = await res.json();
+    if (!data.success || !data.estimates || data.estimates.length === 0) {
+      area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center">見積書がありません</p>';
+      return;
+    }
+    let html = '';
+    data.estimates.reverse().forEach(est => {
+      const statusColor = est.status === '作成済' ? 'background:#e6f4ea;color:#137333' :
+                           est.status === '発注済' ? 'background:#e8f0fe;color:#1a73e8' :
+                           'background:#f1f3f4;color:#5f6368';
+      html += '<div class="est-list-card">' +
+        '<div class="est-header"><span class="est-no">' + (est.estimateNo || '-') + '</span>' +
+        '<span class="est-status" style="' + statusColor + '">' + est.status + '</span></div>' +
+        '<div class="est-detail">' + (est.customerName || '') + (est.subject ? ' / ' + est.subject : '') + '</div>' +
+        '<div class="est-detail">' + (est.estimateDate || '') + ' / ' + (est.staff || '') + '</div>' +
+        '<div class="est-amount">¥' + Number(est.grandTotal || 0).toLocaleString() + '</div>' +
+        '<div class="est-actions">' +
+        '<a class="btn-view" href="' + (est.sheetUrl || '#') + '" target="_blank">📄 開く</a>' +
+        (est.status === '作成済' ? '<button class="btn-transfer" onclick="transferToPO(\'' + est.id + '\')">📦 発注書に転記</button>' : '') +
+        '</div></div>';
+    });
+    area.innerHTML = html;
+  } catch (err) {
+    area.innerHTML = '<p style="color:var(--danger);font-size:13px;text-align:center">読込エラー: ' + err.message + '</p>';
+  }
+}
+
+// ============ 見積→発注 転記 ============
+async function transferToPO(estimateId) {
+  showToast('見積データを取得中...', 'info');
+  try {
+    const res = await fetch(GAS_URL + '?action=getEstimateData&id=' + estimateId);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || '取得失敗');
+
+    // 発注書タブに切替
+    switchTab('order');
+
+    // フォームにデータをセット
+    document.getElementById('siteName').value = data.subject || '';
+
+    // 既存明細をクリア
+    document.getElementById('lineItems').innerHTML = '';
+    lineItemCount = 0;
+
+    // 見積の明細を発注書にセット（原価ベース）
+    data.lines.forEach(ln => {
+      addLineItem();
+      const n = lineItemCount;
+      document.getElementById('maker-' + n).value = ln.maker || '';
+      document.getElementById('product-' + n).value = ln.product || '';
+      document.getElementById('model-' + n).value = ln.model || '';
+      document.getElementById('qty-' + n).value = ln.qty || 0;
+      document.getElementById('price-' + n).value = ln.price || 0;  // 原価
+      calcLineAmount(n);
+    });
+
+    // 見積一覧のステータスを更新
+    await fetch(GAS_URL + '?action=markTransferred&id=' + estimateId);
+    loadEstimateList();
+
+    showToast('見積データを発注書に転記しました（原価ベース）', 'success');
+    validate();
+  } catch (err) {
+    showToast('転記エラー: ' + err.message, 'error');
+  }
+}
+
+
+// ============================================================
+// ============ 発注書 明細行（既存） ============
+// ============================================================
 function addLineItem() {
   lineItemCount++;
   const num = lineItemCount;
@@ -347,12 +879,12 @@ function addLineItem() {
     (num > 1 ? '<button type="button" class="btn-remove-line" onclick="removeLineItem(' + num + ')">&times;</button>' : '') +
     '</div>' +
     '<div class="row"><div><div class="field-label"><span class="required-badge">必須</span>メーカー</div>' +
-    '<input type="text" id="maker-' + num + '" list="makerList" placeholder="メーカーを入力/選択" oninput="validate()"></div>' +
+    '<input type="text" id="maker-' + num + '" list="makerList" placeholder="メーカー" oninput="validate()"></div>' +
     '<div><div class="field-label"><span class="required-badge">必須</span>形態</div>' +
     '<select id="type-' + num + '" onchange="validate()"><option value="">選択</option>' +
     FORM_TYPES.map(t => '<option value="' + t.value + '">' + t.label + '</option>').join('') + '</select></div></div>' +
     '<div><div class="field-label"><span class="required-badge">必須</span>商品名</div>' +
-    '<input type="text" id="product-' + num + '" list="productList" placeholder="商品名を入力/選択" oninput="validate()"></div>' +
+    '<input type="text" id="product-' + num + '" list="productList" placeholder="商品名" oninput="validate()"></div>' +
     '<div><div class="field-label">型式</div><input type="text" id="model-' + num + '" placeholder="型式"></div>' +
     '<div class="row"><div><div class="field-label"><span class="required-badge">必須</span>数量</div>' +
     '<input type="number" id="qty-' + num + '" min="1" placeholder="0" oninput="calcLineAmount(' + num + ')"></div>' +
@@ -363,12 +895,10 @@ function addLineItem() {
   c.appendChild(d);
   validate();
 }
-
 function removeLineItem(num) {
   const el = document.getElementById('line-' + num);
   if (el) { el.remove(); calcTotal(); validate(); }
 }
-
 function calcLineAmount(num) {
   const q = parseInt(document.getElementById('qty-' + num)?.value) || 0;
   const p = parseInt(document.getElementById('price-' + num)?.value) || 0;
@@ -376,10 +906,9 @@ function calcLineAmount(num) {
   if (el) el.textContent = '\u00a5' + (q * p).toLocaleString();
   calcTotal(); validate();
 }
-
 function calcTotal() {
   let total = 0;
-  document.querySelectorAll('.line-item').forEach(item => {
+  document.querySelectorAll('#lineItems .line-item').forEach(item => {
     const n = item.id.replace('line-', '');
     total += (parseInt(document.getElementById('qty-' + n)?.value) || 0) *
              (parseInt(document.getElementById('price-' + n)?.value) || 0);
@@ -387,20 +916,19 @@ function calcTotal() {
   document.getElementById('totalAmount').textContent = '\u00a5' + total.toLocaleString();
 }
 
-// ============ バリデーション ============
+// ============ 発注バリデーション ============
 function validate() {
   const ok = getValidationErrors().length === 0;
   document.getElementById('btnSubmit').disabled = !ok;
   return ok;
 }
-
 function getValidationErrors() {
   const e = [];
   if (!document.getElementById('issueDate').value) e.push('発行日');
   if (!document.getElementById('orderNo').value) e.push('注文No.');
   if (!document.getElementById('supplier').value) e.push('仕入先');
   if (!document.getElementById('branch').value) e.push('事業所');
-  const lines = document.querySelectorAll('.line-item');
+  const lines = document.querySelectorAll('#lineItems .line-item');
   if (lines.length === 0) e.push('明細行');
   lines.forEach(item => {
     const n = item.id.replace('line-', '');
@@ -414,11 +942,10 @@ function getValidationErrors() {
   if (!document.getElementById('approver').value) e.push('承認者');
   return e;
 }
-
 function setupValidation() {
   document.querySelectorAll('input,select,textarea').forEach(el => {
-    el.addEventListener('change', validate);
-    el.addEventListener('input', validate);
+    el.addEventListener('change', () => { validate(); validateEst(); });
+    el.addEventListener('input', () => { validate(); validateEst(); });
   });
   document.getElementById('urgent').addEventListener('change', function() {
     document.getElementById('urgentLabel').textContent = this.checked ? '緊急' : 'PASS';
@@ -426,10 +953,10 @@ function setupValidation() {
   });
 }
 
-// ============ データ収集 ============
+// ============ 発注データ収集 ============
 function collectFormData() {
   const lines = [];
-  document.querySelectorAll('.line-item').forEach(item => {
+  document.querySelectorAll('#lineItems .line-item').forEach(item => {
     const n = item.id.replace('line-', '');
     const q = parseInt(document.getElementById('qty-' + n)?.value) || 0;
     const p = parseInt(document.getElementById('price-' + n)?.value) || 0;
@@ -460,21 +987,21 @@ function collectFormData() {
   };
 }
 
-// ============ 送信処理 ============
+// ============ 発注送信処理 ============
 function handleSend() {
   if (getValidationErrors().length > 0) return;
+  pendingSendType = 'order';
   showPreview();
 }
-
 function showPreview() {
   const data = collectFormData();
   let rows = '';
   data.lines.forEach((l, i) => {
     rows += '<tr><td>' + (i+1) + '</td><td>' + l.maker + '</td><td>' + l.product + '</td><td>' +
-      (l.model||'-') + '</td><td class="text-right">' + l.qty + '</td><td class="text-right">&yen;' +
-      l.price.toLocaleString() + '</td><td class="text-right">&yen;' + l.amount.toLocaleString() +
-      '</td><td>' + l.type + '</td></tr>';
+      (l.model||'-') + '</td><td>' + l.qty + '</td><td>&yen;' +
+      l.price.toLocaleString() + '</td><td>&yen;' + l.amount.toLocaleString() + '</td><td>' + l.type + '</td></tr>';
   });
+  document.getElementById('previewTitle').textContent = '発注書プレビュー';
   document.getElementById('previewContent').innerHTML =
     '<table class="preview-table">' +
     '<tr><th>発行日</th><td>' + data.issueDate + '</td></tr>' +
@@ -489,53 +1016,30 @@ function showPreview() {
     '<tr><th>注文者</th><td>' + data.orderer + '</td></tr>' +
     '<tr><th>状態</th><td>' + (data.urgent ? '<span style="color:red;font-weight:bold">緊急</span>' : 'PASS') + '</td></tr>' +
     '<tr><th>承認者</th><td>' + data.approverName + '</td></tr></table>';
+  document.getElementById('btnConfirm').textContent = 'この内容で送信する';
+  document.getElementById('btnConfirm').style.background = 'var(--success)';
   document.getElementById('previewModal').classList.add('active');
 }
-
-function closeModal() {
-  document.getElementById('previewModal').classList.remove('active');
-}
+function closeModal() { document.getElementById('previewModal').classList.remove('active'); }
 
 async function executeSend() {
   const btn = document.getElementById('btnConfirm');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> 送信中...';
-
   const data = collectFormData();
-
-  // GAS URLが未設定の場合はフォールバック（mailto）
-  if (!GAS_URL || GAS_URL === 'YOUR_GAS_WEB_APP_URL_HERE') {
-    // フォールバック: mailtoで送信
-    const subject = encodeURIComponent((data.urgent ? '【緊急】' : '') + '発注承認依頼: ' + data.supplier + ' / ' + data.orderNo);
-    const body = encodeURIComponent(buildTextMessage(data));
-    window.location.href = 'mailto:' + data.approverEmail + '?subject=' + subject + '&body=' + body;
-    closeModal();
-    btn.disabled = false;
-    btn.textContent = 'この内容で送信する';
-    showToast('GAS未設定のためメーラーで送信します', 'info');
-    return;
-  }
-
   try {
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      body: JSON.stringify(data),
-      headers: { 'Content-Type': 'text/plain' }
-    });
+    const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'text/plain' } });
     const result = await res.json();
-
     if (result.success) {
       closeModal();
       document.getElementById('formArea').style.display = 'none';
-      document.getElementById('sendArea').style.display = 'none';
+      document.getElementById('btnSubmit').style.display = 'none';
       document.getElementById('successScreen').classList.add('show');
       document.getElementById('successMessage').textContent = data.urgent
-        ? '【緊急】注文No.' + data.orderNo + ' を登録し、' + data.approverName + 'さん＋発注担当者に同時メール通知しました。即発注扱いです。'
-        : '注文No.' + data.orderNo + ' をスプレッドシートに記録し、' + data.approverName + 'さんに承認依頼メールを送信しました。';
-      // スプシリンク設定
-      var ssBase = result.spreadsheetUrl || 'https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit';
-      document.getElementById('linkSpreadsheet').href = ssBase;
-      document.getElementById('linkEditSheet').href = result.sheetUrl || ssBase;
+        ? '【緊急】注文No.' + data.orderNo + ' を登録し、即発注扱いです。'
+        : '注文No.' + data.orderNo + ' をスプレッドシートに記録し、承認依頼メールを送信しました。';
+      document.getElementById('linkSpreadsheet').href = result.spreadsheetUrl || '#';
+      document.getElementById('linkEditSheet').href = result.sheetUrl || '#';
       showToast('送信完了', 'success');
     } else {
       throw new Error(result.error || '送信に失敗しました');
@@ -546,27 +1050,10 @@ async function executeSend() {
     btn.textContent = 'この内容で送信する';
   }
 }
-
-function buildTextMessage(data) {
-  let m = (data.urgent ? '【緊急】' : '') + '発注承認依頼\n\n';
-  m += '発行日: ' + data.issueDate + '\n注文No.: ' + data.orderNo + '\n';
-  m += '仕入先: ' + data.supplier + '\n事業所: ' + data.branch + '\n\n【注文明細】\n';
-  data.lines.forEach((l, i) => {
-    m += (i+1) + '. ' + l.maker + ' / ' + l.product;
-    if (l.model) m += ' (' + l.model + ')';
-    m += '  数量:' + l.qty + ' 金額:' + l.amount.toLocaleString() + '円\n';
-  });
-  m += '\n合計: ' + data.total.toLocaleString() + '円\n\n';
-  if (data.siteName) m += '現場名: ' + data.siteName + '\n';
-  m += '注文者: ' + data.orderer + '\n状態: ' + (data.urgent ? '緊急' : 'PASS') + '\n';
-  return m;
-}
-
 function resetForm() {
   document.getElementById('formArea').style.display = '';
-  document.getElementById('sendArea').style.display = '';
+  document.getElementById('btnSubmit').style.display = '';
   document.getElementById('successScreen').classList.remove('show');
-  // フォームリセット
   document.getElementById('supplier').value = '';
   document.getElementById('branch').value = '';
   document.getElementById('siteName').value = '';
@@ -575,7 +1062,6 @@ function resetForm() {
   document.getElementById('approver').value = '';
   document.getElementById('urgent').checked = false;
   document.getElementById('urgentLabel').textContent = 'PASS';
-  // 明細リセット
   document.getElementById('lineItems').innerHTML = '';
   lineItemCount = 0;
   setDefaultDate();
@@ -591,13 +1077,6 @@ function showToast(msg, type) {
   t.className = 'toast show ' + (type || 'info');
   setTimeout(() => t.className = 'toast', 3000);
 }
-
-// 商品名datalist（initDropdownsに移動しなかったのでここに残す）
-(function() {
-  const dl = document.createElement('datalist'); dl.id = 'productList';
-  PRODUCTS.forEach(p => { const o = document.createElement('option'); o.value = p; dl.appendChild(o); });
-  document.body.appendChild(dl);
-})();
 </script>
 </body>
 </html>
