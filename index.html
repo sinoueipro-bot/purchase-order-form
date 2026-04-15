@@ -159,6 +159,7 @@ textarea { resize: vertical; min-height: 60px; }
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab('estimate')">📝 見積書</button>
     <button class="tab-btn" onclick="switchTab('order')">📦 発注書</button>
+    <button class="tab-btn" onclick="switchTab('list')">📋 一覧</button>
   </div>
 </div>
 
@@ -268,15 +269,6 @@ textarea { resize: vertical; min-height: 60px; }
   <button class="btn-new" style="background:var(--estimate)" onclick="resetEstForm()">新しい見積書を作成</button>
 </div>
 
-<!-- 見積一覧（下部） -->
-<div class="section" style="margin-top:20px">
-  <div class="section-title est">📋 見積一覧</div>
-  <div id="estListArea" style="padding:12px 16px">
-    <p style="color:var(--text-secondary);font-size:13px;text-align:center">読み込み中...</p>
-  </div>
-  <button type="button" class="btn-reload" onclick="loadEstimateList()">🔄 一覧を更新</button>
-</div>
-
 </div><!-- /tab-estimate -->
 
 
@@ -369,6 +361,35 @@ textarea { resize: vertical; min-height: 60px; }
 </div><!-- /tab-order -->
 
 
+<!-- ============================================================ -->
+<!-- 一覧タブ -->
+<!-- ============================================================ -->
+<div class="tab-content" id="tab-list">
+
+<!-- 見積一覧 -->
+<div class="section">
+  <div class="section-title est">📋 見積一覧</div>
+  <div id="estListArea" style="padding:12px 16px">
+    <p style="color:var(--text-secondary);font-size:13px;text-align:center">読み込み中...</p>
+  </div>
+</div>
+
+<!-- 発注一覧（リンクのみ） -->
+<div class="section">
+  <div class="section-title">📦 発注一覧</div>
+  <div style="padding:12px 16px;text-align:center">
+    <a href="https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit#gid=0" target="_blank"
+       style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;background:var(--primary);color:white;border-radius:var(--radius);text-decoration:none;font-weight:600;font-size:14px">
+      📊 スプレッドシートで発注一覧を開く
+    </a>
+  </div>
+</div>
+
+<button type="button" class="btn-reload" onclick="loadEstimateList()" style="margin:8px 12px;width:calc(100% - 24px)">🔄 一覧を更新</button>
+
+</div><!-- /tab-list -->
+
+
 <!-- 送信ボタン（タブで切替） -->
 <div class="send-area" id="sendArea">
   <button type="button" class="btn-submit est-btn" id="btnEstSubmit" onclick="handleEstSend()">
@@ -389,33 +410,6 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
 </div>
 
-<!-- ワンクリック発注申請モーダル -->
-<div class="modal-overlay" id="quickPOModal">
-  <div class="modal">
-    <h2 style="color:var(--primary)">📦 ワンクリック発注申請</h2>
-    <div id="quickPOInfo" style="margin-bottom:16px"></div>
-    <div class="field-group">
-      <div class="field-label"><span class="required-badge">必須</span>承認者</div>
-      <select id="quickApprover" style="font-size:16px"></select>
-    </div>
-    <div class="field-group">
-      <div class="field-label"><span class="required-badge">必須</span>注文者</div>
-      <select id="quickOrderer" style="font-size:16px"></select>
-    </div>
-    <div class="field-group">
-      <div class="field-label">事業所</div>
-      <select id="quickBranch" style="font-size:16px"></select>
-    </div>
-    <div class="field-group">
-      <div class="toggle-wrapper">
-        <label class="toggle"><input type="checkbox" id="quickUrgent"><span class="toggle-slider"></span></label>
-        <span class="urgent-label" id="quickUrgentLabel">PASS（通常承認）</span>
-      </div>
-    </div>
-    <button class="btn-confirm" id="btnQuickPO" onclick="executeQuickPO()" style="background:var(--primary)">📦 発注申請を送信</button>
-    <button class="btn-close-modal" onclick="closeQuickPO()">キャンセル</button>
-  </div>
-</div>
 
 <!-- トースト -->
 <div class="toast" id="toast"></div>
@@ -485,6 +479,12 @@ document.addEventListener('DOMContentLoaded', () => {
   addLineItem();
   addEstLine();
   setupValidation();
+  // URLパラメータ ?quickPO=<estimateId> → 発注書タブに自動転記
+  const params = new URLSearchParams(window.location.search);
+  const qpId = params.get('quickPO');
+  if (qpId) {
+    setTimeout(() => transferToPO(qpId), 500);
+  }
   loadEstimateList();
 });
 
@@ -493,17 +493,14 @@ function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  if (tab === 'estimate') {
-    document.querySelectorAll('.tab-btn')[0].classList.add('active');
-    document.getElementById('tab-estimate').classList.add('active');
-    document.getElementById('btnEstSubmit').style.display = '';
-    document.getElementById('btnSubmit').style.display = 'none';
-  } else {
-    document.querySelectorAll('.tab-btn')[1].classList.add('active');
-    document.getElementById('tab-order').classList.add('active');
-    document.getElementById('btnEstSubmit').style.display = 'none';
-    document.getElementById('btnSubmit').style.display = '';
-  }
+  const tabMap = { estimate: 0, order: 1, list: 2 };
+  document.querySelectorAll('.tab-btn')[tabMap[tab]].classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+  // 送信ボタン表示制御
+  document.getElementById('btnEstSubmit').style.display = (tab === 'estimate') ? '' : 'none';
+  document.getElementById('btnSubmit').style.display = (tab === 'order') ? '' : 'none';
+  document.getElementById('sendArea').style.display = (tab === 'list') ? 'none' : '';
+  if (tab === 'list') loadEstimateList();
   validateEst();
   validate();
 }
@@ -843,7 +840,7 @@ async function loadEstimateList() {
         '<div class="est-amount">¥' + Number(est.grandTotal || 0).toLocaleString() + '</div>' +
         '<div class="est-actions">' +
         '<a class="btn-view" href="' + (est.sheetUrl || '#') + '" target="_blank">📄 開く</a>' +
-        (est.status === '作成済' ? '<button class="btn-transfer" onclick="showQuickPO(\'' + est.id + '\',\'' + (est.estimateNo||'') + '\',\'' + (est.customerName||'') + '\',' + (est.grandTotal||0) + ')">📦 発注申請</button>' : '') +
+        (est.status === '作成済' ? '<button class="btn-transfer" onclick="transferToPO(\'' + est.id + '\')">📦 発注書に転記</button>' : '') +
         '</div></div>';
     });
     area.innerHTML = html;
@@ -853,6 +850,8 @@ async function loadEstimateList() {
 }
 
 // ============ 見積→発注 転記 ============
+let transferredEstimateId = null; // 転記元の見積ID（発注送信後にステータス更新用）
+
 async function transferToPO(estimateId) {
   showToast('見積データを取得中...', 'info');
   try {
@@ -860,10 +859,25 @@ async function transferToPO(estimateId) {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || '取得失敗');
 
+    // 転記元を記録（発注送信成功後にステータス更新する）
+    transferredEstimateId = estimateId;
+
     // 発注書タブに切替
     switchTab('order');
 
-    // フォームにデータをセット
+    // フォーム上部に転記元情報を表示
+    let infoBar = document.getElementById('transferInfo');
+    if (!infoBar) {
+      infoBar = document.createElement('div');
+      infoBar.id = 'transferInfo';
+      infoBar.style.cssText = 'background:#e8f0fe;border:2px solid var(--primary);border-radius:8px;padding:12px 16px;margin:12px;font-size:13px';
+      document.getElementById('formArea').insertBefore(infoBar, document.getElementById('formArea').firstChild);
+    }
+    infoBar.innerHTML = '<div style="font-weight:700;color:var(--primary);margin-bottom:4px">📋 見積書から転記済み（見積No. ' + (data.estimateNo || '') + '）</div>' +
+      '<div style="color:var(--text-secondary)">お客様: ' + (data.customerName || '') + ' / 件名: ' + (data.subject || '-') + '</div>' +
+      '<div style="color:var(--danger);font-size:12px;margin-top:4px">⚠️ 仕入先・承認者・注文者を確認してから送信してください（単価は原価ベースです）</div>';
+
+    // 現場名にセット
     document.getElementById('siteName').value = data.subject || '';
 
     // 既存明細をクリア
@@ -878,93 +892,21 @@ async function transferToPO(estimateId) {
       document.getElementById('product-' + n).value = ln.product || '';
       document.getElementById('model-' + n).value = ln.model || '';
       document.getElementById('qty-' + n).value = ln.qty || 0;
-      document.getElementById('price-' + n).value = ln.price || 0;  // 原価
+      document.getElementById('price-' + n).value = ln.price || 0;
+      // 備考に見積No.を記録
+      const remarkEl = document.getElementById('remark-' + n);
+      if (remarkEl) remarkEl.value = '見積No.' + (data.estimateNo || '');
       calcLineAmount(n);
     });
 
-    // 見積一覧のステータスを更新
-    await fetch(GAS_URL + '?action=markTransferred&id=' + estimateId);
-    loadEstimateList();
-
-    showToast('見積データを発注書に転記しました（原価ベース）', 'success');
+    showToast('✅ 発注書タブに転記しました。内容を確認して送信してください', 'success');
     validate();
+    window.scrollTo(0, 0);
   } catch (err) {
     showToast('転記エラー: ' + err.message, 'error');
   }
 }
 
-
-// ============ ワンクリック発注申請 ============
-let quickPOEstimateId = null;
-
-function showQuickPO(estId, estNo, customer, total) {
-  quickPOEstimateId = estId;
-  // モーダル内のドロップダウンを初期化
-  const qa = document.getElementById('quickApprover');
-  const qo = document.getElementById('quickOrderer');
-  const qb = document.getElementById('quickBranch');
-  if (qa.options.length <= 1) {
-    qa.innerHTML = '<option value="">選択してください</option>';
-    APPROVERS.forEach(a => qa.add(new Option(a.name + '（' + a.email + '）', a.email)));
-    qo.innerHTML = '<option value="">選択してください</option>';
-    STAFF.forEach(s => qo.add(new Option(s, s)));
-    qb.innerHTML = '';
-    BRANCHES.forEach(b => qb.add(new Option(b, b)));
-  }
-  document.getElementById('quickUrgent').addEventListener('change', function() {
-    document.getElementById('quickUrgentLabel').textContent = this.checked ? '緊急（即発注）' : 'PASS（通常承認）';
-    document.getElementById('quickUrgentLabel').classList.toggle('active', this.checked);
-  });
-  document.getElementById('quickPOInfo').innerHTML =
-    '<div style="background:#f0f4f9;padding:12px;border-radius:8px;font-size:13px">' +
-    '<div style="font-weight:700;color:var(--primary);margin-bottom:4px">見積No. ' + estNo + '</div>' +
-    '<div>' + customer + ' / 合計 ¥' + Number(total).toLocaleString() + '</div>' +
-    '<div style="color:var(--text-secondary);font-size:12px;margin-top:4px">→ 原価ベースで発注書を自動作成し、承認フローに乗せます</div></div>';
-  document.getElementById('quickPOModal').classList.add('active');
-}
-
-function closeQuickPO() {
-  document.getElementById('quickPOModal').classList.remove('active');
-  quickPOEstimateId = null;
-}
-
-async function executeQuickPO() {
-  const approver = document.getElementById('quickApprover').value;
-  const orderer = document.getElementById('quickOrderer').value;
-  if (!approver) { showToast('承認者を選択してください', 'error'); return; }
-  if (!orderer) { showToast('注文者を選択してください', 'error'); return; }
-
-  const btn = document.getElementById('btnQuickPO');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> 発注処理中...';
-
-  try {
-    const res = await fetch(GAS_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        formType: 'quickPO',
-        estimateId: quickPOEstimateId,
-        approverEmail: approver,
-        orderer: orderer,
-        branch: document.getElementById('quickBranch').value,
-        urgent: document.getElementById('quickUrgent').checked
-      }),
-      headers: { 'Content-Type': 'text/plain' }
-    });
-    const result = await res.json();
-    if (result.success) {
-      closeQuickPO();
-      showToast('発注申請を送信しました！承認メールを確認してください', 'success');
-      loadEstimateList();
-    } else {
-      throw new Error(result.error || '発注申請に失敗しました');
-    }
-  } catch (err) {
-    showToast('エラー: ' + err.message, 'error');
-  }
-  btn.disabled = false;
-  btn.textContent = '📦 発注申請を送信';
-}
 
 
 // ============================================================
@@ -1133,6 +1075,14 @@ async function executeSend() {
     const result = await res.json();
     if (result.success) {
       closeModal();
+      // 見積から転記された発注の場合、見積ステータスを「発注済」に更新
+      if (transferredEstimateId) {
+        fetch(GAS_URL + '?action=markTransferred&id=' + transferredEstimateId).catch(()=>{});
+        transferredEstimateId = null;
+        // 転記情報バーを削除
+        const infoBar = document.getElementById('transferInfo');
+        if (infoBar) infoBar.remove();
+      }
       document.getElementById('formArea').style.display = 'none';
       document.getElementById('btnSubmit').style.display = 'none';
       document.getElementById('successScreen').classList.add('show');
