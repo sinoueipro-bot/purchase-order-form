@@ -22,20 +22,40 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif;
-  background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; padding-bottom: 80px;
+  background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; padding-bottom: 140px;
 }
-.header { background: var(--primary); color: white; padding: 16px 16px 0; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-.header h1 { font-size: 18px; font-weight: 600; }
-.header p { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+.header { background: var(--primary); color: white; padding: 14px 16px; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.header h1 { font-size: 16px; font-weight: 600; flex: 1; text-align: center; }
+.header .back-btn { background: rgba(255,255,255,0.2); border: none; color: white; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 20px; display: none; font-family: inherit; }
+.header .back-btn.show { display: block; }
+.header .spacer { width: 40px; }
 
-/* タブ */
-.tab-bar { display: flex; margin-top: 12px; }
-.tab-btn { flex: 1; padding: 10px; border: none; background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.7); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.2s; border-bottom: 3px solid transparent; }
-.tab-btn.active { background: rgba(255,255,255,0.25); color: white; border-bottom-color: white; }
-.tab-btn:first-child { border-radius: 8px 0 0 0; }
-.tab-btn:last-child { border-radius: 0 8px 0 0; }
+/* 下部タブナビ (スマホUI) */
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: white; display: flex; border-top: 1px solid var(--border); z-index: 99; box-shadow: 0 -2px 10px rgba(0,0,0,0.08); }
+.bottom-nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border: none; background: none; font-family: inherit; font-size: 11px; color: var(--text-secondary); cursor: pointer; transition: all 0.2s; }
+.bottom-nav-btn .icon { font-size: 22px; line-height: 1; }
+.bottom-nav-btn.active { color: var(--primary); font-weight: 700; }
+.bottom-nav-btn.active .icon { transform: scale(1.15); }
+
+/* ビュー切替 (旧tab-content) */
 .tab-content { display: none; }
 .tab-content.active { display: block; }
+
+/* ホーム画面の大ボタン */
+.home-view { padding: 20px 16px; }
+.home-greeting { text-align: center; margin: 16px 0 28px; }
+.home-greeting h2 { font-size: 22px; margin-bottom: 6px; }
+.home-greeting p { color: var(--text-secondary); font-size: 14px; }
+.home-big-btn { display: block; width: 100%; background: white; border: 2px solid var(--border); border-radius: 16px; padding: 22px 20px; margin-bottom: 16px; text-align: left; font-family: inherit; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.04); }
+.home-big-btn:hover, .home-big-btn:active { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.1); border-color: var(--primary); }
+.home-big-btn .big-icon { font-size: 42px; margin-bottom: 8px; display: block; }
+.home-big-btn .big-title { font-size: 20px; font-weight: 700; color: var(--text); display: block; margin-bottom: 4px; }
+.home-big-btn .big-desc { font-size: 13px; color: var(--text-secondary); display: block; }
+.home-big-btn.primary { border-color: var(--estimate); background: linear-gradient(135deg, #f0fdf4 0%, white 100%); }
+.home-big-btn.primary .big-title { color: var(--estimate); }
+.home-big-btn.secondary { border-color: var(--primary); background: linear-gradient(135deg, #f0f7ff 0%, white 100%); }
+.home-big-btn.secondary .big-title { color: var(--primary); }
+.home-big-btn.tertiary { border-color: var(--text-secondary); }
 
 .section { background: var(--card); margin: 12px; border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
 .section-title { background: #e8f0fe; color: var(--primary); padding: 10px 16px; font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--border); }
@@ -154,19 +174,45 @@ textarea { resize: vertical; min-height: 60px; }
 <body>
 
 <div class="header">
-  <h1>見積書・発注書フォーム</h1>
-  <p>スプレッドシート自動記録</p>
-  <div class="tab-bar">
-    <button class="tab-btn active" onclick="switchTab('estimate')">📝 見積書</button>
-    <button class="tab-btn" onclick="switchTab('order')">📦 発注書</button>
-    <button class="tab-btn" onclick="switchTab('list')">📋 一覧</button>
+  <button type="button" class="back-btn" id="backBtn" onclick="goHome()">←</button>
+  <h1 id="headerTitle">発注システム</h1>
+  <div class="spacer"></div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ホーム画面 -->
+<!-- ============================================================ -->
+<div class="tab-content active" id="tab-home">
+  <div class="home-view">
+    <div class="home-greeting">
+      <h2>👋 こんにちは</h2>
+      <p>今日は何をしますか？</p>
+    </div>
+
+    <button type="button" class="home-big-btn primary" onclick="switchTab('estimate')">
+      <span class="big-icon">📝</span>
+      <span class="big-title">お見積りを作る</span>
+      <span class="big-desc">お客さんに出す見積書を新しく作成します</span>
+    </button>
+
+    <button type="button" class="home-big-btn secondary" onclick="switchTab('list')">
+      <span class="big-icon">📦</span>
+      <span class="big-title">発注する</span>
+      <span class="big-desc">見積書から業者へ発注書を作って送ります</span>
+    </button>
+
+    <button type="button" class="home-big-btn tertiary" onclick="switchTab('list')">
+      <span class="big-icon">📋</span>
+      <span class="big-title">過去の見積・発注を見る</span>
+      <span class="big-desc">今まで作成したものを確認します</span>
+    </button>
   </div>
 </div>
 
 <!-- ============================================================ -->
 <!-- 見積書タブ -->
 <!-- ============================================================ -->
-<div class="tab-content active" id="tab-estimate">
+<div class="tab-content" id="tab-estimate">
 
 <div id="estFormArea">
 <!-- 見積書 基本情報 -->
@@ -420,6 +466,22 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
 </div>
 
+<!-- 下部タブナビ -->
+<nav class="bottom-nav" id="bottomNav">
+  <button type="button" class="bottom-nav-btn active" data-tab="home" onclick="switchTab('home')">
+    <span class="icon">🏠</span><span>ホーム</span>
+  </button>
+  <button type="button" class="bottom-nav-btn" data-tab="estimate" onclick="switchTab('estimate')">
+    <span class="icon">📝</span><span>見積</span>
+  </button>
+  <button type="button" class="bottom-nav-btn" data-tab="order" onclick="switchTab('order')">
+    <span class="icon">📦</span><span>発注</span>
+  </button>
+  <button type="button" class="bottom-nav-btn" data-tab="list" onclick="switchTab('list')">
+    <span class="icon">📋</span><span>一覧</span>
+  </button>
+</nav>
+
 <!-- トースト -->
 <div class="toast" id="toast"></div>
 
@@ -489,7 +551,7 @@ const FORM_TYPES = [
 ];
 
 // ============ 状態 ============
-let currentTab = 'estimate';
+let currentTab = 'home';
 let lineItemCount = 0;
 let estLineCount = 0;
 let pendingSendType = null; // 'estimate' or 'order'
@@ -502,6 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
   addLineItem();
   addEstLine();
   setupValidation();
+  switchTab('home');
   // URLパラメータ ?quickPO=<estimateId> → メーカー別発注モーダルを表示
   const params = new URLSearchParams(window.location.search);
   const qpId = params.get('quickPO');
@@ -511,21 +574,46 @@ document.addEventListener('DOMContentLoaded', () => {
   loadEstimateList();
 });
 
-// ============ タブ切替 ============
+// ============ タブ/画面切替 ============
+const TAB_TITLES = {
+  home: '発注システム',
+  estimate: '📝 お見積り作成',
+  order: '📦 発注書',
+  list: '📋 一覧'
+};
+
 function switchTab(tab) {
   currentTab = tab;
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  // ビュー切替
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-  const tabMap = { estimate: 0, order: 1, list: 2 };
-  document.querySelectorAll('.tab-btn')[tabMap[tab]].classList.add('active');
-  document.getElementById('tab-' + tab).classList.add('active');
+  const view = document.getElementById('tab-' + tab);
+  if (view) view.classList.add('active');
+
+  // 下部タブのハイライト
+  document.querySelectorAll('.bottom-nav-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector('.bottom-nav-btn[data-tab="' + tab + '"]');
+  if (btn) btn.classList.add('active');
+
+  // ヘッダータイトル
+  document.getElementById('headerTitle').textContent = TAB_TITLES[tab] || '発注システム';
+
+  // 戻るボタン表示（ホーム以外で表示）
+  document.getElementById('backBtn').classList.toggle('show', tab !== 'home');
+
   // 送信ボタン表示制御
   document.getElementById('btnEstSubmit').style.display = (tab === 'estimate') ? '' : 'none';
   document.getElementById('btnSubmit').style.display = (tab === 'order') ? '' : 'none';
-  document.getElementById('sendArea').style.display = (tab === 'list') ? 'none' : '';
+  document.getElementById('sendArea').style.display = (tab === 'home' || tab === 'list') ? 'none' : '';
+
   if (tab === 'list') loadEstimateList();
+
   validateEst();
   validate();
+  window.scrollTo(0, 0);
+}
+
+function goHome() {
+  switchTab('home');
 }
 
 // ============ ドロップダウン初期化 ============
