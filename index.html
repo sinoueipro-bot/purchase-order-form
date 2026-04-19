@@ -1335,47 +1335,73 @@ async function printSheetDirect(sheetUrl) {
   const gid = m[1];
 
   showToast('🖨 印刷準備中... (3〜5秒)', 'info');
+
+  let data = null;
+  let gasError = null;
   try {
     const res = await fetch(GAS_URL + '?action=getPdf&gid=' + gid);
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || 'PDF取得失敗');
+    const text = await res.text();
+    try { data = JSON.parse(text); }
+    catch(e) { throw new Error('GAS応答が不正（再承認が必要な可能性あり）'); }
+    if (!data || !data.success || !data.base64) {
+      gasError = (data && data.error) || '不明なエラー';
+      throw new Error(gasError);
+    }
+  } catch (err) {
+    console.error('[印刷] GAS PDF取得失敗:', err);
+    // GASで取れない場合 → Google SheetsのPDF URLをiframeで直接印刷を試みる（別タブ）
+    showToast('⚠️ GAS再承認が必要な可能性。新規タブで印刷を開きます', 'info');
+    const directUrl = pdfUrl(sheetUrl);
+    const w = window.open(directUrl, '_blank');
+    if (w) {
+      // ブラウザのPDFビューアの印刷ボタンを使うよう案内
+      setTimeout(() => {
+        showToast('📄 PDFが開きました → ブラウザの🖨アイコン または Ctrl+P で印刷', 'info');
+      }, 1500);
+    }
+    return;
+  }
 
-    // Base64 → Uint8Array → Blob
+  // Base64 → Uint8Array → Blob
+  try {
     const binary = atob(data.base64);
     const arr = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
     const blob = new Blob([arr], { type: 'application/pdf' });
     const blobUrl = URL.createObjectURL(blob);
 
-    // 既存の印刷用iframeがあれば除去
+    // 既存iframeを除去
     const existing = document.getElementById('printIframe');
     if (existing) existing.remove();
 
-    // 非表示iframeでPDFを読込 → 印刷ダイアログを自動表示
+    // iframeは「見えないけど描画される」サイズで (0x0だとPDFビューアが起動しない)
     const iframe = document.createElement('iframe');
     iframe.id = 'printIframe';
-    iframe.style.cssText = 'position:fixed;right:-9999px;bottom:-9999px;width:0;height:0;border:0';
+    iframe.style.cssText = 'position:fixed;right:-10000px;top:0;width:800px;height:1000px;border:0;opacity:0';
     iframe.src = blobUrl;
-    iframe.onload = () => {
+    let printCalled = false;
+    iframe.onload = function() {
       setTimeout(() => {
+        if (printCalled) return;
+        printCalled = true;
         try {
           iframe.contentWindow.focus();
           iframe.contentWindow.print();
           showToast('🖨 印刷ダイアログを開きました', 'success');
         } catch(e) {
-          // フォールバック: 新規タブでPDFを開く
-          window.open(blobUrl, '_blank');
-          showToast('PDFを開きました。Ctrl+Pで印刷してください', 'info');
+          console.error('[印刷] iframe.print()失敗:', e);
+          // フォールバック: blobを新規タブで開く（Ctrl+P案内）
+          const w = window.open(blobUrl, '_blank');
+          if (w) showToast('📄 新しいタブでPDFを開きました → Ctrl+Pで印刷', 'info');
+          else showToast('ポップアップがブロックされました。許可してください', 'error');
         }
-      }, 500);
-      // 30秒後にblob URLを解放
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+      }, 1200);  // PDFビューア初期化待ち
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
     };
     document.body.appendChild(iframe);
   } catch (err) {
-    // フォールバック: PDFダウンロードURLを直接開く
-    showToast('印刷準備エラー: PDFを開きます', 'error');
-    window.open(pdfUrl(sheetUrl), '_blank');
+    console.error('[印刷] blob作成失敗:', err);
+    showToast('印刷失敗: ' + err.message, 'error');
   }
 }
 
