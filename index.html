@@ -580,17 +580,23 @@ textarea { resize: vertical; min-height: 60px; }
       <button type="button" class="list-filter-btn" data-filter="estimate" onclick="setListFilter('estimate')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--border);background:white;color:var(--text);font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">📝 見積</button>
       <button type="button" class="list-filter-btn" data-filter="order" onclick="setListFilter('order')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--border);background:white;color:var(--text);font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">📦 発注</button>
     </div>
-    <!-- 役割フィルタ（チェックボックス） -->
-    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-      <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:10px 12px;border-radius:8px;background:#e8f0fe;cursor:pointer;font-size:13px;font-weight:600;color:var(--primary)">
-        <input type="checkbox" id="roleApprover" onchange="onRoleFilterChange()" style="width:auto;margin:0;transform:scale(1.3)">
-        👔 承認者用<br><span style="font-size:11px;font-weight:400;color:var(--text-secondary)">(申請中のみ)</span>
-      </label>
-      <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:10px 12px;border-radius:8px;background:#e6f4ea;cursor:pointer;font-size:13px;font-weight:600;color:var(--success)">
-        <input type="checkbox" id="rolePurchaser" onchange="onRoleFilterChange()" style="width:auto;margin:0;transform:scale(1.3)">
-        👷 発注担当用<br><span style="font-size:11px;font-weight:400;color:var(--text-secondary)">(承認済のみ)</span>
-      </label>
+    <!-- 役割フィルタ（トグルボタン） -->
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button type="button" id="roleApproverBtn" onclick="setRoleFilter('approver')"
+        style="flex:1;padding:14px 10px;border-radius:10px;border:2px solid var(--border);background:#e8f0fe;cursor:pointer;font-family:inherit;text-align:center;transition:all 0.15s">
+        <div style="font-size:22px;line-height:1">👔</div>
+        <div style="font-size:13px;font-weight:700;color:var(--primary);margin-top:2px">承認者用</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:1px">申請中のみ表示</div>
+      </button>
+      <button type="button" id="rolePurchaserBtn" onclick="setRoleFilter('purchaser')"
+        style="flex:1;padding:14px 10px;border-radius:10px;border:2px solid var(--border);background:#e6f4ea;cursor:pointer;font-family:inherit;text-align:center;transition:all 0.15s">
+        <div style="font-size:22px;line-height:1">👷</div>
+        <div style="font-size:13px;font-weight:700;color:var(--success);margin-top:2px">発注担当用</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:1px">承認済のみ表示</div>
+      </button>
     </div>
+    <!-- 絞込中バナー -->
+    <div id="filterBanner" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:700;text-align:center;cursor:pointer" onclick="setRoleFilter('none')"></div>
     <div id="listResultCount" style="font-size:12px;color:var(--text-secondary);margin-top:8px;text-align:center"></div>
   </div>
 </div>
@@ -1400,6 +1406,7 @@ async function loadOrderList() {
     const data = await res.json();
     _orderListCache = (data.success && data.orders) ? data.orders.slice().reverse() : [];
     renderOrderListArea();
+    updateRoleFilterUI();
   } catch (err) {
     area.innerHTML = '<p style="color:var(--danger);font-size:13px;text-align:center">読込エラー: ' + err.message + '</p>';
   }
@@ -1449,10 +1456,19 @@ function renderOrderListArea() {
   const q = (document.getElementById('listSearchBox')?.value || '').trim();
   let filtered = _orderListCache.filter(o => matchesSearch(o, q));
   filtered = applyRoleFilter(filtered);
+
+  // セクションタイトルを動的に
+  const sectionTitle = document.querySelector('#orderListSection .section-title');
+  if (sectionTitle) {
+    if (_roleFilter === 'approver') sectionTitle.innerHTML = '⏳ 承認待ち発注書 <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">(' + filtered.length + '件)</span>';
+    else if (_roleFilter === 'purchaser') sectionTitle.innerHTML = '✅ 発注すべき発注書(承認済) <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">(' + filtered.length + '件)</span>';
+    else sectionTitle.innerHTML = '📦 発注一覧 <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">(' + filtered.length + '件)</span>';
+  }
+
   if (filtered.length === 0) {
-    const roleLabel = _roleFilter === 'approver' ? '（申請中なし）' :
-                       _roleFilter === 'purchaser' ? '（承認済なし）' : '';
-    area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center;padding:8px">' + (q ? '該当なし' : ('発注書がありません' + roleLabel)) + '</p>';
+    const roleLabel = _roleFilter === 'approver' ? '（承認待ちの発注はありません）' :
+                       _roleFilter === 'purchaser' ? '（承認済の発注はありません）' : '';
+    area.innerHTML = '<p style="color:var(--text-secondary);font-size:14px;text-align:center;padding:20px">' + (q ? '該当なし' : ('発注書がありません' + roleLabel)) + '</p>';
     return;
   }
   let html = '';
@@ -1517,28 +1533,68 @@ function setListFilter(type) {
   renderEstListArea();
 }
 
-function onRoleFilterChange() {
-  const ap = document.getElementById('roleApprover').checked;
-  const pu = document.getElementById('rolePurchaser').checked;
-  // 排他制御: どちらか1つだけON
-  if (ap && pu) {
-    if (_roleFilter === 'approver') {
-      document.getElementById('roleApprover').checked = false;
-      _roleFilter = 'purchaser';
-    } else {
-      document.getElementById('rolePurchaser').checked = false;
-      _roleFilter = 'approver';
-    }
-  } else if (ap) _roleFilter = 'approver';
-  else if (pu) _roleFilter = 'purchaser';
-  else _roleFilter = 'none';
+function setRoleFilter(role) {
+  // 同じボタンをもう一度押すとOFF (toggle)
+  _roleFilter = (_roleFilter === role) ? 'none' : role;
+  updateRoleFilterUI();
 
   // 役割フィルタONなら自動的に「📦発注」タブに切替（見積は非表示）
-  if (_roleFilter !== 'none' && _listFilter !== 'order') setListFilter('order');
-  else {
+  if (_roleFilter !== 'none' && _listFilter !== 'order') {
+    setListFilter('order');
+  } else if (_roleFilter === 'none' && _listFilter === 'order') {
+    // OFF時は「全て」に戻す
+    setListFilter('all');
+  } else {
     renderOrderListArea();
     renderEstListArea();
     updateResultCount();
+  }
+}
+
+function updateRoleFilterUI() {
+  const apBtn = document.getElementById('roleApproverBtn');
+  const puBtn = document.getElementById('rolePurchaserBtn');
+  const banner = document.getElementById('filterBanner');
+
+  // 承認者用ボタン
+  if (apBtn) {
+    const active = _roleFilter === 'approver';
+    apBtn.style.background = active ? 'var(--primary)' : '#e8f0fe';
+    apBtn.style.borderColor = active ? 'var(--primary)' : 'var(--border)';
+    apBtn.style.boxShadow = active ? '0 4px 10px rgba(26,115,232,0.3)' : 'none';
+    const divs = apBtn.querySelectorAll('div');
+    if (divs[1]) divs[1].style.color = active ? 'white' : 'var(--primary)';
+    if (divs[2]) divs[2].style.color = active ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)';
+  }
+  // 発注担当用ボタン
+  if (puBtn) {
+    const active = _roleFilter === 'purchaser';
+    puBtn.style.background = active ? 'var(--success)' : '#e6f4ea';
+    puBtn.style.borderColor = active ? 'var(--success)' : 'var(--border)';
+    puBtn.style.boxShadow = active ? '0 4px 10px rgba(15,157,88,0.3)' : 'none';
+    const divs = puBtn.querySelectorAll('div');
+    if (divs[1]) divs[1].style.color = active ? 'white' : 'var(--success)';
+    if (divs[2]) divs[2].style.color = active ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)';
+  }
+  // 絞込中バナー
+  if (banner) {
+    if (_roleFilter === 'approver') {
+      const cnt = _orderListCache.filter(o => o.status === '申請中').length;
+      banner.style.display = 'block';
+      banner.style.background = '#fef7e0';
+      banner.style.color = '#b06000';
+      banner.style.border = '1.5px solid #f9ab00';
+      banner.innerHTML = '⏳ 承認待ち <strong>' + cnt + '件</strong> を表示中 　<span style="font-weight:400;font-size:12px">（タップで解除）</span>';
+    } else if (_roleFilter === 'purchaser') {
+      const cnt = _orderListCache.filter(o => o.status === '承認済' || o.status === '緊急承認済').length;
+      banner.style.display = 'block';
+      banner.style.background = '#e6f4ea';
+      banner.style.color = '#137333';
+      banner.style.border = '1.5px solid var(--success)';
+      banner.innerHTML = '✅ 承認済(発注すべき) <strong>' + cnt + '件</strong> を表示中 　<span style="font-weight:400;font-size:12px">（タップで解除）</span>';
+    } else {
+      banner.style.display = 'none';
+    }
   }
 }
 
