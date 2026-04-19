@@ -260,17 +260,36 @@ textarea { resize: vertical; min-height: 60px; }
       <span class="big-desc">お客さんに出す見積書を新しく作成します</span>
     </button>
 
-    <button type="button" class="home-big-btn secondary" onclick="switchTab('list')">
+    <button type="button" class="home-big-btn secondary" onclick="switchTab('order')">
       <span class="big-icon">📦</span>
       <span class="big-title">発注する</span>
-      <span class="big-desc">見積書から業者へ発注書を作って送ります</span>
+      <span class="big-desc">業者へ発注書を直接作成して送ります</span>
     </button>
 
     <button type="button" class="home-big-btn tertiary" onclick="switchTab('list')">
       <span class="big-icon">📋</span>
       <span class="big-title">過去の見積・発注を見る</span>
-      <span class="big-desc">今まで作成したものを確認します</span>
+      <span class="big-desc">今まで作成したものを確認・発注します</span>
     </button>
+
+    <!-- スプレッドシートリンク -->
+    <div style="background:white;border:1.5px dashed var(--border);border-radius:12px;padding:14px 16px;margin-top:20px">
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;font-weight:600">📊 スプレッドシートを開く</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <a href="https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit" target="_blank"
+           style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#e8f0fe;border-radius:8px;text-decoration:none;color:var(--primary);font-weight:600;font-size:13px">
+          📋 発注一覧・見積一覧シート
+        </a>
+        <a href="https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit#gid=0" target="_blank"
+           style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fef7e0;border-radius:8px;text-decoration:none;color:#b06000;font-weight:600;font-size:13px">
+          📦 発注一覧（承認状況の確認）
+        </a>
+        <a href="https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit" target="_blank"
+           style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#e6f4ea;border-radius:8px;text-decoration:none;color:var(--estimate);font-weight:600;font-size:13px">
+          📝 見積一覧
+        </a>
+      </div>
+    </div>
   </div>
 </div>
 
