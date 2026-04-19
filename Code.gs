@@ -108,6 +108,7 @@ function doGet(e) {
   if (action === 'markTransferred') return jsonResponse(markEstimateTransferred(id));
   if (action === 'listOrders') return jsonResponse(getOrderList());
   if (action === 'cancelOrder') return jsonResponse(cancelOrder(id));
+  if (action === 'getPdf') return jsonResponse(getSheetPdfBase64(e.parameter.gid));
 
   if (!action || !id) return HtmlService.createHtmlOutput('<h2>発注書・見積書APIは稼働中です</h2>');
 
@@ -1007,6 +1008,30 @@ function cancelOrder(id) {
   } catch(e) { Logger.log('キャンセル通知エラー: ' + e.toString()); }
 
   return { success: true, message: '発注を取り消しました' };
+}
+
+// ============ API: シートのPDFをBase64で返す（ブラウザ印刷用） ============
+function getSheetPdfBase64(gid) {
+  if (!gid) return { success: false, error: 'gidが必要です' };
+  try {
+    var ssId = SpreadsheetApp.getActiveSpreadsheet().getId();
+    var url = 'https://docs.google.com/spreadsheets/d/' + ssId +
+              '/export?format=pdf&gid=' + gid +
+              '&portrait=true&size=A4&fitw=true&gridlines=false&printtitle=false&sheetnames=false&pagenum=false&fzr=false';
+    var response = UrlFetchApp.fetch(url, {
+      headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true
+    });
+    if (response.getResponseCode() !== 200) {
+      return { success: false, error: 'PDF取得失敗(' + response.getResponseCode() + ')' };
+    }
+    return {
+      success: true,
+      base64: Utilities.base64Encode(response.getBlob().getBytes())
+    };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
 }
 
 // ============ メーカー→仕入先マッピング ============

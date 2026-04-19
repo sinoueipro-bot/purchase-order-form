@@ -444,7 +444,7 @@ textarea { resize: vertical; min-height: 60px; }
     <a id="estLinkSheet" class="link-spreadsheet" href="#" target="_blank">📊 スプレッドシートを開く</a>
     <a id="estLinkDirect" class="link-edit" href="#" target="_blank">📄 見積書シートを開く</a>
     <a id="estLinkPdf" class="link-edit" href="#" target="_blank" style="background:#fef7e0;color:#b06000;border-color:#f9ab00">📥 PDFダウンロード</a>
-    <a id="estLinkPrint" class="link-edit" href="#" target="_blank" style="background:#e6f4ea;color:#137333;border-color:#0f9d58">🖨 印刷する</a>
+    <a id="estLinkPrint" class="link-edit" href="#" onclick="printSheetDirect(document.getElementById('estLinkDirect').href); return false;" style="background:#e6f4ea;color:#137333;border-color:#0f9d58;cursor:pointer">🖨 印刷ダイアログを開く</a>
   </div>
   <button class="btn-new" style="background:var(--estimate)" onclick="resetEstForm()">新しい見積書を作成</button>
 </div>
@@ -553,7 +553,7 @@ textarea { resize: vertical; min-height: 60px; }
     <a id="linkSpreadsheet" class="link-spreadsheet" href="#" target="_blank">📊 スプレッドシートを開く</a>
     <a id="linkEditSheet" class="link-edit" href="#" target="_blank">📄 発注書シートを開く</a>
     <a id="linkPdf" class="link-edit" href="#" target="_blank" style="background:#fef7e0;color:#b06000;border-color:#f9ab00">📥 PDFダウンロード</a>
-    <a id="linkPrint" class="link-edit" href="#" target="_blank" style="background:#e6f4ea;color:#137333;border-color:#0f9d58">🖨 印刷</a>
+    <a id="linkPrint" class="link-edit" href="#" onclick="printSheetDirect(document.getElementById('linkEditSheet').href); return false;" style="background:#e6f4ea;color:#137333;border-color:#0f9d58;cursor:pointer">🖨 印刷ダイアログを開く</a>
   </div>
   <button class="btn-new" onclick="resetForm()">新しい発注書を作成</button>
 </div>
@@ -574,10 +574,22 @@ textarea { resize: vertical; min-height: 60px; }
              oninput="filterList()"
              style="width:100%;padding:12px 12px 12px 38px;font-size:15px;border:1.5px solid var(--border);border-radius:8px">
     </div>
+    <!-- 種類フィルタ -->
     <div style="display:flex;gap:6px;margin-top:10px">
       <button type="button" class="list-filter-btn active" data-filter="all" onclick="setListFilter('all')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--border);background:var(--primary);color:white;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">全て</button>
       <button type="button" class="list-filter-btn" data-filter="estimate" onclick="setListFilter('estimate')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--border);background:white;color:var(--text);font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">📝 見積</button>
       <button type="button" class="list-filter-btn" data-filter="order" onclick="setListFilter('order')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--border);background:white;color:var(--text);font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">📦 発注</button>
+    </div>
+    <!-- 役割フィルタ（チェックボックス） -->
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:10px 12px;border-radius:8px;background:#e8f0fe;cursor:pointer;font-size:13px;font-weight:600;color:var(--primary)">
+        <input type="checkbox" id="roleApprover" onchange="onRoleFilterChange()" style="width:auto;margin:0;transform:scale(1.3)">
+        👔 承認者用<br><span style="font-size:11px;font-weight:400;color:var(--text-secondary)">(申請中のみ)</span>
+      </label>
+      <label style="flex:1;min-width:140px;display:flex;align-items:center;gap:6px;padding:10px 12px;border-radius:8px;background:#e6f4ea;cursor:pointer;font-size:13px;font-weight:600;color:var(--success)">
+        <input type="checkbox" id="rolePurchaser" onchange="onRoleFilterChange()" style="width:auto;margin:0;transform:scale(1.3)">
+        👷 発注担当用<br><span style="font-size:11px;font-weight:400;color:var(--text-secondary)">(承認済のみ)</span>
+      </label>
     </div>
     <div id="listResultCount" style="font-size:12px;color:var(--text-secondary);margin-top:8px;text-align:center"></div>
   </div>
@@ -1256,7 +1268,7 @@ async function executeEstSend() {
       document.getElementById('estLinkSheet').href = result.spreadsheetUrl || '#';
       document.getElementById('estLinkDirect').href = result.sheetUrl || '#';
       document.getElementById('estLinkPdf').href = pdfUrl(result.sheetUrl);
-      document.getElementById('estLinkPrint').href = printUrl(result.sheetUrl);
+      // estLinkPrintはonclickで動作（hrefセット不要）
       showToast('見積書作成完了', 'success');
       loadEstimateList();
     } else {
@@ -1295,6 +1307,7 @@ function resetEstForm() {
 let _estListCache = [];
 let _orderListCache = [];
 let _listFilter = 'all';  // 'all' | 'estimate' | 'order'
+let _roleFilter = 'none'; // 'none' | 'approver' (申請中) | 'purchaser' (承認済)
 
 // スプシID（PDF URL組立用）
 const SS_ID = '1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s';
@@ -1307,12 +1320,57 @@ function pdfUrl(sheetUrl) {
   return 'https://docs.google.com/spreadsheets/d/' + SS_ID + '/export?format=pdf&gid=' + gid +
     '&portrait=true&size=A4&fitw=true&gridlines=false&printtitle=false&sheetnames=false&pagenum=false&fzr=false';
 }
-// 印刷URL（プレビュー→印刷ダイアログ）
-function printUrl(sheetUrl) {
-  if (!sheetUrl) return '#';
+
+// 印刷実行: GAS経由でPDFを取得→blob化→iframe内で印刷ダイアログ表示
+async function printSheetDirect(sheetUrl) {
+  if (!sheetUrl) { showToast('シートURLが不明です', 'error'); return; }
   const m = sheetUrl.match(/gid=(\d+)/);
-  const gid = m ? m[1] : '0';
-  return 'https://docs.google.com/spreadsheets/d/' + SS_ID + '/view?gid=' + gid + '&printMode=true';
+  if (!m) { showToast('シートIDが取れません', 'error'); return; }
+  const gid = m[1];
+
+  showToast('🖨 印刷準備中... (3〜5秒)', 'info');
+  try {
+    const res = await fetch(GAS_URL + '?action=getPdf&gid=' + gid);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'PDF取得失敗');
+
+    // Base64 → Uint8Array → Blob
+    const binary = atob(data.base64);
+    const arr = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'application/pdf' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    // 既存の印刷用iframeがあれば除去
+    const existing = document.getElementById('printIframe');
+    if (existing) existing.remove();
+
+    // 非表示iframeでPDFを読込 → 印刷ダイアログを自動表示
+    const iframe = document.createElement('iframe');
+    iframe.id = 'printIframe';
+    iframe.style.cssText = 'position:fixed;right:-9999px;bottom:-9999px;width:0;height:0;border:0';
+    iframe.src = blobUrl;
+    iframe.onload = () => {
+      setTimeout(() => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+          showToast('🖨 印刷ダイアログを開きました', 'success');
+        } catch(e) {
+          // フォールバック: 新規タブでPDFを開く
+          window.open(blobUrl, '_blank');
+          showToast('PDFを開きました。Ctrl+Pで印刷してください', 'info');
+        }
+      }, 500);
+      // 30秒後にblob URLを解放
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+    };
+    document.body.appendChild(iframe);
+  } catch (err) {
+    // フォールバック: PDFダウンロードURLを直接開く
+    showToast('印刷準備エラー: PDFを開きます', 'error');
+    window.open(pdfUrl(sheetUrl), '_blank');
+  }
 }
 
 // 全リスト読込
@@ -1380,7 +1438,7 @@ function renderEstListArea() {
       '<div class="est-actions" style="flex-wrap:wrap">' +
       '<a class="btn-view" href="' + (est.sheetUrl || '#') + '" target="_blank">📄 開く</a>' +
       '<a class="btn-view" href="' + pdf + '" target="_blank" style="background:#fef7e0;color:#b06000;border-color:#f9ab00">📥 PDF</a>' +
-      '<a class="btn-view" href="' + print + '" target="_blank" style="background:#e6f4ea;color:#137333;border-color:#0f9d58">🖨 印刷</a>' +
+      '<button class="btn-view" onclick="printSheetDirect(\'' + (est.sheetUrl || '') + '\')" style="background:#e6f4ea;color:#137333;border-color:#0f9d58;border-width:1.5px;border-style:solid">🖨 印刷</button>' +
       (est.status === '作成済' ? '<button class="btn-transfer" onclick="showBatchPOModal(\'' + est.id + '\')">📦 メーカー別発注</button>' : '') +
       '</div></div>';
   });
@@ -1390,9 +1448,12 @@ function renderEstListArea() {
 function renderOrderListArea() {
   const area = document.getElementById('orderListArea');
   const q = (document.getElementById('listSearchBox')?.value || '').trim();
-  const filtered = _orderListCache.filter(o => matchesSearch(o, q));
+  let filtered = _orderListCache.filter(o => matchesSearch(o, q));
+  filtered = applyRoleFilter(filtered);
   if (filtered.length === 0) {
-    area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center;padding:8px">' + (q ? '該当なし' : '発注書がありません') + '</p>';
+    const roleLabel = _roleFilter === 'approver' ? '（申請中なし）' :
+                       _roleFilter === 'purchaser' ? '（承認済なし）' : '';
+    area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center;padding:8px">' + (q ? '該当なし' : ('発注書がありません' + roleLabel)) + '</p>';
     return;
   }
   let html = '';
@@ -1418,7 +1479,7 @@ function renderOrderListArea() {
       '<div class="est-actions" style="flex-wrap:wrap">' +
       '<a class="btn-view" href="' + (o.sheetUrl || '#') + '" target="_blank">📄 開く</a>' +
       '<a class="btn-view" href="' + pdf + '" target="_blank" style="background:#fef7e0;color:#b06000;border-color:#f9ab00">📥 PDF</a>' +
-      '<a class="btn-view" href="' + print + '" target="_blank" style="background:#e6f4ea;color:#137333;border-color:#0f9d58">🖨 印刷</a>' +
+      '<button class="btn-view" onclick="printSheetDirect(\'' + (o.sheetUrl || '') + '\')" style="background:#e6f4ea;color:#137333;border-color:#0f9d58;border-width:1.5px;border-style:solid">🖨 印刷</button>' +
       (canCancel ? '<button class="btn-transfer" onclick="cancelOrderById(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--danger)">↩️ 取消</button>' : '') +
       '</div></div>';
   });
@@ -1454,6 +1515,33 @@ function setListFilter(type) {
   });
   applyListFilter();
   updateResultCount();
+  renderOrderListArea();
+  renderEstListArea();
+}
+
+function onRoleFilterChange() {
+  const ap = document.getElementById('roleApprover').checked;
+  const pu = document.getElementById('rolePurchaser').checked;
+  // 排他制御: どちらか1つだけON
+  if (ap && pu) {
+    if (_roleFilter === 'approver') {
+      document.getElementById('roleApprover').checked = false;
+      _roleFilter = 'purchaser';
+    } else {
+      document.getElementById('rolePurchaser').checked = false;
+      _roleFilter = 'approver';
+    }
+  } else if (ap) _roleFilter = 'approver';
+  else if (pu) _roleFilter = 'purchaser';
+  else _roleFilter = 'none';
+
+  // 役割フィルタONなら自動的に「📦発注」タブに切替（見積は非表示）
+  if (_roleFilter !== 'none' && _listFilter !== 'order') setListFilter('order');
+  else {
+    renderOrderListArea();
+    renderEstListArea();
+    updateResultCount();
+  }
 }
 
 function applyListFilter() {
@@ -1463,14 +1551,28 @@ function applyListFilter() {
   if (ord) ord.style.display = (_listFilter === 'all' || _listFilter === 'order') ? '' : 'none';
 }
 
+// 役割フィルタの適用
+function applyRoleFilter(orders) {
+  if (_roleFilter === 'approver') {
+    return orders.filter(o => o.status === '申請中');
+  } else if (_roleFilter === 'purchaser') {
+    return orders.filter(o => o.status === '承認済' || o.status === '緊急承認済');
+  }
+  return orders;
+}
+
 function updateResultCount() {
   const q = (document.getElementById('listSearchBox')?.value || '').trim();
   const el = document.getElementById('listResultCount');
   if (!el) return;
   const eN = _estListCache.filter(e => matchesSearch(e, q)).length;
-  const oN = _orderListCache.filter(o => matchesSearch(o, q)).length;
-  if (q) el.textContent = '🔍 「' + q + '」: 見積' + eN + '件 / 発注' + oN + '件';
-  else el.textContent = '見積' + _estListCache.length + '件 / 発注' + _orderListCache.length + '件';
+  const oFiltered = applyRoleFilter(_orderListCache.filter(o => matchesSearch(o, q)));
+  const oN = oFiltered.length;
+  let prefix = '';
+  if (_roleFilter === 'approver') prefix = '👔 承認待ち: ';
+  else if (_roleFilter === 'purchaser') prefix = '👷 承認済(発注すべき): ';
+  if (q) el.textContent = prefix + '🔍「' + q + '」 見積' + eN + '件 / 発注' + oN + '件';
+  else el.textContent = prefix + '見積' + _estListCache.length + '件 / 発注' + oN + '件';
 }
 
 // ========= 送信後60秒カウントダウン取消 =========
@@ -1997,7 +2099,7 @@ async function executeSend() {
       document.getElementById('linkSpreadsheet').href = result.spreadsheetUrl || '#';
       document.getElementById('linkEditSheet').href = result.sheetUrl || '#';
       document.getElementById('linkPdf').href = pdfUrl(result.sheetUrl);
-      document.getElementById('linkPrint').href = printUrl(result.sheetUrl);
+      // linkPrintはonclickで動作（hrefセット不要）
       // 60秒以内の取消パネルを起動
       startUndoCountdown(result.orderId || result.uniqueId || result.id);
       showToast('送信完了', 'success');
