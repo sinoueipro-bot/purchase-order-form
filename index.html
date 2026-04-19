@@ -1428,7 +1428,6 @@ function renderEstListArea() {
                          est.status === '発注済' ? 'background:#e8f0fe;color:#1a73e8' :
                          'background:#f1f3f4;color:#5f6368';
     const pdf = pdfUrl(est.sheetUrl);
-    const print = printUrl(est.sheetUrl);
     html += '<div class="est-list-card">' +
       '<div class="est-header"><span class="est-no">' + (est.estimateNo || '-') + '</span>' +
       '<span class="est-status" style="' + statusColor + '">' + est.status + '</span></div>' +
@@ -1467,7 +1466,6 @@ function renderOrderListArea() {
                          st === '取消' ? 'background:#f1f3f4;color:#5f6368' :
                          'background:#f1f3f4;color:#5f6368';
     const pdf = pdfUrl(o.sheetUrl);
-    const print = printUrl(o.sheetUrl);
     // 60秒以内なら取消ボタン表示
     const canCancel = o.timestamp && (Date.now() - new Date(o.timestamp).getTime() < 60000) && st !== '取消';
     html += '<div class="est-list-card">' +
