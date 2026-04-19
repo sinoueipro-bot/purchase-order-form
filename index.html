@@ -57,6 +57,47 @@ body {
 .home-big-btn.secondary .big-title { color: var(--primary); }
 .home-big-btn.tertiary { border-color: var(--text-secondary); }
 
+/* ウィザード (Step 1/2/3) */
+.wizard-progress { background: white; padding: 14px 16px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); }
+.wizard-step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; position: relative; }
+.wizard-step .step-circle { width: 32px; height: 32px; border-radius: 50%; background: #e0e0e0; color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; transition: all 0.3s; }
+.wizard-step .step-label { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+.wizard-step.active .step-circle { background: var(--estimate); transform: scale(1.1); box-shadow: 0 0 0 4px #c8f0d4; }
+.wizard-step.active .step-label { color: var(--estimate); }
+.wizard-step.done .step-circle { background: var(--estimate); }
+.wizard-step.done .step-circle::before { content: '✓'; }
+.wizard-step.done .step-circle-num { display: none; }
+.wizard-step:not(:last-child)::after { content: ''; position: absolute; top: 16px; left: calc(50% + 20px); right: calc(-50% + 20px); height: 2px; background: #e0e0e0; z-index: -1; }
+.wizard-step.done:not(:last-child)::after { background: var(--estimate); }
+
+.wizard-step-view { display: none; }
+.wizard-step-view.active { display: block; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.step-title { text-align: center; margin: 20px 16px 12px; }
+.step-title h2 { font-size: 20px; margin-bottom: 4px; }
+.step-title p { color: var(--text-secondary); font-size: 13px; }
+
+.wizard-nav { display: flex; gap: 10px; padding: 14px 16px; background: white; border-top: 1px solid var(--border); position: fixed; bottom: 60px; left: 0; right: 0; z-index: 98; box-shadow: 0 -2px 8px rgba(0,0,0,0.05); }
+.wizard-nav button { flex: 1; padding: 14px; border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.wizard-nav .btn-back { background: white; color: var(--text-secondary); border: 1.5px solid var(--border); }
+.wizard-nav .btn-next { background: var(--estimate); color: white; }
+.wizard-nav .btn-next:disabled { background: #ccc; cursor: not-allowed; }
+
+/* 金額大型表示 */
+.price-display { background: linear-gradient(135deg, #e6f4ea 0%, #f0fdf4 100%); border: 2px solid var(--estimate); border-radius: 12px; padding: 16px; margin: 12px 16px; text-align: center; }
+.price-display .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+.price-display .formula { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
+.price-display .formula strong { color: var(--text); }
+.price-display .big-amount { font-size: 32px; font-weight: 800; color: var(--estimate); line-height: 1.1; }
+.price-display .big-amount small { font-size: 14px; font-weight: 600; margin-left: 4px; }
+
+/* 発注進捗バー */
+.po-progress-bar { background: white; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.po-progress-bar .progress-track { height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; margin-bottom: 6px; }
+.po-progress-bar .progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--success)); transition: width 0.3s; }
+.po-progress-bar .progress-label { font-size: 12px; color: var(--text-secondary); display: flex; justify-content: space-between; }
+
 .section { background: var(--card); margin: 12px; border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
 .section-title { background: #e8f0fe; color: var(--primary); padding: 10px 16px; font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--border); }
 .section-title.est { background: #e6f4ea; color: var(--estimate); }
@@ -101,7 +142,7 @@ textarea { resize: vertical; min-height: 60px; }
 .urgent-label { font-weight: 600; color: var(--text-secondary); }
 .urgent-label.active { color: var(--danger); }
 
-.send-area { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 12px 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 100; }
+.send-area { position: fixed; bottom: 60px; left: 0; right: 0; background: white; padding: 12px 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 98; }
 .btn-submit { width: 100%; padding: 14px; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: white; transition: all 0.2s; }
 .btn-submit.est-btn { background: var(--estimate); }
 .btn-submit:disabled { background: #e0e0e0 !important; color: #999 !important; cursor: not-allowed; }
@@ -210,11 +251,34 @@ textarea { resize: vertical; min-height: 60px; }
 </div>
 
 <!-- ============================================================ -->
-<!-- 見積書タブ -->
+<!-- 見積書タブ（ウィザード形式） -->
 <!-- ============================================================ -->
 <div class="tab-content" id="tab-estimate">
 
+<!-- Step進捗インジケーター -->
+<div class="wizard-progress" id="wizardProgress">
+  <div class="wizard-step active" data-step="1">
+    <div class="step-circle"><span class="step-circle-num">1</span></div>
+    <div class="step-label">お客様情報</div>
+  </div>
+  <div class="wizard-step" data-step="2">
+    <div class="step-circle"><span class="step-circle-num">2</span></div>
+    <div class="step-label">商品明細</div>
+  </div>
+  <div class="wizard-step" data-step="3">
+    <div class="step-circle"><span class="step-circle-num">3</span></div>
+    <div class="step-label">確認</div>
+  </div>
+</div>
+
 <div id="estFormArea">
+
+<!-- ==================== STEP 1: お客様情報 ==================== -->
+<div class="wizard-step-view active" data-step="1">
+<div class="step-title">
+  <h2>👤 お客様情報を入力</h2>
+  <p>お客様の情報と担当者を選んでください</p>
+</div>
 <!-- 見積書 基本情報 -->
 <div class="section">
   <div class="section-title est">基本情報</div>
@@ -251,15 +315,30 @@ textarea { resize: vertical; min-height: 60px; }
     </div>
   </div>
 </div>
+</div><!-- /step 1 -->
+
+<!-- ==================== STEP 2: 商品明細 ==================== -->
+<div class="wizard-step-view" data-step="2">
+<div class="step-title">
+  <h2>📦 商品を入力</h2>
+  <p>売りたい商品とメーカーを追加してください</p>
+</div>
+
+<!-- 金額大型表示 -->
+<div class="price-display">
+  <div class="label">💰 現在の合計（税込）</div>
+  <div class="big-amount" id="estGrandTotalBig">¥0</div>
+  <div class="formula"><strong>税抜:</strong> <span id="estSubtotalMini">¥0</span> ＋ <strong>消費税:</strong> <span id="estTaxMini">¥0</span></div>
+</div>
 
 <!-- 見積書 明細行 -->
 <div class="section">
   <div class="section-title est">見積明細</div>
   <div id="estLineItems"></div>
-  <button type="button" class="btn-add-line" onclick="addEstLine()">+ 行を追加</button>
+  <button type="button" class="btn-add-line" onclick="addEstLine()">+ もう1件追加</button>
 </div>
 
-<!-- 見積 集計 -->
+<!-- 見積 集計（社内用詳細） -->
 <div class="est-summary" id="estSummaryBlock">
   <div class="row"><span>小計（税抜）</span><span id="estSubtotal">&yen;0</span></div>
   <div class="row"><span>消費税（10%）</span><span id="estTax">&yen;0</span></div>
@@ -276,8 +355,33 @@ textarea { resize: vertical; min-height: 60px; }
     <textarea id="estNotes" placeholder="特記事項があれば入力"></textarea>
   </div>
 </div>
+</div><!-- /step 2 -->
+
+<!-- ==================== STEP 3: 確認 ==================== -->
+<div class="wizard-step-view" data-step="3">
+<div class="step-title">
+  <h2>✅ 内容を確認</h2>
+  <p>この内容で見積書を作ります。間違いがないか確認してください</p>
+</div>
+<div class="section">
+  <div class="section-title est">確認内容</div>
+  <div id="estConfirmArea" style="padding:12px 16px"></div>
+</div>
+
+<!-- 確認画面の大型合計 -->
+<div class="price-display" style="margin-top:0">
+  <div class="label">💰 お客様へのご請求額（税込）</div>
+  <div class="big-amount" id="estGrandTotalConfirm">¥0</div>
+</div>
+</div><!-- /step 3 -->
 
 </div><!-- /estFormArea -->
+
+<!-- ウィザードナビ -->
+<div class="wizard-nav" id="estWizardNav">
+  <button type="button" class="btn-back" id="btnWizardBack" onclick="wizardPrev()">← 戻る</button>
+  <button type="button" class="btn-next" id="btnWizardNext" onclick="wizardNext()">次へ →</button>
+</div>
 
 <!-- 見積 完了画面 -->
 <div class="success-screen" id="estSuccessScreen">
@@ -298,6 +402,15 @@ textarea { resize: vertical; min-height: 60px; }
 <!-- 発注書タブ -->
 <!-- ============================================================ -->
 <div class="tab-content" id="tab-order">
+
+<!-- 発注進捗バー（キューモード時のみ表示） -->
+<div class="po-progress-bar" id="poProgressBar" style="display:none">
+  <div class="progress-track"><div class="progress-fill" id="poProgressFill" style="width:0%"></div></div>
+  <div class="progress-label">
+    <span id="poProgressText">メーカー 1/2</span>
+    <span id="poProgressSupplier">パロマ → 株式会社パロマ</span>
+  </div>
+</div>
 
 <div id="formArea">
 <!-- 基本情報 -->
@@ -600,12 +713,23 @@ function switchTab(tab) {
   // 戻るボタン表示（ホーム以外で表示）
   document.getElementById('backBtn').classList.toggle('show', tab !== 'home');
 
-  // 送信ボタン表示制御
-  document.getElementById('btnEstSubmit').style.display = (tab === 'estimate') ? '' : 'none';
+  // 送信ボタン表示制御（見積タブではStep 3のみ表示）
+  document.getElementById('btnEstSubmit').style.display = (tab === 'estimate' && currentWizardStep === MAX_WIZARD_STEP) ? '' : 'none';
   document.getElementById('btnSubmit').style.display = (tab === 'order') ? '' : 'none';
-  document.getElementById('sendArea').style.display = (tab === 'home' || tab === 'list') ? 'none' : '';
+  // 見積タブではStep 3のみ送信エリア表示、発注タブは常時、それ以外は隠す
+  const showSend = (tab === 'order') || (tab === 'estimate' && currentWizardStep === MAX_WIZARD_STEP);
+  document.getElementById('sendArea').style.display = showSend ? '' : 'none';
 
   if (tab === 'list') loadEstimateList();
+
+  // 見積タブ: ウィザードをStep 1から開始（完了画面表示中は除く）
+  if (tab === 'estimate' && !document.getElementById('estSuccessScreen').classList.contains('show')) {
+    resetWizard();
+  }
+
+  // ウィザードナビの表示制御
+  const wnav = document.getElementById('estWizardNav');
+  if (wnav) wnav.style.display = (tab === 'estimate' && !document.getElementById('estSuccessScreen').classList.contains('show')) ? '' : 'none';
 
   validateEst();
   validate();
@@ -613,7 +737,116 @@ function switchTab(tab) {
 }
 
 function goHome() {
+  // ウィザード途中なら確認
+  if (currentTab === 'estimate' && currentWizardStep > 1) {
+    if (!confirm('入力内容が失われます。ホームに戻りますか？')) return;
+    resetWizard();
+  }
   switchTab('home');
+}
+
+// ============ 見積書ウィザード制御 ============
+let currentWizardStep = 1;
+const MAX_WIZARD_STEP = 3;
+
+function goToWizardStep(step) {
+  currentWizardStep = step;
+  // ステップビューの表示切替
+  document.querySelectorAll('.wizard-step-view').forEach(v => v.classList.remove('active'));
+  const view = document.querySelector('.wizard-step-view[data-step="' + step + '"]');
+  if (view) view.classList.add('active');
+
+  // 進捗インジケーター更新
+  document.querySelectorAll('.wizard-step').forEach((el, idx) => {
+    const n = idx + 1;
+    el.classList.remove('active', 'done');
+    if (n < step) el.classList.add('done');
+    else if (n === step) el.classList.add('active');
+  });
+
+  // ナビボタンの状態
+  document.getElementById('btnWizardBack').style.visibility = step === 1 ? 'hidden' : 'visible';
+  const nextBtn = document.getElementById('btnWizardNext');
+  nextBtn.textContent = step === MAX_WIZARD_STEP ? '確認完了' : '次へ →';
+  nextBtn.style.display = step === MAX_WIZARD_STEP ? 'none' : '';
+
+  // Step 3なら送信ボタン表示・確認内容描画
+  document.getElementById('btnEstSubmit').style.display = (step === MAX_WIZARD_STEP) ? '' : 'none';
+  document.getElementById('sendArea').style.display = (step === MAX_WIZARD_STEP) ? '' : 'none';
+  if (step === MAX_WIZARD_STEP) renderEstConfirm();
+
+  window.scrollTo(0, 0);
+}
+
+function wizardNext() {
+  // バリデーション
+  if (currentWizardStep === 1) {
+    const errs = [];
+    if (!document.getElementById('estDate').value) errs.push('見積日');
+    if (!document.getElementById('estCustomer').value) errs.push('お客様名');
+    if (!document.getElementById('estBranch').value) errs.push('事業所');
+    if (!document.getElementById('estStaff').value) errs.push('担当者');
+    if (errs.length > 0) {
+      showToast('⚠️ 未入力: ' + errs.join(', '), 'error');
+      return;
+    }
+  } else if (currentWizardStep === 2) {
+    if (!validateEst()) {
+      showToast('⚠️ 商品明細に未入力があります', 'error');
+      return;
+    }
+  }
+  if (currentWizardStep < MAX_WIZARD_STEP) goToWizardStep(currentWizardStep + 1);
+}
+
+function wizardPrev() {
+  if (currentWizardStep > 1) goToWizardStep(currentWizardStep - 1);
+}
+
+function resetWizard() {
+  currentWizardStep = 1;
+  goToWizardStep(1);
+}
+
+// Step 3の確認内容を描画
+function renderEstConfirm() {
+  const data = collectEstData();
+  let html = '<div style="background:#f8f9fa;padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px">' +
+    '<div><strong>見積日:</strong> ' + data.estimateDate + '</div>' +
+    '<div><strong>お客様:</strong> ' + (data.customerName || '-') + '様</div>' +
+    (data.subject ? '<div><strong>件名:</strong> ' + data.subject + '</div>' : '') +
+    '<div><strong>事業所:</strong> ' + data.branch + '</div>' +
+    '<div><strong>担当者:</strong> ' + data.staff + '</div></div>';
+
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead>' +
+    '<tr style="background:#e6f4ea"><th style="padding:6px;border:1px solid #ddd">No</th>' +
+    '<th style="padding:6px;border:1px solid #ddd">メーカー</th>' +
+    '<th style="padding:6px;border:1px solid #ddd">品名</th>' +
+    '<th style="padding:6px;border:1px solid #ddd">数量</th>' +
+    '<th style="padding:6px;border:1px solid #ddd">売値</th>' +
+    '<th style="padding:6px;border:1px solid #ddd">金額</th></tr></thead><tbody>';
+  data.lines.forEach((l, i) => {
+    const selling = calcSellingPriceJS(l.cost, l.marginRate, l.rounding);
+    const amount = selling * l.qty;
+    html += '<tr><td style="padding:4px;border:1px solid #ddd;text-align:center">' + (i+1) + '</td>' +
+      '<td style="padding:4px;border:1px solid #ddd">' + l.maker + '</td>' +
+      '<td style="padding:4px;border:1px solid #ddd">' + l.product + '</td>' +
+      '<td style="padding:4px;border:1px solid #ddd;text-align:center">' + l.qty + '</td>' +
+      '<td style="padding:4px;border:1px solid #ddd;text-align:right">¥' + selling.toLocaleString() + '</td>' +
+      '<td style="padding:4px;border:1px solid #ddd;text-align:right;font-weight:700">¥' + amount.toLocaleString() + '</td></tr>';
+  });
+  html += '</tbody></table>';
+
+  let sub = 0;
+  data.lines.forEach(l => { sub += calcSellingPriceJS(l.cost, l.marginRate, l.rounding) * l.qty; });
+  const tax = Math.floor(sub * 0.1);
+  const grand = sub + tax;
+
+  html += '<div style="text-align:right;margin-top:12px;font-size:13px;color:var(--text-secondary)">' +
+    '小計(税抜): ¥' + sub.toLocaleString() + '<br>消費税: ¥' + tax.toLocaleString() + '</div>';
+
+  document.getElementById('estConfirmArea').innerHTML = html;
+  document.getElementById('estGrandTotalConfirm').textContent = '¥' + grand.toLocaleString();
 }
 
 // ============ ドロップダウン初期化 ============
@@ -761,6 +994,14 @@ function calcEstTotal() {
   document.getElementById('estCostTotal').textContent = '¥' + costTotal.toLocaleString();
   document.getElementById('estProfitTotal').textContent = '¥' + profit.toLocaleString();
   document.getElementById('estMarginRate').textContent = marginRate + '%';
+
+  // 大型表示とミニ表示も同期
+  const bigEl = document.getElementById('estGrandTotalBig');
+  if (bigEl) bigEl.textContent = '¥' + grand.toLocaleString();
+  const subMini = document.getElementById('estSubtotalMini');
+  if (subMini) subMini.textContent = '¥' + subtotal.toLocaleString();
+  const taxMini = document.getElementById('estTaxMini');
+  if (taxMini) taxMini.textContent = '¥' + tax.toLocaleString();
 }
 
 // ============ 見積バリデーション ============
@@ -892,6 +1133,9 @@ async function executeEstSend() {
       document.getElementById('estFormArea').style.display = 'none';
       document.getElementById('estSummaryBlock').style.display = 'none';
       document.getElementById('btnEstSubmit').style.display = 'none';
+      // ウィザードナビを隠す
+      const wnav = document.getElementById('estWizardNav');
+      if (wnav) wnav.style.display = 'none';
       document.getElementById('estSuccessScreen').classList.add('show');
       document.getElementById('estSuccessMsg').textContent = '見積No.' + result.estimateNo + ' をスプレッドシートに記録しました。';
       document.getElementById('estLinkSheet').href = result.spreadsheetUrl || '#';
@@ -913,6 +1157,10 @@ function resetEstForm() {
   document.getElementById('estSummaryBlock').style.display = '';
   document.getElementById('btnEstSubmit').style.display = '';
   document.getElementById('estSuccessScreen').classList.remove('show');
+  // ウィザードナビを再表示
+  const wnav = document.getElementById('estWizardNav');
+  if (wnav) wnav.style.display = '';
+  resetWizard();
   document.getElementById('estCustomer').value = '';
   document.getElementById('estSubject').value = '';
   document.getElementById('estNotes').value = '';
@@ -1057,11 +1305,15 @@ function processNextPOQueue() {
     showToast('✅ ' + poQueueDone + '件の発注書を全て送信しました', 'success');
     poQueueEstimateId = null;
     poQueueDone = 0;
+    // 進捗バー非表示
+    const pb = document.getElementById('poProgressBar');
+    if (pb) pb.style.display = 'none';
     loadEstimateList();
     switchTab('list');
     // 転記情報バーを削除
     const bar = document.getElementById('transferInfo');
     if (bar) bar.remove();
+    window._poQueueActive = false;
     return;
   }
 
@@ -1070,6 +1322,14 @@ function processNextPOQueue() {
 
   // 発注書タブに切替
   switchTab('order');
+
+  // 進捗バー表示
+  const total = poQueueDone + remaining;
+  const progressPct = Math.round((poQueueDone / total) * 100);
+  document.getElementById('poProgressBar').style.display = '';
+  document.getElementById('poProgressFill').style.width = progressPct + '%';
+  document.getElementById('poProgressText').textContent = 'メーカー ' + (poQueueDone + 1) + '/' + total;
+  document.getElementById('poProgressSupplier').textContent = current.maker + ' → ' + current.supplier;
 
   // 転記情報バー
   let infoBar = document.getElementById('transferInfo');
