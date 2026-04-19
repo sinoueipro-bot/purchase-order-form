@@ -70,6 +70,12 @@ body {
 .wizard-step:not(:last-child)::after { content: ''; position: absolute; top: 16px; left: calc(50% + 20px); right: calc(-50% + 20px); height: 2px; background: #e0e0e0; z-index: -1; }
 .wizard-step.done:not(:last-child)::after { background: var(--estimate); }
 
+/* 発注書用ウィザード（青） */
+.wizard-progress.po .wizard-step.active .step-circle { background: var(--primary); box-shadow: 0 0 0 4px #d1e3fc; }
+.wizard-progress.po .wizard-step.active .step-label { color: var(--primary); }
+.wizard-progress.po .wizard-step.done .step-circle { background: var(--primary); }
+.wizard-progress.po .wizard-step.done:not(:last-child)::after { background: var(--primary); }
+
 .wizard-step-view { display: none; }
 .wizard-step-view.active { display: block; animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -456,6 +462,22 @@ textarea { resize: vertical; min-height: 60px; }
 <!-- ============================================================ -->
 <div class="tab-content" id="tab-order">
 
+<!-- Step進捗インジケーター（発注書） -->
+<div class="wizard-progress po" id="poWizardProgress">
+  <div class="wizard-step active" data-step="1">
+    <div class="step-circle"><span class="step-circle-num">1</span></div>
+    <div class="step-label">仕入先情報</div>
+  </div>
+  <div class="wizard-step" data-step="2">
+    <div class="step-circle"><span class="step-circle-num">2</span></div>
+    <div class="step-label">注文明細</div>
+  </div>
+  <div class="wizard-step" data-step="3">
+    <div class="step-circle"><span class="step-circle-num">3</span></div>
+    <div class="step-label">送信先・確認</div>
+  </div>
+</div>
+
 <!-- 発注進捗バー（キューモード時のみ表示） -->
 <div class="po-progress-bar" id="poProgressBar" style="display:none">
   <div class="progress-track"><div class="progress-fill" id="poProgressFill" style="width:0%"></div></div>
@@ -465,8 +487,20 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
 </div>
 
+<!-- エラー常時表示 -->
+<div class="error-banner" id="poErrorBanner" onclick="focusFirstPoError()">
+  <div class="err-title">⚠️ 未入力の項目があります</div>
+  <div class="err-list" id="poErrorList"></div>
+</div>
+
 <div id="formArea">
-<!-- 基本情報 -->
+
+<!-- ==================== STEP 1: 仕入先情報 ==================== -->
+<div class="wizard-step-view active" data-po-step="1">
+<div class="step-title">
+  <h2>🏢 仕入先情報を入力</h2>
+  <p>発注する業者と現場情報を入れてください</p>
+</div>
 <div class="section">
   <div class="section-title">基本情報</div>
   <div class="field-group">
@@ -494,46 +528,81 @@ textarea { resize: vertical; min-height: 60px; }
     <input type="text" id="siteName" placeholder="現場名を入力">
   </div>
 </div>
-<!-- 明細行 -->
+</div><!-- /po step 1 -->
+
+<!-- ==================== STEP 2: 注文明細 ==================== -->
+<div class="wizard-step-view" data-po-step="2">
+<div class="step-title">
+  <h2>📦 商品を入力</h2>
+  <p>発注する商品を追加してください</p>
+</div>
+
+<!-- 金額大型表示 -->
+<div class="price-display" style="background:linear-gradient(135deg,#e8f0fe 0%,#f0f7ff 100%);border-color:var(--primary)">
+  <div class="label">💰 発注合計金額</div>
+  <div class="big-amount" id="totalAmountBig" style="color:var(--primary)">¥0</div>
+</div>
+
 <div class="section">
   <div class="section-title">注文明細</div>
   <div id="lineItems"></div>
   <button type="button" class="btn-add-line" onclick="addLineItem()">+ 行を追加</button>
 </div>
-<!-- 合計 -->
 <div class="total-bar">
   <span class="label">合計金額</span>
   <span class="amount" id="totalAmount">&yen;0</span>
 </div>
-<!-- その他 -->
 <div class="section">
-  <div class="section-title">その他</div>
+  <div class="section-title">特記事項</div>
   <div class="field-group">
-    <div class="field-label">特記事項</div>
     <textarea id="notes" placeholder="特記事項があれば入力"></textarea>
   </div>
+</div>
+</div><!-- /po step 2 -->
+
+<!-- ==================== STEP 3: 送信先・確認 ==================== -->
+<div class="wizard-step-view" data-po-step="3">
+<div class="step-title">
+  <h2>✅ 送信先を選んで確認</h2>
+  <p>注文者・承認者を選び、内容を確認してください</p>
+</div>
+<div class="section">
+  <div class="section-title">送信先</div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge">必須</span>注文者</div>
     <select id="orderer" required><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
-    <div class="field-label">緊急</div>
+    <div class="field-label"><span class="required-badge">必須</span>承認者</div>
+    <select id="approver" required><option value="">選択してください</option></select>
+  </div>
+  <div class="field-group">
+    <div class="field-label">緊急（即発注扱い）</div>
     <div class="toggle-wrapper">
       <label class="toggle"><input type="checkbox" id="urgent"><span class="toggle-slider"></span></label>
       <span class="urgent-label" id="urgentLabel">PASS</span>
     </div>
   </div>
 </div>
-<!-- 承認者選択 -->
+<!-- 確認内容 -->
 <div class="section">
-  <div class="section-title">送信先</div>
-  <div class="field-group">
-    <div class="field-label"><span class="required-badge">必須</span>承認者</div>
-    <select id="approver" required><option value="">選択してください</option></select>
-  </div>
+  <div class="section-title">確認内容</div>
+  <div id="poConfirmArea" style="padding:12px 16px"></div>
 </div>
+<div class="price-display" style="background:linear-gradient(135deg,#e8f0fe 0%,#f0f7ff 100%);border-color:var(--primary);margin-top:0">
+  <div class="label">💰 発注合計金額</div>
+  <div class="big-amount" id="totalAmountConfirm" style="color:var(--primary)">¥0</div>
+</div>
+</div><!-- /po step 3 -->
+
 <div class="error-summary" id="errorSummary"></div>
 </div><!-- /formArea -->
+
+<!-- 発注書ウィザードナビ -->
+<div class="wizard-nav" id="poWizardNav">
+  <button type="button" class="btn-back" id="btnPoWizardBack" onclick="poWizardPrev()">← 戻る</button>
+  <button type="button" class="btn-next" id="btnPoWizardNext" onclick="poWizardNext()" style="background:var(--primary)">次へ →</button>
+</div>
 
 <!-- 発注 完了画面 -->
 <div class="success-screen" id="successScreen">
@@ -809,11 +878,12 @@ function switchTab(tab) {
   // 戻るボタン表示（ホーム以外で表示）
   document.getElementById('backBtn').classList.toggle('show', tab !== 'home');
 
-  // 送信ボタン表示制御（見積タブではStep 3のみ表示）
+  // 送信ボタン表示制御（両タブともStep 3のみ表示）
   document.getElementById('btnEstSubmit').style.display = (tab === 'estimate' && currentWizardStep === MAX_WIZARD_STEP) ? '' : 'none';
-  document.getElementById('btnSubmit').style.display = (tab === 'order') ? '' : 'none';
-  // 見積タブではStep 3のみ送信エリア表示、発注タブは常時、それ以外は隠す
-  const showSend = (tab === 'order') || (tab === 'estimate' && currentWizardStep === MAX_WIZARD_STEP);
+  document.getElementById('btnSubmit').style.display = (tab === 'order' && currentPoWizardStep === MAX_PO_WIZARD_STEP) ? '' : 'none';
+  // Step 3のみ送信エリア表示、それ以外は隠す
+  const showSend = (tab === 'order' && currentPoWizardStep === MAX_PO_WIZARD_STEP) ||
+                    (tab === 'estimate' && currentWizardStep === MAX_WIZARD_STEP);
   document.getElementById('sendArea').style.display = showSend ? '' : 'none';
 
   if (tab === 'list') loadAllLists();
@@ -822,10 +892,16 @@ function switchTab(tab) {
   if (tab === 'estimate' && !document.getElementById('estSuccessScreen').classList.contains('show')) {
     resetWizard();
   }
+  // 発注タブ: ウィザードをStep 1から開始（完了画面表示中・キューモード時は除く）
+  if (tab === 'order' && !document.getElementById('successScreen').classList.contains('show') && !window._poQueueActive) {
+    resetPoWizard();
+  }
 
   // ウィザードナビの表示制御
   const wnav = document.getElementById('estWizardNav');
   if (wnav) wnav.style.display = (tab === 'estimate' && !document.getElementById('estSuccessScreen').classList.contains('show')) ? '' : 'none';
+  const pnav = document.getElementById('poWizardNav');
+  if (pnav) pnav.style.display = (tab === 'order' && !document.getElementById('successScreen').classList.contains('show')) ? '' : 'none';
 
   validateEst();
   validate();
@@ -878,6 +954,127 @@ function goToWizardStep(step) {
   if (step === MAX_WIZARD_STEP) renderEstConfirm();
 
   window.scrollTo(0, 0);
+}
+
+// ============ 発注書ウィザード制御 ============
+let currentPoWizardStep = 1;
+const MAX_PO_WIZARD_STEP = 3;
+
+function goToPoWizardStep(step) {
+  currentPoWizardStep = step;
+  document.querySelectorAll('.wizard-step-view[data-po-step]').forEach(v => v.classList.remove('active'));
+  const view = document.querySelector('.wizard-step-view[data-po-step="' + step + '"]');
+  if (view) view.classList.add('active');
+
+  // 進捗インジケーター更新
+  const progress = document.getElementById('poWizardProgress');
+  if (progress) {
+    progress.querySelectorAll('.wizard-step').forEach((el, idx) => {
+      const n = idx + 1;
+      el.classList.remove('active', 'done');
+      if (n < step) el.classList.add('done');
+      else if (n === step) el.classList.add('active');
+    });
+  }
+
+  // ナビボタン
+  document.getElementById('btnPoWizardBack').style.visibility = step === 1 ? 'hidden' : 'visible';
+  const nextBtn = document.getElementById('btnPoWizardNext');
+  nextBtn.style.display = step === MAX_PO_WIZARD_STEP ? 'none' : '';
+
+  // Step 3なら送信ボタン表示・確認内容描画
+  document.getElementById('btnSubmit').style.display = (step === MAX_PO_WIZARD_STEP) ? '' : 'none';
+  document.getElementById('sendArea').style.display = (step === MAX_PO_WIZARD_STEP) ? '' : 'none';
+  if (step === MAX_PO_WIZARD_STEP) renderPoConfirm();
+
+  window.scrollTo(0, 0);
+}
+
+function poWizardNext() {
+  // バリデーション
+  if (currentPoWizardStep === 1) {
+    const errs = [];
+    if (!document.getElementById('issueDate').value) errs.push('発行日');
+    if (!document.getElementById('orderNo').value) errs.push('注文No.');
+    if (!document.getElementById('supplier').value) errs.push('仕入先');
+    if (!document.getElementById('branch').value) errs.push('事業所');
+    if (errs.length > 0) {
+      showToast('⚠️ 未入力: ' + errs.join(', '), 'error');
+      return;
+    }
+  } else if (currentPoWizardStep === 2) {
+    const errs = getValidationErrors().filter(e => e.indexOf('明細') === 0);
+    if (errs.length > 0) {
+      showToast('⚠️ 商品明細に未入力があります', 'error');
+      return;
+    }
+  }
+  if (currentPoWizardStep < MAX_PO_WIZARD_STEP) goToPoWizardStep(currentPoWizardStep + 1);
+}
+
+function poWizardPrev() {
+  if (currentPoWizardStep > 1) goToPoWizardStep(currentPoWizardStep - 1);
+}
+
+function resetPoWizard() {
+  currentPoWizardStep = 1;
+  goToPoWizardStep(1);
+}
+
+function focusFirstPoError() {
+  const errs = getValidationErrors();
+  if (errs.length === 0) return;
+  const first = errs[0];
+  const idMap = { '発行日':'issueDate','注文No.':'orderNo','仕入先':'supplier','事業所':'branch','注文者':'orderer','承認者':'approver' };
+  if (idMap[first]) {
+    const el = document.getElementById(idMap[first]);
+    if (el) { el.scrollIntoView({behavior:'smooth', block:'center'}); el.focus(); }
+    // 適切なステップに移動
+    if (['発行日','注文No.','仕入先','事業所'].indexOf(first) !== -1) goToPoWizardStep(1);
+    else if (['注文者','承認者'].indexOf(first) !== -1) goToPoWizardStep(3);
+  } else if (first.indexOf('明細') === 0) {
+    goToPoWizardStep(2);
+  }
+}
+
+// 発注書Step 3 確認内容を描画
+function renderPoConfirm() {
+  const data = collectFormData();
+  let html = '<div style="background:#f8f9fa;padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px">' +
+    '<div><strong>発行日:</strong> ' + data.issueDate + '</div>' +
+    '<div><strong>注文No.:</strong> ' + data.orderNo + '</div>' +
+    '<div><strong>仕入先:</strong> ' + (data.supplier || '-') + '</div>' +
+    '<div><strong>事業所:</strong> ' + data.branch + '</div>' +
+    (data.siteName ? '<div><strong>現場:</strong> ' + data.siteName + '</div>' : '') +
+    '</div>';
+
+  html += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead>' +
+    '<tr style="background:#e8f0fe"><th style="padding:6px;border:1px solid #ddd">No</th>' +
+    '<th style="padding:6px;border:1px solid #ddd">メーカー</th>' +
+    '<th style="padding:6px;border:1px solid #ddd">商品名</th>' +
+    '<th style="padding:6px;border:1px solid #ddd">数量</th>' +
+    '<th style="padding:6px;border:1px solid #ddd">単価</th>' +
+    '<th style="padding:6px;border:1px solid #ddd">金額</th></tr></thead><tbody>';
+  (data.lines || []).forEach((l, i) => {
+    html += '<tr><td style="padding:4px;border:1px solid #ddd;text-align:center">' + (i+1) + '</td>' +
+      '<td style="padding:4px;border:1px solid #ddd">' + (l.maker || '') + '</td>' +
+      '<td style="padding:4px;border:1px solid #ddd">' + (l.product || '') + '</td>' +
+      '<td style="padding:4px;border:1px solid #ddd;text-align:center">' + (l.qty || 0) + '</td>' +
+      '<td style="padding:4px;border:1px solid #ddd;text-align:right">¥' + Number(l.price || 0).toLocaleString() + '</td>' +
+      '<td style="padding:4px;border:1px solid #ddd;text-align:right;font-weight:700">¥' + Number(l.amount || 0).toLocaleString() + '</td></tr>';
+  });
+  html += '</tbody></table>';
+
+  const approverName = APPROVERS.find(a => a.email === data.approverEmail)?.name || '-';
+  html += '<div style="margin-top:10px;font-size:13px">' +
+    '<div><strong>注文者:</strong> ' + (data.orderer || '-') + '</div>' +
+    '<div><strong>承認者:</strong> ' + approverName + '</div>' +
+    '<div><strong>状態:</strong> ' + (data.urgent ? '<span style="color:var(--danger);font-weight:700">🔴 緊急（即発注）</span>' : 'PASS（通常承認）') + '</div>' +
+    (data.notes ? '<div style="margin-top:6px;padding:8px;background:#f0f0f0;border-radius:4px"><strong>特記:</strong> ' + data.notes + '</div>' : '') +
+    '</div>';
+
+  document.getElementById('poConfirmArea').innerHTML = html;
+  document.getElementById('totalAmountConfirm').textContent = '¥' + Number(data.total || 0).toLocaleString();
 }
 
 function wizardNext() {
@@ -2025,13 +2222,31 @@ function calcTotal() {
     total += (parseInt(document.getElementById('qty-' + n)?.value) || 0) *
              (parseInt(document.getElementById('price-' + n)?.value) || 0);
   });
-  document.getElementById('totalAmount').textContent = '\u00a5' + total.toLocaleString();
+  const s = '\u00a5' + total.toLocaleString();
+  document.getElementById('totalAmount').textContent = s;
+  const big = document.getElementById('totalAmountBig');
+  if (big) big.textContent = s;
+  const conf = document.getElementById('totalAmountConfirm');
+  if (conf) conf.textContent = s;
 }
 
 // ============ 発注バリデーション ============
+function updatePoErrorBanner() {
+  const banner = document.getElementById('poErrorBanner');
+  if (!banner) return;
+  const errs = getValidationErrors();
+  if (errs.length > 0 && currentTab === 'order') {
+    document.getElementById('poErrorList').textContent = errs.join('、');
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
+}
+
 function validate() {
   const ok = getValidationErrors().length === 0;
   document.getElementById('btnSubmit').disabled = !ok;
+  updatePoErrorBanner();
   return ok;
 }
 function getValidationErrors() {
@@ -2168,6 +2383,12 @@ async function executeSend() {
       window._poQueueActive = false;
       document.getElementById('formArea').style.display = 'none';
       document.getElementById('btnSubmit').style.display = 'none';
+      // 発注書ウィザードナビを隠す
+      const pnav = document.getElementById('poWizardNav');
+      if (pnav) pnav.style.display = 'none';
+      // Step進捗も隠す
+      const pprog = document.getElementById('poWizardProgress');
+      if (pprog) pprog.style.display = 'none';
       document.getElementById('successScreen').classList.add('show');
       document.getElementById('successMessage').textContent = data.urgent
         ? '【緊急】注文No.' + data.orderNo + ' を登録し、即発注扱いです。'
@@ -2192,6 +2413,12 @@ function resetForm() {
   document.getElementById('formArea').style.display = '';
   document.getElementById('btnSubmit').style.display = '';
   document.getElementById('successScreen').classList.remove('show');
+  // ウィザードUI復帰
+  const pnav = document.getElementById('poWizardNav');
+  if (pnav) pnav.style.display = '';
+  const pprog = document.getElementById('poWizardProgress');
+  if (pprog) pprog.style.display = '';
+  resetPoWizard();
   document.getElementById('supplier').value = '';
   document.getElementById('branch').value = '';
   document.getElementById('siteName').value = '';

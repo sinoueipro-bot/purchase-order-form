@@ -484,6 +484,43 @@ function fixEstimateLinks() {
 }
 
 // ============ シート整理（1回実行後に削除してOK） ============
+// ============ シート整理（削除せず並び替え+色分け） ============
+function organizeSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  var systemNames = ['発注一覧', '見積一覧', 'テンプレート'];
+  var systemSheets = [], estSheets = [], orderSheets = [];
+  sheets.forEach(function(s) {
+    var name = s.getName();
+    if (systemNames.indexOf(name) !== -1) systemSheets.push(s);
+    else if (name.indexOf('見積_') === 0) estSheets.push(s);
+    else orderSheets.push(s);
+  });
+  // システムシートは固定順（発注一覧→見積一覧→テンプレート）
+  systemSheets.sort(function(a, b) {
+    return systemNames.indexOf(a.getName()) - systemNames.indexOf(b.getName());
+  });
+  // データシートは名前(日付)で新しい順
+  estSheets.sort(function(a, b) { return b.getName().localeCompare(a.getName()); });
+  orderSheets.sort(function(a, b) { return b.getName().localeCompare(a.getName()); });
+  // 並び替え: システム→見積→発注
+  var ordered = systemSheets.concat(estSheets).concat(orderSheets);
+  ordered.forEach(function(s, i) {
+    ss.setActiveSheet(s);
+    ss.moveActiveSheet(i + 1);
+  });
+  // 色分け
+  var tpl = ss.getSheetByName('テンプレート'); if (tpl) tpl.setTabColor('#5f6368');
+  var oIdx = ss.getSheetByName('発注一覧'); if (oIdx) oIdx.setTabColor('#1a73e8');
+  var eIdx = ss.getSheetByName('見積一覧'); if (eIdx) eIdx.setTabColor('#0f9d58');
+  estSheets.forEach(function(s) { try { s.setTabColor('#c8f0d4'); } catch(e){} });   // 薄緑
+  orderSheets.forEach(function(s) { try { s.setTabColor('#cce0f8'); } catch(e){} }); // 薄青
+  // 最初のシート（発注一覧）をアクティブに
+  if (oIdx) ss.setActiveSheet(oIdx);
+  Logger.log('整理完了: システム' + systemSheets.length + ' + 見積' + estSheets.length + ' + 発注' + orderSheets.length + ' = ' + ordered.length + 'シート');
+  return { systemCount: systemSheets.length, estCount: estSheets.length, orderCount: orderSheets.length };
+}
+
 function cleanupSheets() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var keep = ['テンプレート', '発注一覧', '見積一覧'];
