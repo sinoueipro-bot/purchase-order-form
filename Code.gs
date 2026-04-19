@@ -106,6 +106,8 @@ function doGet(e) {
   if (action === 'listEstimates') return jsonResponse(getEstimateList());
   if (action === 'getEstimateData') return jsonResponse(getEstimateData(id));
   if (action === 'markTransferred') return jsonResponse(markEstimateTransferred(id));
+  if (action === 'listOrders') return jsonResponse(getOrderList());
+  if (action === 'cancelOrder') return jsonResponse(cancelOrder(id));
 
   if (!action || !id) return HtmlService.createHtmlOutput('<h2>発注書・見積書APIは稼働中です</h2>');
 
@@ -196,7 +198,7 @@ function processOrder(data) {
   }
 
   var sheetUrl = ss.getUrl() + '#gid=' + os.getSheetId();
-  return { success: true, message: '発注書を登録しました', orderNo: data.orderNo, spreadsheetUrl: ss.getUrl(), sheetUrl: sheetUrl };
+  return { success: true, message: '発注書を登録しました', orderNo: data.orderNo, orderId: uniqueId, spreadsheetUrl: ss.getUrl(), sheetUrl: sheetUrl };
 }
 
 // ============ テンプレートコピー ============
@@ -301,6 +303,8 @@ function applyStatusColor(sheet, row, status) {
       cell.setFontColor('#5f6368').setBackground('#f1f3f4'); break;
     case '却下':
       cell.setFontColor('#c5221f').setBackground('#fce8e6'); break;
+    case '取消':
+      cell.setFontColor('#5f6368').setBackground('#f1f3f4').setFontStyle('italic'); break;
   }
 }
 
@@ -920,6 +924,89 @@ function markEstimateTransferred(id) {
     }
   }
   return { success: false, error: '見積書が見つかりません' };
+}
+
+// ============ API: 発注一覧取得 ============
+function getOrderList() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(INDEX_SHEET);
+  if (!s) return { success: true, orders: [] };
+  var data = s.getDataRange().getValues();
+  var orders = [];
+  for (var i = 1; i < data.length; i++) {
+    orders.push({
+      timestamp: data[i][0],
+      orderNo: data[i][1],
+      issueDate: data[i][2],
+      supplier: data[i][3],
+      branch: data[i][4],
+      siteName: data[i][5],
+      total: data[i][6],
+      orderer: data[i][7],
+      urgent: data[i][8],
+      approverName: data[i][9],
+      status: data[i][10],
+      sheetUrl: data[i][11],
+      id: data[i][12]
+    });
+  }
+  return { success: true, orders: orders };
+}
+
+// ============ API: 発注書の取消（60秒以内） ============
+function cancelOrder(id) {
+  if (!id) return { success: false, error: 'IDが必要です' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(INDEX_SHEET);
+  if (!s) return { success: false, error: '発注一覧がありません' };
+
+  var data = s.getDataRange().getValues();
+  var rowIdx = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][12] === id) { rowIdx = i; break; }
+  }
+  if (rowIdx === -1) return { success: false, error: '発注書が見つかりません' };
+
+  // 受付から60秒以内かチェック
+  var timestamp = data[rowIdx][0];
+  var ts = (typeof timestamp === 'string') ? new Date(timestamp) : timestamp;
+  var elapsed = (new Date()).getTime() - ts.getTime();
+  if (elapsed > 60 * 1000) {
+    return { success: false, error: '送信から60秒を超えたため取消できません' };
+  }
+
+  // 発注書シートを削除
+  try {
+    var sheetUrl = data[rowIdx][11];
+    var match = sheetUrl.match(/gid=(\d+)/);
+    if (match) {
+      var gid = parseInt(match[1]);
+      var sheets = ss.getSheets();
+      for (var j = 0; j < sheets.length; j++) {
+        if (sheets[j].getSheetId() === gid) {
+          ss.deleteSheet(sheets[j]);
+          break;
+        }
+      }
+    }
+  } catch(e) { Logger.log('発注書シート削除エラー: ' + e.toString()); }
+
+  // 発注一覧のステータスを「取消」に
+  applyStatusColor(s, rowIdx + 1, '取消');
+
+  // 承認者にキャンセル通知メール
+  try {
+    var orderNo = data[rowIdx][1];
+    var supplier = data[rowIdx][3];
+    var approverEmail = APPROVER_PASS.email; // テスト用に固定
+    MailApp.sendEmail({
+      to: approverEmail,
+      subject: '【取消】発注書: ' + supplier + ' / ' + orderNo,
+      body: '先ほど送信した発注書は取り消されました。\n\n注文No.: ' + orderNo + '\n仕入先: ' + supplier + '\n\n承認は不要です。',
+    });
+  } catch(e) { Logger.log('キャンセル通知エラー: ' + e.toString()); }
+
+  return { success: true, message: '発注を取り消しました' };
 }
 
 // ============ メーカー→仕入先マッピング ============

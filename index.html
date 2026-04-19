@@ -437,9 +437,14 @@ textarea { resize: vertical; min-height: 60px; }
   <div class="icon">&#10004;&#65039;</div>
   <h2>見積書を作成しました</h2>
   <p id="estSuccessMsg"></p>
+  <div style="background:#e8f0fe;border-radius:10px;padding:12px;margin:12px auto;max-width:340px;font-size:13px;color:var(--primary);font-weight:600;text-align:center">
+    💡 営業担当の方は PDF/印刷 ボタンでお客様にお渡しください
+  </div>
   <div class="success-links">
     <a id="estLinkSheet" class="link-spreadsheet" href="#" target="_blank">📊 スプレッドシートを開く</a>
     <a id="estLinkDirect" class="link-edit" href="#" target="_blank">📄 見積書シートを開く</a>
+    <a id="estLinkPdf" class="link-edit" href="#" target="_blank" style="background:#fef7e0;color:#b06000;border-color:#f9ab00">📥 PDFダウンロード</a>
+    <a id="estLinkPrint" class="link-edit" href="#" target="_blank" style="background:#e6f4ea;color:#137333;border-color:#0f9d58">🖨 印刷する</a>
   </div>
   <button class="btn-new" style="background:var(--estimate)" onclick="resetEstForm()">新しい見積書を作成</button>
 </div>
@@ -536,9 +541,19 @@ textarea { resize: vertical; min-height: 60px; }
   <div class="icon">&#10004;&#65039;</div>
   <h2>発注書を送信しました</h2>
   <p id="successMessage"></p>
+
+  <!-- 取消パネル（60秒以内） -->
+  <div id="undoPanel" style="background:#fef7e0;border:2px solid var(--warning);border-radius:12px;padding:14px;margin:16px auto;max-width:340px;display:none">
+    <div style="font-size:13px;color:#b06000;font-weight:600;margin-bottom:6px">⏱ 間違えて送った場合はすぐ取消できます</div>
+    <div id="undoCountdown" style="font-size:24px;font-weight:800;color:var(--danger);text-align:center;margin:6px 0">60秒</div>
+    <button type="button" id="btnUndoSend" onclick="undoLastSend()" style="width:100%;padding:12px;background:var(--danger);color:white;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">↩️ この発注を取り消す</button>
+  </div>
+
   <div class="success-links">
     <a id="linkSpreadsheet" class="link-spreadsheet" href="#" target="_blank">📊 スプレッドシートを開く</a>
-    <a id="linkEditSheet" class="link-edit" href="#" target="_blank">✏️ 修正はこちらから</a>
+    <a id="linkEditSheet" class="link-edit" href="#" target="_blank">📄 発注書シートを開く</a>
+    <a id="linkPdf" class="link-edit" href="#" target="_blank" style="background:#fef7e0;color:#b06000;border-color:#f9ab00">📥 PDFダウンロード</a>
+    <a id="linkPrint" class="link-edit" href="#" target="_blank" style="background:#e6f4ea;color:#137333;border-color:#0f9d58">🖨 印刷</a>
   </div>
   <button class="btn-new" onclick="resetForm()">新しい発注書を作成</button>
 </div>
@@ -550,26 +565,41 @@ textarea { resize: vertical; min-height: 60px; }
 <!-- ============================================================ -->
 <div class="tab-content" id="tab-list">
 
+<!-- 検索＆フィルタ -->
+<div class="section" style="margin-bottom:8px">
+  <div style="padding:12px">
+    <div style="position:relative">
+      <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-secondary)">🔍</span>
+      <input type="text" id="listSearchBox" placeholder="お客様名・No.・件名・メーカーで検索..."
+             oninput="filterList()"
+             style="width:100%;padding:12px 12px 12px 38px;font-size:15px;border:1.5px solid var(--border);border-radius:8px">
+    </div>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <button type="button" class="list-filter-btn active" data-filter="all" onclick="setListFilter('all')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--border);background:var(--primary);color:white;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">全て</button>
+      <button type="button" class="list-filter-btn" data-filter="estimate" onclick="setListFilter('estimate')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--border);background:white;color:var(--text);font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">📝 見積</button>
+      <button type="button" class="list-filter-btn" data-filter="order" onclick="setListFilter('order')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--border);background:white;color:var(--text);font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">📦 発注</button>
+    </div>
+    <div id="listResultCount" style="font-size:12px;color:var(--text-secondary);margin-top:8px;text-align:center"></div>
+  </div>
+</div>
+
 <!-- 見積一覧 -->
-<div class="section">
-  <div class="section-title est">📋 見積一覧</div>
+<div class="section" id="estListSection">
+  <div class="section-title est">📝 見積一覧</div>
   <div id="estListArea" style="padding:12px 16px">
     <p style="color:var(--text-secondary);font-size:13px;text-align:center">読み込み中...</p>
   </div>
 </div>
 
-<!-- 発注一覧（リンクのみ） -->
-<div class="section">
+<!-- 発注一覧 -->
+<div class="section" id="orderListSection">
   <div class="section-title">📦 発注一覧</div>
-  <div style="padding:12px 16px;text-align:center">
-    <a href="https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit#gid=0" target="_blank"
-       style="display:inline-flex;align-items:center;gap:8px;padding:12px 24px;background:var(--primary);color:white;border-radius:var(--radius);text-decoration:none;font-weight:600;font-size:14px">
-      📊 スプレッドシートで発注一覧を開く
-    </a>
+  <div id="orderListArea" style="padding:12px 16px">
+    <p style="color:var(--text-secondary);font-size:13px;text-align:center">読み込み中...</p>
   </div>
 </div>
 
-<button type="button" class="btn-reload" onclick="loadEstimateList()" style="margin:8px 12px;width:calc(100% - 24px)">🔄 一覧を更新</button>
+<button type="button" class="btn-reload" onclick="loadAllLists()" style="margin:8px 12px;width:calc(100% - 24px)">🔄 一覧を更新</button>
 
 </div><!-- /tab-list -->
 
@@ -770,7 +800,7 @@ function switchTab(tab) {
   const showSend = (tab === 'order') || (tab === 'estimate' && currentWizardStep === MAX_WIZARD_STEP);
   document.getElementById('sendArea').style.display = showSend ? '' : 'none';
 
-  if (tab === 'list') loadEstimateList();
+  if (tab === 'list') loadAllLists();
 
   // 見積タブ: ウィザードをStep 1から開始（完了画面表示中は除く）
   if (tab === 'estimate' && !document.getElementById('estSuccessScreen').classList.contains('show')) {
@@ -1225,6 +1255,8 @@ async function executeEstSend() {
       document.getElementById('estSuccessMsg').textContent = '見積No.' + result.estimateNo + ' をスプレッドシートに記録しました。';
       document.getElementById('estLinkSheet').href = result.spreadsheetUrl || '#';
       document.getElementById('estLinkDirect').href = result.sheetUrl || '#';
+      document.getElementById('estLinkPdf').href = pdfUrl(result.sheetUrl);
+      document.getElementById('estLinkPrint').href = printUrl(result.sheetUrl);
       showToast('見積書作成完了', 'success');
       loadEstimateList();
     } else {
@@ -1259,35 +1291,277 @@ function resetEstForm() {
 }
 
 // ============ 見積一覧 ============
+// ============ 一覧キャッシュ（検索フィルタ用） ============
+let _estListCache = [];
+let _orderListCache = [];
+let _listFilter = 'all';  // 'all' | 'estimate' | 'order'
+
+// スプシID（PDF URL組立用）
+const SS_ID = '1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s';
+
+// PDF ダウンロードURL生成（Google Sheets export）
+function pdfUrl(sheetUrl) {
+  if (!sheetUrl) return '#';
+  const m = sheetUrl.match(/gid=(\d+)/);
+  const gid = m ? m[1] : '0';
+  return 'https://docs.google.com/spreadsheets/d/' + SS_ID + '/export?format=pdf&gid=' + gid +
+    '&portrait=true&size=A4&fitw=true&gridlines=false&printtitle=false&sheetnames=false&pagenum=false&fzr=false';
+}
+// 印刷URL（プレビュー→印刷ダイアログ）
+function printUrl(sheetUrl) {
+  if (!sheetUrl) return '#';
+  const m = sheetUrl.match(/gid=(\d+)/);
+  const gid = m ? m[1] : '0';
+  return 'https://docs.google.com/spreadsheets/d/' + SS_ID + '/view?gid=' + gid + '&printMode=true';
+}
+
+// 全リスト読込
+async function loadAllLists() {
+  await Promise.all([loadEstimateList(), loadOrderList()]);
+  filterList();
+}
+
 async function loadEstimateList() {
   const area = document.getElementById('estListArea');
   area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center">読み込み中...</p>';
   try {
     const res = await fetch(GAS_URL + '?action=listEstimates');
     const data = await res.json();
-    if (!data.success || !data.estimates || data.estimates.length === 0) {
-      area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center">見積書がありません</p>';
-      return;
-    }
-    let html = '';
-    data.estimates.reverse().forEach(est => {
-      const statusColor = est.status === '作成済' ? 'background:#e6f4ea;color:#137333' :
-                           est.status === '発注済' ? 'background:#e8f0fe;color:#1a73e8' :
-                           'background:#f1f3f4;color:#5f6368';
-      html += '<div class="est-list-card">' +
-        '<div class="est-header"><span class="est-no">' + (est.estimateNo || '-') + '</span>' +
-        '<span class="est-status" style="' + statusColor + '">' + est.status + '</span></div>' +
-        '<div class="est-detail">' + (est.customerName || '') + (est.subject ? ' / ' + est.subject : '') + '</div>' +
-        '<div class="est-detail">' + (est.estimateDate || '') + ' / ' + (est.staff || '') + '</div>' +
-        '<div class="est-amount">¥' + Number(est.grandTotal || 0).toLocaleString() + '</div>' +
-        '<div class="est-actions">' +
-        '<a class="btn-view" href="' + (est.sheetUrl || '#') + '" target="_blank">📄 開く</a>' +
-        (est.status === '作成済' ? '<button class="btn-transfer" onclick="showBatchPOModal(\'' + est.id + '\')">📦 メーカー別発注</button>' : '') +
-        '</div></div>';
-    });
-    area.innerHTML = html;
+    _estListCache = (data.success && data.estimates) ? data.estimates.slice().reverse() : [];
+    renderEstListArea();
   } catch (err) {
     area.innerHTML = '<p style="color:var(--danger);font-size:13px;text-align:center">読込エラー: ' + err.message + '</p>';
+  }
+}
+
+async function loadOrderList() {
+  const area = document.getElementById('orderListArea');
+  area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center">読み込み中...</p>';
+  try {
+    const res = await fetch(GAS_URL + '?action=listOrders');
+    const data = await res.json();
+    _orderListCache = (data.success && data.orders) ? data.orders.slice().reverse() : [];
+    renderOrderListArea();
+  } catch (err) {
+    area.innerHTML = '<p style="color:var(--danger);font-size:13px;text-align:center">読込エラー: ' + err.message + '</p>';
+  }
+}
+
+// 検索ワードでフィルタ
+function matchesSearch(obj, q) {
+  if (!q) return true;
+  const ql = q.toLowerCase();
+  const fields = [obj.customerName, obj.estimateNo, obj.orderNo, obj.subject, obj.siteName,
+                  obj.staff, obj.orderer, obj.supplier, obj.status];
+  return fields.some(f => f && String(f).toLowerCase().indexOf(ql) !== -1);
+}
+
+function renderEstListArea() {
+  const area = document.getElementById('estListArea');
+  const q = (document.getElementById('listSearchBox')?.value || '').trim();
+  const filtered = _estListCache.filter(e => matchesSearch(e, q));
+  if (filtered.length === 0) {
+    area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center;padding:8px">' + (q ? '該当なし' : '見積書がありません') + '</p>';
+    return;
+  }
+  let html = '';
+  filtered.forEach(est => {
+    const statusColor = est.status === '作成済' ? 'background:#e6f4ea;color:#137333' :
+                         est.status === '発注済' ? 'background:#e8f0fe;color:#1a73e8' :
+                         'background:#f1f3f4;color:#5f6368';
+    const pdf = pdfUrl(est.sheetUrl);
+    const print = printUrl(est.sheetUrl);
+    html += '<div class="est-list-card">' +
+      '<div class="est-header"><span class="est-no">' + (est.estimateNo || '-') + '</span>' +
+      '<span class="est-status" style="' + statusColor + '">' + est.status + '</span></div>' +
+      '<div class="est-detail">' + (est.customerName || '') + (est.subject ? ' / ' + est.subject : '') + '</div>' +
+      '<div class="est-detail">' + formatDate(est.estimateDate) + ' / 担当: ' + (est.staff || '') + '</div>' +
+      '<div class="est-amount">¥' + Number(est.grandTotal || 0).toLocaleString() + '</div>' +
+      '<div class="est-actions" style="flex-wrap:wrap">' +
+      '<a class="btn-view" href="' + (est.sheetUrl || '#') + '" target="_blank">📄 開く</a>' +
+      '<a class="btn-view" href="' + pdf + '" target="_blank" style="background:#fef7e0;color:#b06000;border-color:#f9ab00">📥 PDF</a>' +
+      '<a class="btn-view" href="' + print + '" target="_blank" style="background:#e6f4ea;color:#137333;border-color:#0f9d58">🖨 印刷</a>' +
+      (est.status === '作成済' ? '<button class="btn-transfer" onclick="showBatchPOModal(\'' + est.id + '\')">📦 メーカー別発注</button>' : '') +
+      '</div></div>';
+  });
+  area.innerHTML = html;
+}
+
+function renderOrderListArea() {
+  const area = document.getElementById('orderListArea');
+  const q = (document.getElementById('listSearchBox')?.value || '').trim();
+  const filtered = _orderListCache.filter(o => matchesSearch(o, q));
+  if (filtered.length === 0) {
+    area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center;padding:8px">' + (q ? '該当なし' : '発注書がありません') + '</p>';
+    return;
+  }
+  let html = '';
+  filtered.forEach(o => {
+    const st = o.status || '';
+    const statusColor = st === '申請中' ? 'background:#fef7e0;color:#b06000' :
+                         st === '承認済' ? 'background:#e6f4ea;color:#137333' :
+                         st === '緊急承認済' ? 'background:#d93025;color:#fff' :
+                         st === '発注済' ? 'background:#e8f0fe;color:#1a73e8' :
+                         st === '却下' ? 'background:#fce8e6;color:#c5221f' :
+                         st === '取消' ? 'background:#f1f3f4;color:#5f6368' :
+                         'background:#f1f3f4;color:#5f6368';
+    const pdf = pdfUrl(o.sheetUrl);
+    const print = printUrl(o.sheetUrl);
+    // 60秒以内なら取消ボタン表示
+    const canCancel = o.timestamp && (Date.now() - new Date(o.timestamp).getTime() < 60000) && st !== '取消';
+    html += '<div class="est-list-card">' +
+      '<div class="est-header"><span class="est-no" style="color:var(--primary)">' + (o.orderNo || '-') + '</span>' +
+      '<span class="est-status" style="' + statusColor + '">' + st + (o.urgent === '緊急' ? ' 🔴' : '') + '</span></div>' +
+      '<div class="est-detail">' + (o.supplier || '') + (o.siteName ? ' / ' + o.siteName : '') + '</div>' +
+      '<div class="est-detail">' + formatDate(o.issueDate) + ' / 注文者: ' + (o.orderer || '') + ' / 承認: ' + (o.approverName || '-') + '</div>' +
+      '<div class="est-amount">¥' + Number(o.total || 0).toLocaleString() + '</div>' +
+      '<div class="est-actions" style="flex-wrap:wrap">' +
+      '<a class="btn-view" href="' + (o.sheetUrl || '#') + '" target="_blank">📄 開く</a>' +
+      '<a class="btn-view" href="' + pdf + '" target="_blank" style="background:#fef7e0;color:#b06000;border-color:#f9ab00">📥 PDF</a>' +
+      '<a class="btn-view" href="' + print + '" target="_blank" style="background:#e6f4ea;color:#137333;border-color:#0f9d58">🖨 印刷</a>' +
+      (canCancel ? '<button class="btn-transfer" onclick="cancelOrderById(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--danger)">↩️ 取消</button>' : '') +
+      '</div></div>';
+  });
+  area.innerHTML = html;
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  if (typeof d === 'string') {
+    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return m[1] + '/' + m[2] + '/' + m[3];
+  }
+  try {
+    const dt = new Date(d);
+    return dt.getFullYear() + '/' + String(dt.getMonth()+1).padStart(2,'0') + '/' + String(dt.getDate()).padStart(2,'0');
+  } catch(e) { return String(d); }
+}
+
+// 検索ボックス入力時
+function filterList() {
+  renderEstListArea();
+  renderOrderListArea();
+  updateResultCount();
+  applyListFilter();
+}
+
+function setListFilter(type) {
+  _listFilter = type;
+  document.querySelectorAll('.list-filter-btn').forEach(b => {
+    const isActive = b.dataset.filter === type;
+    b.style.background = isActive ? 'var(--primary)' : 'white';
+    b.style.color = isActive ? 'white' : 'var(--text)';
+  });
+  applyListFilter();
+  updateResultCount();
+}
+
+function applyListFilter() {
+  const est = document.getElementById('estListSection');
+  const ord = document.getElementById('orderListSection');
+  if (est) est.style.display = (_listFilter === 'all' || _listFilter === 'estimate') ? '' : 'none';
+  if (ord) ord.style.display = (_listFilter === 'all' || _listFilter === 'order') ? '' : 'none';
+}
+
+function updateResultCount() {
+  const q = (document.getElementById('listSearchBox')?.value || '').trim();
+  const el = document.getElementById('listResultCount');
+  if (!el) return;
+  const eN = _estListCache.filter(e => matchesSearch(e, q)).length;
+  const oN = _orderListCache.filter(o => matchesSearch(o, q)).length;
+  if (q) el.textContent = '🔍 「' + q + '」: 見積' + eN + '件 / 発注' + oN + '件';
+  else el.textContent = '見積' + _estListCache.length + '件 / 発注' + _orderListCache.length + '件';
+}
+
+// ========= 送信後60秒カウントダウン取消 =========
+let _undoOrderId = null;
+let _undoTimer = null;
+let _undoEndsAt = 0;
+
+function startUndoCountdown(orderId) {
+  const panel = document.getElementById('undoPanel');
+  if (!panel) return;
+  if (!orderId) {
+    // orderIdが取れない場合は発注一覧から最新を取得して使う
+    fetch(GAS_URL + '?action=listOrders').then(r => r.json()).then(d => {
+      if (d.success && d.orders && d.orders.length > 0) {
+        _undoOrderId = d.orders[0].id;  // 先頭=最新
+        _startUndoTick();
+      }
+    }).catch(() => {});
+    panel.style.display = '';
+    _undoEndsAt = Date.now() + 60 * 1000;
+    _startUndoTick();
+    return;
+  }
+  _undoOrderId = orderId;
+  panel.style.display = '';
+  _undoEndsAt = Date.now() + 60 * 1000;
+  _startUndoTick();
+}
+
+function _startUndoTick() {
+  if (_undoTimer) clearInterval(_undoTimer);
+  const cd = document.getElementById('undoCountdown');
+  const panel = document.getElementById('undoPanel');
+  const tick = () => {
+    const left = Math.max(0, Math.ceil((_undoEndsAt - Date.now()) / 1000));
+    if (cd) cd.textContent = left + '秒';
+    if (left <= 0) {
+      clearInterval(_undoTimer);
+      _undoTimer = null;
+      if (panel) panel.style.display = 'none';
+      _undoOrderId = null;
+    }
+  };
+  tick();
+  _undoTimer = setInterval(tick, 500);
+}
+
+async function undoLastSend() {
+  if (!_undoOrderId) {
+    showToast('取消できる発注がありません', 'error');
+    return;
+  }
+  if (!confirm('この発注を取り消しますか？\n\n・発注書シートが削除されます\n・承認者に取消通知が送信されます')) return;
+  const btn = document.getElementById('btnUndoSend');
+  if (btn) { btn.disabled = true; btn.textContent = '取消中...'; }
+  try {
+    const res = await fetch(GAS_URL + '?action=cancelOrder&id=' + _undoOrderId);
+    const data = await res.json();
+    if (data.success) {
+      showToast('✅ 発注を取り消しました', 'success');
+      const panel = document.getElementById('undoPanel');
+      if (panel) panel.style.display = 'none';
+      if (_undoTimer) clearInterval(_undoTimer);
+      _undoOrderId = null;
+      // キューモードなら次へ進む動作を停止する必要あり
+      window._poQueueActive = false;
+    } else {
+      showToast('❌ ' + (data.error || '取消失敗'), 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '↩️ この発注を取り消す'; }
+    }
+  } catch (err) {
+    showToast('エラー: ' + err.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '↩️ この発注を取り消す'; }
+  }
+}
+
+// 発注書取消（一覧から）
+async function cancelOrderById(id, orderNo) {
+  if (!confirm('注文No. ' + orderNo + ' を取り消しますか？\n\n・発注書シートが削除されます\n・承認者に取消通知が送信されます\n\n※ 送信から60秒以内のみ取消可能')) return;
+  showToast('取消処理中...', 'info');
+  try {
+    const res = await fetch(GAS_URL + '?action=cancelOrder&id=' + id);
+    const data = await res.json();
+    if (data.success) {
+      showToast('✅ ' + data.message, 'success');
+      loadOrderList();
+    } else {
+      showToast('❌ ' + (data.error || '取消失敗'), 'error');
+    }
+  } catch (err) {
+    showToast('エラー: ' + err.message, 'error');
   }
 }
 
@@ -1722,6 +1996,10 @@ async function executeSend() {
         : '注文No.' + data.orderNo + ' をスプレッドシートに記録し、承認依頼メールを送信しました。';
       document.getElementById('linkSpreadsheet').href = result.spreadsheetUrl || '#';
       document.getElementById('linkEditSheet').href = result.sheetUrl || '#';
+      document.getElementById('linkPdf').href = pdfUrl(result.sheetUrl);
+      document.getElementById('linkPrint').href = printUrl(result.sheetUrl);
+      // 60秒以内の取消パネルを起動
+      startUndoCountdown(result.orderId || result.uniqueId || result.id);
       showToast('送信完了', 'success');
     } else {
       throw new Error(result.error || '送信に失敗しました');
