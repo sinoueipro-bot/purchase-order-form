@@ -98,6 +98,30 @@ body {
 .po-progress-bar .progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--success)); transition: width 0.3s; }
 .po-progress-bar .progress-label { font-size: 12px; color: var(--text-secondary); display: flex; justify-content: space-between; }
 
+/* ヘルプアイコン */
+.help-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--text-secondary); color: white; font-size: 11px; font-weight: 700; cursor: pointer; margin-left: 4px; user-select: none; }
+.help-icon:hover { background: var(--primary); }
+
+/* ヘルプツールチップ (モバイル: タップで表示) */
+.help-tooltip { display: none; background: #333; color: white; padding: 8px 12px; border-radius: 6px; font-size: 12px; line-height: 1.5; margin-top: 4px; position: relative; }
+.help-tooltip.show { display: block; animation: fadeIn 0.2s; }
+.help-tooltip::before { content: ''; position: absolute; top: -6px; left: 16px; border: 6px solid transparent; border-bottom-color: #333; border-top: 0; }
+
+/* エラーバナー (常時表示) */
+.error-banner { display: none; background: #fce8e6; border: 2px solid var(--danger); border-radius: 8px; padding: 12px 16px; margin: 8px 12px; color: var(--danger); font-weight: 600; font-size: 13px; cursor: pointer; }
+.error-banner.show { display: block; animation: fadeIn 0.3s; }
+.error-banner .err-title { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.error-banner .err-list { font-weight: 500; font-size: 12px; padding-left: 20px; }
+
+/* 最終確認ダイアログ */
+.final-confirm-modal .modal { max-width: 420px; }
+.final-confirm-modal h2 { color: var(--danger); }
+.final-confirm-modal .confirm-info { background: #fef7e0; border: 1px solid var(--warning); border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 13px; }
+.final-confirm-modal .confirm-info .row { display: flex; justify-content: space-between; padding: 4px 0; }
+.final-confirm-modal .confirm-info .row .label { color: var(--text-secondary); }
+.final-confirm-modal .confirm-info .row .value { font-weight: 700; }
+.final-confirm-modal .warn-text { background: #fce8e6; border-left: 4px solid var(--danger); padding: 10px 12px; margin-bottom: 12px; color: var(--danger); font-weight: 600; font-size: 13px; }
+
 .section { background: var(--card); margin: 12px; border-radius: var(--radius); box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
 .section-title { background: #e8f0fe; color: var(--primary); padding: 10px 16px; font-weight: 600; font-size: 14px; border-bottom: 1px solid var(--border); }
 .section-title.est { background: #e6f4ea; color: var(--estimate); }
@@ -269,6 +293,12 @@ textarea { resize: vertical; min-height: 60px; }
     <div class="step-circle"><span class="step-circle-num">3</span></div>
     <div class="step-label">確認</div>
   </div>
+</div>
+
+<!-- エラー常時表示バナー -->
+<div class="error-banner" id="estErrorBanner" onclick="focusFirstError()">
+  <div class="err-title">⚠️ 未入力の項目があります</div>
+  <div class="err-list" id="estErrorList"></div>
 </div>
 
 <div id="estFormArea">
@@ -536,12 +566,13 @@ textarea { resize: vertical; min-height: 60px; }
 </div>
 
 <!-- プレビューモーダル -->
-<div class="modal-overlay" id="previewModal">
+<div class="modal-overlay final-confirm-modal" id="previewModal">
   <div class="modal">
-    <h2 id="previewTitle">プレビュー</h2>
+    <h2 id="previewTitle">⚠️ 送信前の最終確認</h2>
+    <div class="warn-text" id="previewWarn">送信後は取り消せません。内容をよく確認してください</div>
     <div id="previewContent"></div>
     <button class="btn-confirm" id="btnConfirm" onclick="executeCurrentSend()">この内容で実行</button>
-    <button class="btn-close-modal" onclick="closeModal()">戻って修正する</button>
+    <button class="btn-close-modal" onclick="closeModal()">❌ やっぱりやめる</button>
   </div>
 </div>
 
@@ -736,6 +767,12 @@ function switchTab(tab) {
   window.scrollTo(0, 0);
 }
 
+function toggleHelp(el) {
+  const parent = el.closest('.field-label').parentElement;
+  const tooltip = parent.querySelector('.help-tooltip');
+  if (tooltip) tooltip.classList.toggle('show');
+}
+
 function goHome() {
   // ウィザード途中なら確認
   if (currentTab === 'estimate' && currentWizardStep > 1) {
@@ -909,13 +946,16 @@ function addEstLine() {
     '<input type="number" id="est-qty-' + num + '" min="1" value="1" oninput="calcEstLine(' + num + ')"></div>' +
     '<div><div class="field-label">単位</div>' +
     '<select id="est-unit-' + num + '">' + UNITS.map(u => '<option value="' + u + '">' + u + '</option>').join('') + '</select></div></div>' +
-    '<div class="row row-3"><div><div class="field-label"><span class="required-badge">必須</span>原価(税別)</div>' +
-    '<input type="number" id="est-cost-' + num + '" min="0" placeholder="0" oninput="calcEstLine(' + num + ')"></div>' +
-    '<div><div class="field-label"><span class="required-badge">必須</span>粗利率%</div>' +
-    '<input type="number" id="est-margin-' + num + '" min="0" max="99" step="1" value="30" oninput="calcEstLine(' + num + ')"></div>' +
-    '<div><div class="field-label">丸め</div>' +
+    '<div class="row row-3"><div><div class="field-label"><span class="required-badge">必須</span>原価(税別)<span class="help-icon" onclick="toggleHelp(this)">?</span></div>' +
+    '<input type="number" id="est-cost-' + num + '" min="0" placeholder="0" oninput="calcEstLine(' + num + ')">' +
+    '<div class="help-tooltip">仕入値を入れてください。例: 10000</div></div>' +
+    '<div><div class="field-label"><span class="required-badge">必須</span>粗利率%<span class="help-icon" onclick="toggleHelp(this)">?</span></div>' +
+    '<input type="number" id="est-margin-' + num + '" min="0" max="99" step="1" value="30" oninput="calcEstLine(' + num + ')">' +
+    '<div class="help-tooltip">30 と入れると30%の利益が乗ります。仕入10,000円なら売値は約14,290円です</div></div>' +
+    '<div><div class="field-label">丸め<span class="help-icon" onclick="toggleHelp(this)">?</span></div>' +
     '<select id="est-round-' + num + '" onchange="calcEstLine(' + num + ')">' +
-    ROUNDING_OPTIONS.map(r => '<option value="' + r.value + '">' + r.label + '</option>').join('') + '</select></div></div>' +
+    ROUNDING_OPTIONS.map(r => '<option value="' + r.value + '">' + r.label + '</option>').join('') + '</select>' +
+    '<div class="help-tooltip">売値のキリを決めます。0=十の位切上(¥14,290)、8=末尾8(¥14,288)</div></div></div>' +
     '<div class="row" style="margin-top:4px"><div><div class="field-label">定価(税別)</div>' +
     '<input type="number" id="est-listprice-' + num + '" min="0" placeholder="参考"></div>' +
     '<div style="display:flex;align-items:flex-end;padding-bottom:2px"><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">' +
@@ -1009,7 +1049,32 @@ function validateEst() {
   const errs = getEstErrors();
   const btn = document.getElementById('btnEstSubmit');
   btn.disabled = errs.length > 0;
+  // エラーバナー更新
+  const banner = document.getElementById('estErrorBanner');
+  if (banner) {
+    if (errs.length > 0 && currentTab === 'estimate') {
+      document.getElementById('estErrorList').textContent = errs.join('、');
+      banner.classList.add('show');
+    } else {
+      banner.classList.remove('show');
+    }
+  }
   return errs.length === 0;
+}
+
+function focusFirstError() {
+  const errs = getEstErrors();
+  if (errs.length === 0) return;
+  const first = errs[0];
+  const idMap = { '見積日':'estDate', 'お客様名':'estCustomer', '事業所':'estBranch', '担当者':'estStaff' };
+  if (idMap[first]) {
+    const el = document.getElementById(idMap[first]);
+    if (el) { el.scrollIntoView({behavior:'smooth', block:'center'}); el.focus(); }
+    // Step 1にも移動
+    if (currentWizardStep !== 1) goToWizardStep(1);
+  } else if (first.indexOf('明細') === 0) {
+    if (currentWizardStep !== 2) goToWizardStep(2);
+  }
 }
 function getEstErrors() {
   const e = [];
@@ -1097,7 +1162,8 @@ function showEstPreview() {
   data.lines.forEach(l => { sub += calcSellingPriceJS(l.cost, l.marginRate, l.rounding) * l.qty; });
   const tax = Math.floor(sub * 0.1);
 
-  document.getElementById('previewTitle').textContent = '見積書プレビュー';
+  document.getElementById('previewTitle').textContent = '⚠️ 見積書作成の最終確認';
+  document.getElementById('previewWarn').textContent = 'この内容でスプレッドシートに記録します';
   document.getElementById('previewContent').innerHTML =
     '<table class="preview-table">' +
     '<tr><th>見積日</th><td>' + data.estimateDate + '</td></tr>' +
@@ -1577,7 +1643,8 @@ function showPreview() {
       (l.model||'-') + '</td><td>' + l.qty + '</td><td>&yen;' +
       l.price.toLocaleString() + '</td><td>&yen;' + l.amount.toLocaleString() + '</td><td>' + l.type + '</td></tr>';
   });
-  document.getElementById('previewTitle').textContent = '発注書プレビュー';
+  document.getElementById('previewTitle').textContent = '⚠️ 発注書送信の最終確認';
+  document.getElementById('previewWarn').innerHTML = '📧 承認者へメールが送信されます<br>送信先: <strong>' + data.approverEmail + '</strong>';
   document.getElementById('previewContent').innerHTML =
     '<table class="preview-table">' +
     '<tr><th>発行日</th><td>' + data.issueDate + '</td></tr>' +
