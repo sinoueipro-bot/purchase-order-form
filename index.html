@@ -645,7 +645,7 @@ textarea { resize: vertical; min-height: 60px; }
   <div style="padding:12px">
     <div style="position:relative">
       <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-secondary)">🔍</span>
-      <input type="text" id="listSearchBox" placeholder="お客様名・No.・件名・メーカーで検索..."
+      <input type="text" id="listSearchBox" placeholder="お客様・No.・件名・現場・担当者・仕入先などで検索..."
              oninput="filterList()"
              style="width:100%;padding:12px 12px 12px 38px;font-size:15px;border:1.5px solid var(--border);border-radius:8px">
     </div>
@@ -1209,7 +1209,9 @@ function addEstLine() {
     '<select id="est-maker-' + num + '" onchange="validateEst()" style="font-size:14px"><option value="">選択</option>' +
     EST_MAKERS.map(m => '<option value="' + m + '"' + (m==='発注なし'?' style="color:#999"':m==='工事'?' style="color:#b06000"':'') + '>' + m + '</option>').join('') + '</select></div>' +
     '<div style="flex:3"><div class="field-label"><span class="required-badge">必須</span>品名</div>' +
-    '<input type="text" id="est-product-' + num + '" list="productList" placeholder="品名" oninput="validateEst()"></div></div>' +
+    '<select id="est-product-' + num + '" onchange="validateEst()" style="font-size:14px"><option value="">選択してください</option>' +
+    PRODUCTS.map(p => '<option value="' + p + '">' + p + '</option>').join('') +
+    '<option value="その他">その他（下の欄に型式で入力）</option></select></div></div>' +
     '<div class="row"><div style="flex:2"><div class="field-label">型式・仕様</div>' +
     '<input type="text" id="est-model-' + num + '" placeholder="型式"></div>' +
     '<div><div class="field-label"><span class="required-badge">必須</span>数量</div>' +
@@ -1646,7 +1648,8 @@ function matchesSearch(obj, q) {
   if (!q) return true;
   const ql = q.toLowerCase();
   const fields = [obj.customerName, obj.estimateNo, obj.orderNo, obj.subject, obj.siteName,
-                  obj.staff, obj.orderer, obj.supplier, obj.status];
+                  obj.staff, obj.orderer, obj.supplier, obj.status, obj.approverName,
+                  obj.branch];
   return fields.some(f => f && String(f).toLowerCase().indexOf(ql) !== -1);
 }
 
@@ -1701,7 +1704,7 @@ function renderOrderListArea() {
   }
   let html = '';
   filtered.forEach(o => {
-    const st = o.status || '';
+    const st = String(o.status || '').trim();
     const statusColor = st === '申請中' ? 'background:#fef7e0;color:#b06000' :
                          st === '承認済' ? 'background:#e6f4ea;color:#137333' :
                          st === '緊急承認済' ? 'background:#d93025;color:#fff' :
@@ -2120,13 +2123,15 @@ function processNextPOQueue() {
   infoBar.innerHTML =
     '<div style="font-weight:700;color:var(--primary);font-size:15px;margin-bottom:4px">' +
     '📦 発注 ' + (poQueueDone + 1) + '/' + (poQueueDone + remaining) +
-    ': ' + current.maker + ' → ' + current.supplier + '</div>' +
+    ': メーカー=<strong>' + current.maker + '</strong></div>' +
     '<div style="color:var(--text-secondary);font-size:12px">見積No. ' + current.estimateNo + '</div>' +
     (remaining > 1 ? '<div style="color:var(--success);font-size:12px;margin-top:4px">残り ' + (remaining - 1) + '件は送信後に自動で表示されます</div>' : '') +
-    '<div style="color:var(--danger);font-size:12px;margin-top:2px">⚠️ 内容を確認してから送信してください（単価は原価ベース）</div>';
+    '<div style="color:var(--danger);font-size:13px;margin-top:6px;font-weight:700">⚠️ 仕入先を必ず選び直してください（単価は原価ベース）</div>' +
+    '<div style="color:var(--text-secondary);font-size:11px;margin-top:2px">参考マッピング: ' + current.supplier + '</div>';
 
-  // 仕入先を自動セット
-  document.getElementById('supplier').value = current.supplier;
+  // 仕入先は空欄（ユーザーに必ず選ばせる）
+  document.getElementById('supplier').value = '';
+  document.getElementById('supplier').focus();
 
   // 現場名に見積情報
   document.getElementById('siteName').value = current.estimateNo ? '見積No.' + current.estimateNo : '';

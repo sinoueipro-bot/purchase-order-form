@@ -13,6 +13,7 @@
 var INDEX_SHEET = '発注一覧';
 var TEMPLATE_SHEET = 'テンプレート';
 var EST_INDEX_SHEET = '見積一覧';
+var EST_TEMPLATE_SHEET = '見積テンプレート'; // 存在する場合はテンプレートコピー方式、なければ旧プログラム生成
 
 // ★ メールアドレス設定
 // テスト: 全て井上将吾に送信。本番時は各担当者のアドレスに変更
@@ -649,6 +650,7 @@ function processEstimate(data) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var tabName = '見積_' + data.estimateDate.replace(/-/g, '');
   if (data.customerName) tabName += '_' + data.customerName.substring(0, 10);
+  if (data.staff) tabName += '_' + data.staff;
   var uniqueId = Utilities.getUuid();
 
   // 明細の売値・金額を計算
@@ -679,7 +681,11 @@ function processEstimate(data) {
   data.costTotal = costTotal;
   data.overallMargin = overallMargin;
 
-  var sheet = createEstimateSheet(ss, tabName, data);
+  // 見積テンプレートが存在すればコピー方式、なければプログラム生成
+  var tplSheet = ss.getSheetByName(EST_TEMPLATE_SHEET);
+  var sheet = tplSheet
+    ? createEstimateFromTemplate(ss, tplSheet, tabName, data)
+    : createEstimateSheet(ss, tabName, data);
   addToEstimateIndex(ss, data, sheet, uniqueId);
 
   var sheetUrl = ss.getUrl() + '#gid=' + sheet.getSheetId();
@@ -692,7 +698,64 @@ function processEstimate(data) {
   };
 }
 
-// ============ 見積書シート作成（Excelレイアウト再現・改良版） ============
+// ============ 見積書: 既存テンプレートをコピーして使う ============
+// 見積テンプレートシート (見積連動発注原紙.xlsx と同じ構造) からコピー
+// セル配置（Excelテンプレート準拠）:
+//   H1: 発行日, K2: 日付連番, A4:D4: お客様名, I5: 事業所, I10: 担当者
+//   C9: 件名, C10: 納期, C11: 受渡場所, C12: 支払条件, E12: 支払日数
+//   A15-A32: 明細(B=メーカー, C=品名, D=型式, E=数量, F=単位, I=定価, J=丸め, K=原価, L=粗利率, M=原価0対象)
+//   A36-A38: 特記事項
+function createEstimateFromTemplate(ss, template, tabName, data) {
+  var sh = template.copyTo(ss);
+  var name = tabName; var i = 1;
+  while (ss.getSheetByName(name)) { name = tabName + '_' + i; i++; }
+  sh.setName(name);
+  sh.setTabColor('#0f9d58'); // 緑
+  // 見積一覧の直後に配置
+  try {
+    var idx = ss.getSheetByName(EST_INDEX_SHEET);
+    if (idx) {
+      ss.setActiveSheet(sh);
+      ss.moveActiveSheet(idx.getIndex() + 1);
+    }
+  } catch(e) {}
+
+  // ヘッダー部の埋め込み
+  var d = data.estimateDate.split('-');
+  try { sh.getRange('H1').setValue(new Date(parseInt(d[0]), parseInt(d[1])-1, parseInt(d[2]))); } catch(e) {}
+  if (data.seq) { try { sh.getRange('K2').setValue(data.seq); } catch(e) {} }
+  try { sh.getRange('A4').setValue(data.customerName || ''); } catch(e) {}
+  try { sh.getRange('I5').setValue(data.branch || '本社'); } catch(e) {}
+  try { sh.getRange('I10').setValue(data.staff || ''); } catch(e) {}
+  if (data.subject) { try { sh.getRange('C9').setValue(data.subject); } catch(e) {} }
+
+  // 明細行（15-32行）
+  var lines = data.lines || [];
+  for (var idx2 = 0; idx2 < 18; idx2++) {
+    var r = 15 + idx2;
+    var ln = lines[idx2];
+    if (ln && ln.cost) {
+      try { sh.getRange(r, 2).setValue(ln.maker || ''); } catch(e) {}         // B: メーカー
+      try { sh.getRange(r, 3).setValue(ln.product || ''); } catch(e) {}       // C: 品名
+      try { sh.getRange(r, 4).setValue(ln.model || ''); } catch(e) {}         // D: 型式
+      try { sh.getRange(r, 5).setValue(ln.qty || 0); } catch(e) {}            // E: 数量
+      try { sh.getRange(r, 6).setValue(ln.unit || '台'); } catch(e) {}        // F: 単位
+      if (ln.listPrice) { try { sh.getRange(r, 9).setValue(ln.listPrice); } catch(e) {} } // I: 定価
+      try { sh.getRange(r, 10).setNumberFormat('@').setValue(String(ln.rounding || '0')); } catch(e) {} // J: 丸め
+      try { sh.getRange(r, 11).setValue(ln.cost || 0); } catch(e) {}          // K: 原価
+      try { sh.getRange(r, 12).setValue((ln.marginRate || 0) / 100); } catch(e) {} // L: 粗利率
+      if (ln.zeroCost) { try { sh.getRange(r, 13).setValue('○'); } catch(e) {} } // M: 原価0対象
+    }
+  }
+  // ※ G(単価)・H(金額)・N(原価金額)・O(実粗利率)・P(粗利益高) は数式で自動計算
+
+  // 特記事項
+  if (data.notes) { try { sh.getRange('B36').setValue(data.notes); } catch(e) {} }
+
+  return sh;
+}
+
+// ============ 見積書シート作成（Excelレイアウト再現・フォールバック版） ============
 function createEstimateSheet(ss, tabName, data) {
   var sh = ss.insertSheet();
   var name = tabName; var i = 1;
