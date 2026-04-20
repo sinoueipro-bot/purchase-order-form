@@ -108,6 +108,9 @@ function doGet(e) {
   if (action === 'markTransferred') return jsonResponse(markEstimateTransferred(id));
   if (action === 'listOrders') return jsonResponse(getOrderList());
   if (action === 'cancelOrder') return jsonResponse(cancelOrder(id));
+  if (action === 'markOrderCompleted') return jsonResponse(markOrderCompleted(id));
+  if (action === 'hideCompleted') return jsonResponse(hideCompletedSheets());
+  if (action === 'showAllSheets') return jsonResponse(showAllSheets());
   if (action === 'getPdf') return jsonResponse(getSheetPdfBase64(e.parameter.gid));
 
   if (!action || !id) return HtmlService.createHtmlOutput('<h2>発注書・見積書APIは稼働中です</h2>');
@@ -144,7 +147,12 @@ function doGet(e) {
   } else if (action === 'reject') {
     if (currentStatus !== '申請中') return HtmlService.createHtmlOutput(resultPage('処理済', 'この発注書は既に処理済みです', '#5f6368'));
     applyStatusColor(sheet, rowIdx, '却下');
-    return HtmlService.createHtmlOutput(resultPage('却下しました', '注文No.: ' + orderNo, '#d93025', sheetUrl));
+    // 却下時は発注書シートを自動非表示
+    try {
+      var rejSheet = findSheetByUrl(ss, sheetUrl);
+      if (rejSheet && !rejSheet.isSheetHidden()) rejSheet.hideSheet();
+    } catch(e) {}
+    return HtmlService.createHtmlOutput(resultPage('却下しました', '注文No.: ' + orderNo + '<br>（発注書シートを非表示にしました）', '#d93025', sheetUrl));
   }
 
   return HtmlService.createHtmlOutput(resultPage('エラー', '不明なアクション', '#d93025'));
@@ -484,6 +492,77 @@ function fixEstimateLinks() {
 }
 
 // ============ シート整理（1回実行後に削除してOK） ============
+// ============ 完了シートを非表示化（削除せずタブバーをスッキリさせる） ============
+// 発注一覧K列: 発注済/取消/却下 → 対応する発注書シートを非表示
+// 見積一覧K列: 発注済 → 対応する見積書シートを非表示
+function hideCompletedSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var hiddenCount = 0;
+  var skippedCount = 0;
+
+  // 発注一覧から非表示対象を抽出
+  var orderSheet = ss.getSheetByName(INDEX_SHEET);
+  if (orderSheet) {
+    var data = orderSheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      var status = data[i][10]; // K列: ステータス
+      if (status === '発注済' || status === '取消' || status === '却下') {
+        var sheetUrl = data[i][11]; // L列: シートリンク
+        var sheet = findSheetByUrl(ss, sheetUrl);
+        if (sheet && !sheet.isSheetHidden()) {
+          try { sheet.hideSheet(); hiddenCount++; } catch(e) { skippedCount++; }
+        }
+      }
+    }
+  }
+
+  // 見積一覧から非表示対象を抽出
+  var estSheet = ss.getSheetByName(EST_INDEX_SHEET);
+  if (estSheet) {
+    var eData = estSheet.getDataRange().getValues();
+    for (var j = 1; j < eData.length; j++) {
+      var eStatus = eData[j][10]; // K列: ステータス
+      if (eStatus === '発注済') {
+        var eUrl = eData[j][11];
+        var eSh = findSheetByUrl(ss, eUrl);
+        if (eSh && !eSh.isSheetHidden()) {
+          try { eSh.hideSheet(); hiddenCount++; } catch(e) { skippedCount++; }
+        }
+      }
+    }
+  }
+
+  Logger.log('非表示化完了: ' + hiddenCount + '枚 (失敗: ' + skippedCount + '枚)');
+  return { success: true, hidden: hiddenCount, skipped: skippedCount };
+}
+
+// ============ 全シートを再表示 ============
+function showAllSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  var shownCount = 0;
+  sheets.forEach(function(s) {
+    if (s.isSheetHidden()) {
+      try { s.showSheet(); shownCount++; } catch(e) {}
+    }
+  });
+  Logger.log('再表示完了: ' + shownCount + '枚');
+  return { success: true, shown: shownCount };
+}
+
+// ============ ヘルパー: URLからシートを特定 ============
+function findSheetByUrl(ss, sheetUrl) {
+  if (!sheetUrl) return null;
+  var match = String(sheetUrl).match(/gid=(\d+)/);
+  if (!match) return null;
+  var gid = parseInt(match[1]);
+  var sheets = ss.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getSheetId() === gid) return sheets[i];
+  }
+  return null;
+}
+
 // ============ シート整理（削除せず並び替え+色分け） ============
 function organizeSheets() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -989,6 +1068,32 @@ function getOrderList() {
     });
   }
   return { success: true, orders: orders };
+}
+
+// ============ API: 発注書を「発注済」にマーク+非表示化 ============
+function markOrderCompleted(id) {
+  if (!id) return { success: false, error: 'IDが必要です' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(INDEX_SHEET);
+  if (!s) return { success: false, error: '発注一覧がありません' };
+
+  var data = s.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][12] === id) {
+      var currentStatus = data[i][10];
+      if (currentStatus !== '承認済' && currentStatus !== '緊急承認済') {
+        return { success: false, error: '承認済の発注のみ完了にできます (現在: ' + currentStatus + ')' };
+      }
+      applyStatusColor(s, i + 1, '発注済');
+      // シートを非表示化
+      try {
+        var sheet = findSheetByUrl(ss, data[i][11]);
+        if (sheet && !sheet.isSheetHidden()) sheet.hideSheet();
+      } catch(e) {}
+      return { success: true, message: '発注完了にしました' };
+    }
+  }
+  return { success: false, error: '発注書が見つかりません' };
 }
 
 // ============ API: 発注書の取消（60秒以内） ============

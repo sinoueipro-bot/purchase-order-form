@@ -278,8 +278,21 @@ textarea { resize: vertical; min-height: 60px; }
       <span class="big-desc">今まで作成したものを確認・発注します</span>
     </button>
 
+    <!-- スプシ整理 -->
+    <div style="background:white;border:1.5px dashed var(--border);border-radius:12px;padding:14px 16px;margin-top:16px">
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;font-weight:600">🗂 スプレッドシートを整理</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" onclick="hideAllCompleted()" style="flex:1;min-width:140px;padding:10px 8px;background:#e8f0fe;color:var(--primary);border:1.5px solid var(--primary);border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit">
+          🙈 完了分を隠す<br><span style="font-size:10px;font-weight:400;color:var(--text-secondary)">発注済・取消・却下</span>
+        </button>
+        <button type="button" onclick="showAllHidden()" style="flex:1;min-width:140px;padding:10px 8px;background:white;color:var(--text-secondary);border:1.5px solid var(--border);border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit">
+          👀 全て表示<br><span style="font-size:10px;font-weight:400;color:var(--text-secondary)">隠したのを元に戻す</span>
+        </button>
+      </div>
+    </div>
+
     <!-- スプレッドシートリンク -->
-    <div style="background:white;border:1.5px dashed var(--border);border-radius:12px;padding:14px 16px;margin-top:20px">
+    <div style="background:white;border:1.5px dashed var(--border);border-radius:12px;padding:14px 16px;margin-top:16px">
       <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;font-weight:600">📊 スプレッドシートを開く</div>
       <div style="display:flex;flex-direction:column;gap:8px">
         <a href="https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit" target="_blank"
@@ -1713,6 +1726,7 @@ function renderOrderListArea() {
       '<div class="est-actions" style="flex-wrap:wrap">' +
       '<a class="btn-view" href="' + (o.sheetUrl || '#') + '" target="_blank">📄 開く</a>' +
       '<a class="btn-view" href="' + pdf + '" target="_blank" style="background:#fef7e0;color:#b06000;border-color:#f9ab00">📥 PDF</a>' +
+      ((st === '承認済' || st === '緊急承認済') ? '<button class="btn-transfer" onclick="markPoCompleted(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--success)">✅ 発注完了→非表示</button>' : '') +
       (canCancel ? '<button class="btn-transfer" onclick="cancelOrderById(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--danger)">↩️ 取消</button>' : '') +
       '</div></div>';
   });
@@ -1919,6 +1933,58 @@ async function undoLastSend() {
   } catch (err) {
     showToast('エラー: ' + err.message, 'error');
     if (btn) { btn.disabled = false; btn.textContent = '↩️ この発注を取り消す'; }
+  }
+}
+
+// 発注完了→シート非表示
+async function markPoCompleted(id, orderNo) {
+  if (!confirm('注文No. ' + orderNo + ' を「発注完了」にしますか？\n\n・ステータスが「発注済」になります\n・発注書シートがスプシ上で非表示になります\n・一覧からも非表示になります')) return;
+  showToast('処理中...', 'info');
+  try {
+    const res = await fetch(GAS_URL + '?action=markOrderCompleted&id=' + id);
+    const data = await res.json();
+    if (data.success) {
+      showToast('✅ ' + data.message, 'success');
+      loadOrderList();
+    } else {
+      showToast('❌ ' + (data.error || '失敗'), 'error');
+    }
+  } catch (err) {
+    showToast('エラー: ' + err.message, 'error');
+  }
+}
+
+// 一括非表示化（古い完了シートを全部隠す）
+async function hideAllCompleted() {
+  if (!confirm('発注済・取消・却下の発注書シートを一括で非表示にしますか？\n\n※ 一覧データは残ります。「全て表示」でいつでも戻せます。')) return;
+  showToast('非表示化中...', 'info');
+  try {
+    const res = await fetch(GAS_URL + '?action=hideCompleted');
+    const data = await res.json();
+    if (data.success) {
+      showToast('✅ ' + data.hidden + '枚のシートを非表示にしました', 'success');
+    } else {
+      showToast('❌ 失敗', 'error');
+    }
+  } catch (err) {
+    showToast('エラー: ' + err.message, 'error');
+  }
+}
+
+// 全シート再表示
+async function showAllHidden() {
+  if (!confirm('非表示になっているシートを全て表示しますか？')) return;
+  showToast('処理中...', 'info');
+  try {
+    const res = await fetch(GAS_URL + '?action=showAllSheets');
+    const data = await res.json();
+    if (data.success) {
+      showToast('✅ ' + data.shown + '枚のシートを再表示しました', 'success');
+    } else {
+      showToast('❌ 失敗', 'error');
+    }
+  } catch (err) {
+    showToast('エラー: ' + err.message, 'error');
   }
 }
 
