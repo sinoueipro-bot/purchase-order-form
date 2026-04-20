@@ -147,12 +147,7 @@ function doGet(e) {
   } else if (action === 'reject') {
     if (currentStatus !== '申請中') return HtmlService.createHtmlOutput(resultPage('処理済', 'この発注書は既に処理済みです', '#5f6368'));
     applyStatusColor(sheet, rowIdx, '却下');
-    // 却下時は発注書シートを自動非表示
-    try {
-      var rejSheet = findSheetByUrl(ss, sheetUrl);
-      if (rejSheet && !rejSheet.isSheetHidden()) rejSheet.hideSheet();
-    } catch(e) {}
-    return HtmlService.createHtmlOutput(resultPage('却下しました', '注文No.: ' + orderNo + '<br>（発注書シートを非表示にしました）', '#d93025', sheetUrl));
+    return HtmlService.createHtmlOutput(resultPage('却下しました', '注文No.: ' + orderNo, '#d93025', sheetUrl));
   }
 
   return HtmlService.createHtmlOutput(resultPage('エラー', '不明なアクション', '#d93025'));

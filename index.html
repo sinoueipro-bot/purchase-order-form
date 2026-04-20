@@ -278,17 +278,12 @@ textarea { resize: vertical; min-height: 60px; }
       <span class="big-desc">今まで作成したものを確認・発注します</span>
     </button>
 
-    <!-- スプシ整理 -->
+    <!-- 非表示シートを復活 -->
     <div style="background:white;border:1.5px dashed var(--border);border-radius:12px;padding:14px 16px;margin-top:16px">
-      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;font-weight:600">🗂 スプレッドシートを整理</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button type="button" onclick="hideAllCompleted()" style="flex:1;min-width:140px;padding:10px 8px;background:#e8f0fe;color:var(--primary);border:1.5px solid var(--primary);border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit">
-          🙈 完了分を隠す<br><span style="font-size:10px;font-weight:400;color:var(--text-secondary)">発注済・取消・却下</span>
-        </button>
-        <button type="button" onclick="showAllHidden()" style="flex:1;min-width:140px;padding:10px 8px;background:white;color:var(--text-secondary);border:1.5px solid var(--border);border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit">
-          👀 全て表示<br><span style="font-size:10px;font-weight:400;color:var(--text-secondary)">隠したのを元に戻す</span>
-        </button>
-      </div>
+      <button type="button" onclick="showAllHidden()" style="width:100%;padding:12px;background:white;color:var(--text-secondary);border:1.5px solid var(--border);border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">
+        👀 非表示にしたシートを全て表示
+        <div style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-top:2px">発注完了で隠したものを元に戻す</div>
+      </button>
     </div>
 
     <!-- スプレッドシートリンク -->
@@ -1948,23 +1943,6 @@ async function markPoCompleted(id, orderNo) {
       loadOrderList();
     } else {
       showToast('❌ ' + (data.error || '失敗'), 'error');
-    }
-  } catch (err) {
-    showToast('エラー: ' + err.message, 'error');
-  }
-}
-
-// 一括非表示化（古い完了シートを全部隠す）
-async function hideAllCompleted() {
-  if (!confirm('発注済・取消・却下の発注書シートを一括で非表示にしますか？\n\n※ 一覧データは残ります。「全て表示」でいつでも戻せます。')) return;
-  showToast('非表示化中...', 'info');
-  try {
-    const res = await fetch(GAS_URL + '?action=hideCompleted');
-    const data = await res.json();
-    if (data.success) {
-      showToast('✅ ' + data.hidden + '枚のシートを非表示にしました', 'success');
-    } else {
-      showToast('❌ 失敗', 'error');
     }
   } catch (err) {
     showToast('エラー: ' + err.message, 'error');
