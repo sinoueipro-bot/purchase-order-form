@@ -1208,10 +1208,8 @@ function addEstLine() {
     '<div class="row"><div style="flex:2"><div class="field-label"><span class="required-badge">必須</span>メーカー/発注先</div>' +
     '<select id="est-maker-' + num + '" onchange="validateEst()" style="font-size:14px"><option value="">選択</option>' +
     EST_MAKERS.map(m => '<option value="' + m + '"' + (m==='発注なし'?' style="color:#999"':m==='工事'?' style="color:#b06000"':'') + '>' + m + '</option>').join('') + '</select></div>' +
-    '<div style="flex:3"><div class="field-label"><span class="required-badge">必須</span>品名</div>' +
-    '<select id="est-product-' + num + '" onchange="validateEst()" style="font-size:14px"><option value="">選択してください</option>' +
-    PRODUCTS.map(p => '<option value="' + p + '">' + p + '</option>').join('') +
-    '<option value="その他">その他（下の欄に型式で入力）</option></select></div></div>' +
+    '<div style="flex:3"><div class="field-label"><span class="required-badge">必須</span>品名 <span style="font-size:10px;color:var(--text-secondary);font-weight:400">▼候補あり・自由入力可</span></div>' +
+    '<input type="text" id="est-product-' + num + '" list="productList" placeholder="タップで候補表示・自由入力も可" oninput="validateEst()"></div></div>' +
     '<div class="row"><div style="flex:2"><div class="field-label">型式・仕様</div>' +
     '<input type="text" id="est-model-' + num + '" placeholder="型式"></div>' +
     '<div><div class="field-label"><span class="required-badge">必須</span>数量</div>' +
