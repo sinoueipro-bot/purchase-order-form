@@ -11,9 +11,24 @@
  * → 合意後、見積一覧から「発注書に転記」ボタン
  */
 var INDEX_SHEET = '発注一覧';
-var TEMPLATE_SHEET = 'テンプレート';
 var EST_INDEX_SHEET = '見積一覧';
-var EST_TEMPLATE_SHEET = '見積テンプレート'; // 存在する場合はテンプレートコピー方式、なければ旧プログラム生成
+
+// テンプレート名候補（複数名前でも探す。先頭から順にヒットしたものを使用）
+var PO_TEMPLATE_CANDIDATES = ['発注書(テンプレート)', '発注書（テンプレート）', 'テンプレート', '発注書テンプレート', '発注テンプレート'];
+var EST_TEMPLATE_CANDIDATES = ['見積書(テンプレート)', '見積書（テンプレート）', '見積テンプレート', '見積書テンプレート', 'テンプレート見積'];
+
+// 互換のため旧定数を残す（既存コード参照用）
+var TEMPLATE_SHEET = '発注書(テンプレート)';
+var EST_TEMPLATE_SHEET = '見積書(テンプレート)';
+
+// テンプレートシートを候補名から探す
+function findTemplateSheet(ss, candidates) {
+  for (var i = 0; i < candidates.length; i++) {
+    var s = ss.getSheetByName(candidates[i]);
+    if (s) return s;
+  }
+  return null;
+}
 
 // ★ メールアドレス設定
 // テスト: 全て井上将吾に送信。本番時は各担当者のアドレスに変更
@@ -208,8 +223,9 @@ function processOrder(data) {
 
 // ============ テンプレートコピー ============
 function createFromTemplate(ss, tabName, data) {
-  var template = ss.getSheetByName(TEMPLATE_SHEET);
-  if (!template) throw new Error('テンプレート「' + TEMPLATE_SHEET + '」が見つかりません');
+  var template = findTemplateSheet(ss, PO_TEMPLATE_CANDIDATES);
+  if (!template) throw new Error('発注書テンプレートが見つかりません。候補名: ' + PO_TEMPLATE_CANDIDATES.join(' / '));
+  Logger.log('発注書テンプレート使用: ' + template.getName());
 
   var sh = template.copyTo(ss);
   var name = tabName; var i = 1;
@@ -682,7 +698,8 @@ function processEstimate(data) {
   data.overallMargin = overallMargin;
 
   // 見積テンプレートが存在すればコピー方式、なければプログラム生成
-  var tplSheet = ss.getSheetByName(EST_TEMPLATE_SHEET);
+  var tplSheet = findTemplateSheet(ss, EST_TEMPLATE_CANDIDATES);
+  Logger.log('見積テンプレート: ' + (tplSheet ? tplSheet.getName() : '見つからず→プログラム生成'));
   var sheet = tplSheet
     ? createEstimateFromTemplate(ss, tplSheet, tabName, data)
     : createEstimateSheet(ss, tabName, data);
