@@ -1233,11 +1233,33 @@ function cancelOrder(id) {
   return { success: true, message: '発注を取り消しました' };
 }
 
-// ============ API: シートのPDFをBase64で返す（ブラウザ印刷用） ============
+// ============ API: シートのPDFをBase64で返す ============
+// 非表示シートにも対応（一時的に表示→取得→非表示に戻す）
 function getSheetPdfBase64(gid) {
   if (!gid) return { success: false, error: 'gidが必要です' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var gidNum = parseInt(gid);
+  var targetSheet = null;
+  var wasHidden = false;
+
+  // 対象シートを特定し、非表示なら一時的に表示
   try {
-    var ssId = SpreadsheetApp.getActiveSpreadsheet().getId();
+    var sheets = ss.getSheets();
+    for (var i = 0; i < sheets.length; i++) {
+      if (sheets[i].getSheetId() === gidNum) {
+        targetSheet = sheets[i];
+        if (targetSheet.isSheetHidden()) {
+          wasHidden = true;
+          targetSheet.showSheet();
+          SpreadsheetApp.flush(); // 表示化を確実に反映
+        }
+        break;
+      }
+    }
+  } catch(e) { Logger.log('シート特定エラー: ' + e.toString()); }
+
+  try {
+    var ssId = ss.getId();
     var url = 'https://docs.google.com/spreadsheets/d/' + ssId +
               '/export?format=pdf&gid=' + gid +
               '&portrait=true&size=A4&fitw=true&gridlines=false&printtitle=false&sheetnames=false&pagenum=false&fzr=false';
@@ -1254,6 +1276,11 @@ function getSheetPdfBase64(gid) {
     };
   } catch(e) {
     return { success: false, error: e.toString() };
+  } finally {
+    // 元々非表示だったら再度非表示に戻す
+    if (wasHidden && targetSheet) {
+      try { targetSheet.hideSheet(); } catch(e) { Logger.log('再非表示失敗: ' + e.toString()); }
+    }
   }
 }
 
