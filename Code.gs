@@ -747,34 +747,29 @@ function createEstimateFromTemplate(ss, template, tabName, data) {
   try { sh.getRange('I10').setValue(data.staff || ''); } catch(e) {}
   if (data.subject) { try { sh.getRange('C9').setValue(data.subject); } catch(e) {} }
 
-  // 明細行（15-32行）- 計算済み値を直接書き込む（テンプレ数式に依存しない）
+  // 明細行（15-32行）- 新テンプレ構造に合わせる
+  // 列構成: A=No. B=品名 C=型式・仕様 D=数量 E=単位 F=単価 G=金額 H=備考
   var lines = data.lines || [];
   for (var idx2 = 0; idx2 < 18; idx2++) {
     var r = 15 + idx2;
     var ln = lines[idx2];
     if (ln && ln.cost) {
-      try { sh.getRange(r, 2).setValue(ln.maker || ''); } catch(e) {}
-      try { sh.getRange(r, 3).setValue(ln.product || ''); } catch(e) {}
-      try { sh.getRange(r, 4).setValue(ln.model || ''); } catch(e) {}
-      try { sh.getRange(r, 5).setValue(ln.qty || 0); } catch(e) {}
-      try { sh.getRange(r, 6).setValue(ln.unit || '台'); } catch(e) {}
-      // G-P は計算済み値を書き込み（テンプレの数式は上書き）
-      try { sh.getRange(r, 7).setValue(ln.sellingPrice || 0).setNumberFormat('#,##0'); } catch(e) {}  // G: 単価(売値)
-      try { sh.getRange(r, 8).setValue(ln.amount || 0).setNumberFormat('#,##0'); } catch(e) {}        // H: 金額
-      try { sh.getRange(r, 10).setNumberFormat('@').setValue(String(ln.rounding || '0')); } catch(e) {} // J: 丸め
-      try { sh.getRange(r, 11).setValue(ln.cost || 0).setNumberFormat('#,##0'); } catch(e) {}         // K: 原価
-      try { sh.getRange(r, 12).setValue((ln.marginRate || 0) / 100).setNumberFormat('0.0%'); } catch(e) {} // L: 粗利率
-      if (ln.zeroCost) { try { sh.getRange(r, 13).setValue('○'); } catch(e) {} }
-      try { sh.getRange(r, 14).setValue(ln.costAmount || 0).setNumberFormat('#,##0'); } catch(e) {}   // N: 原価金額
-      try { sh.getRange(r, 15).setValue(ln.actualMargin || 0).setNumberFormat('0.0%'); } catch(e) {}  // O: 実粗利率
-      try { sh.getRange(r, 16).setValue(ln.profit || 0).setNumberFormat('#,##0'); } catch(e) {}       // P: 粗利益高
+      try { sh.getRange(r, 1).setValue(idx2 + 1); } catch(e) {}                                          // A: No.
+      try { sh.getRange(r, 2).setValue(ln.product || ''); } catch(e) {}                                   // B: 品名
+      try { sh.getRange(r, 3).setValue(ln.model || ''); } catch(e) {}                                     // C: 型式・仕様
+      try { sh.getRange(r, 4).setValue(ln.qty || 0); } catch(e) {}                                        // D: 数量
+      try { sh.getRange(r, 5).setValue(ln.unit || '台'); } catch(e) {}                                    // E: 単位
+      try { sh.getRange(r, 6).setValue(ln.sellingPrice || 0).setNumberFormat('#,##0'); } catch(e) {}      // F: 単価(売値)
+      try { sh.getRange(r, 7).setValue(ln.amount || 0).setNumberFormat('#,##0'); } catch(e) {}            // G: 金額
+      // H列は備考 (メーカー名を記載してPO作成時の参考に)
+      try { sh.getRange(r, 8).setValue(ln.maker || ''); } catch(e) {}                                     // H: 備考（メーカー）
     }
   }
-  // 合計行もプログラム値で上書き
-  try { sh.getRange('H33').setValue(data.subtotal || 0).setNumberFormat('#,##0'); } catch(e) {}
-  try { sh.getRange('H34').setValue(data.tax || 0).setNumberFormat('#,##0'); } catch(e) {}
-  try { sh.getRange('H35').setValue(data.grandTotal || 0).setNumberFormat('#,##0'); } catch(e) {}
-  // 見積金額欄 C7もセット (テンプレがH35参照数式なら不要だが念のため)
+  // 合計行 (33-35)
+  try { sh.getRange('G33').setValue(data.subtotal || 0).setNumberFormat('#,##0'); } catch(e) {}          // 小計
+  try { sh.getRange('G34').setValue(data.tax || 0).setNumberFormat('#,##0'); } catch(e) {}               // 消費税
+  try { sh.getRange('G35').setValue(data.grandTotal || 0).setNumberFormat('#,##0'); } catch(e) {}        // 合計
+  // 御見積金額欄 C7
   try { sh.getRange('C7').setValue(data.grandTotal || 0).setNumberFormat('#,##0"円"'); } catch(e) {}
 
   // 特記事項
