@@ -525,7 +525,10 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge">必須</span>仕入先</div>
-    <input type="text" id="supplier" list="supplierList" placeholder="仕入先を入力/選択" required>
+    <select id="supplier" onchange="onSupplierChange()" required>
+      <option value="">選択してください</option>
+    </select>
+    <input type="text" id="supplier-custom" placeholder="仕入先を自由入力" oninput="validate()" style="display:none;margin-top:6px">
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge">必須</span>事業所</div>
@@ -1041,7 +1044,7 @@ function poWizardNext() {
     const errs = [];
     if (!document.getElementById('issueDate').value) errs.push('発行日');
     if (!document.getElementById('orderNo').value) errs.push('注文No.');
-    if (!document.getElementById('supplier').value) errs.push('仕入先');
+    if (!getSupplierValue()) errs.push('仕入先');
     if (!document.getElementById('branch').value) errs.push('事業所');
     if (errs.length > 0) {
       showToast('⚠️ 未入力: ' + errs.join(', '), 'error');
@@ -1195,10 +1198,17 @@ function renderEstConfirm() {
 
 // ============ ドロップダウン初期化 ============
 function initAllDropdowns() {
-  // datalist
+  // datalist (互換用・未使用でも残す)
   addDatalist('supplierList', SUPPLIERS);
   addDatalist('makerList', MAKERS);
   addDatalist('productList', PRODUCTS);
+  // 発注書: 仕入先select + その他
+  const supSel = document.getElementById('supplier');
+  SUPPLIERS.forEach(s => supSel.add(new Option(typeof s === 'object' ? s.name : s, typeof s === 'object' ? s.name : s)));
+  const otherOpt = new Option('✏️ その他（自由入力）', '__OTHER__');
+  otherOpt.style.color = 'var(--primary)';
+  otherOpt.style.fontWeight = '700';
+  supSel.add(otherOpt);
   // 発注書
   fillSelect('branch', BRANCHES);
   fillSelect('orderer', STAFF);
@@ -1245,8 +1255,12 @@ function addEstLine() {
     '<div class="row"><div style="flex:2"><div class="field-label"><span class="required-badge">必須</span>メーカー/発注先</div>' +
     '<select id="est-maker-' + num + '" onchange="validateEst()" style="font-size:14px"><option value="">選択</option>' +
     EST_MAKERS.map(m => '<option value="' + m + '"' + (m==='発注なし'?' style="color:#999"':m==='工事'?' style="color:#b06000"':'') + '>' + m + '</option>').join('') + '</select></div>' +
-    '<div style="flex:3"><div class="field-label"><span class="required-badge">必須</span>品名 <span style="font-size:10px;color:var(--text-secondary);font-weight:400">▼候補あり・自由入力可</span></div>' +
-    '<input type="text" id="est-product-' + num + '" list="productList" placeholder="タップで候補表示・自由入力も可" oninput="validateEst()"></div></div>' +
+    '<div style="flex:3"><div class="field-label"><span class="required-badge">必須</span>品名</div>' +
+    '<select id="est-product-' + num + '" onchange="onEstProductChange(' + num + ')" style="font-size:14px"><option value="">選択してください</option>' +
+    PRODUCTS.map(p => p === 'その他' ? '' : '<option value="' + p + '">' + p + '</option>').join('') +
+    '<option value="__OTHER__" style="color:var(--primary);font-weight:700">✏️ その他（自由入力）</option></select>' +
+    '<input type="text" id="est-product-custom-' + num + '" placeholder="品名を自由入力" oninput="validateEst()" style="display:none;margin-top:6px;font-size:14px">' +
+    '</div></div>' +
     '<div class="row"><div style="flex:2"><div class="field-label">型式・仕様</div>' +
     '<input type="text" id="est-model-' + num + '" placeholder="型式"></div>' +
     '<div><div class="field-label"><span class="required-badge">必須</span>数量</div>' +
@@ -1295,6 +1309,31 @@ function calcSellingPriceJS(cost, marginPct, roundingStr) {
   } else {
     return Math.ceil(raw / factor) * factor;
   }
+}
+
+// 品名select切替: 「その他」選択時のみ自由入力欄を表示
+function onEstProductChange(num) {
+  const sel = document.getElementById('est-product-' + num);
+  const custom = document.getElementById('est-product-custom-' + num);
+  if (!sel || !custom) return;
+  if (sel.value === '__OTHER__') {
+    custom.style.display = '';
+    custom.focus();
+  } else {
+    custom.style.display = 'none';
+    custom.value = '';
+  }
+  validateEst();
+}
+
+// 品名の実値を取得（「その他」の場合は自由入力欄の値）
+function getEstProductValue(num) {
+  const sel = document.getElementById('est-product-' + num);
+  if (!sel) return '';
+  if (sel.value === '__OTHER__') {
+    return (document.getElementById('est-product-custom-' + num)?.value || '').trim();
+  }
+  return sel.value;
 }
 
 function calcEstLine(num) {
@@ -1392,7 +1431,7 @@ function getEstErrors() {
   document.querySelectorAll('[id^="est-line-"]').forEach(item => {
     const n = item.id.replace('est-line-', '');
     if (!document.getElementById('est-maker-' + n)?.value) e.push('明細:メーカー');
-    if (!document.getElementById('est-product-' + n)?.value) e.push('明細:品名');
+    if (!getEstProductValue(n)) e.push('明細:品名');
     if (!(parseInt(document.getElementById('est-cost-' + n)?.value) > 0)) e.push('明細:原価');
   });
   return e;
@@ -1409,7 +1448,7 @@ function collectEstData() {
     const qty = parseInt(document.getElementById('est-qty-' + n)?.value) || 0;
     lines.push({
       maker: document.getElementById('est-maker-' + n)?.value || '',
-      product: document.getElementById('est-product-' + n)?.value || '',
+      product: getEstProductValue(n),
       model: document.getElementById('est-model-' + n)?.value || '',
       qty: qty,
       unit: document.getElementById('est-unit-' + n)?.value || '台',
@@ -2165,7 +2204,7 @@ function processNextPOQueue() {
     '<div style="color:var(--text-secondary);font-size:11px;margin-top:2px">参考マッピング: ' + current.supplier + '</div>';
 
   // 仕入先は空欄（ユーザーに必ず選ばせる）
-  document.getElementById('supplier').value = '';
+  setSupplierValue('');
   document.getElementById('supplier').focus();
 
   // 現場名に見積情報
@@ -2299,6 +2338,53 @@ function calcLineAmount(num) {
   if (el) el.textContent = '\u00a5' + (q * p).toLocaleString();
   calcTotal(); validate();
 }
+// 仕入先select切替: 「その他」選択時のみ自由入力欄を表示
+function onSupplierChange() {
+  const sel = document.getElementById('supplier');
+  const custom = document.getElementById('supplier-custom');
+  if (!sel || !custom) return;
+  if (sel.value === '__OTHER__') {
+    custom.style.display = '';
+    custom.focus();
+  } else {
+    custom.style.display = 'none';
+    custom.value = '';
+  }
+  validate();
+}
+
+// 仕入先の実値取得
+function getSupplierValue() {
+  const sel = document.getElementById('supplier');
+  if (!sel) return '';
+  if (sel.value === '__OTHER__') {
+    return (document.getElementById('supplier-custom')?.value || '').trim();
+  }
+  return sel.value;
+}
+
+// 仕入先を値から自動選択（転記時などに使用）
+function setSupplierValue(val) {
+  const sel = document.getElementById('supplier');
+  const custom = document.getElementById('supplier-custom');
+  if (!sel || !custom) return;
+  if (!val) { sel.value = ''; custom.style.display = 'none'; custom.value = ''; return; }
+  // optionに存在するかチェック
+  let found = false;
+  for (let i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value === val) { found = true; break; }
+  }
+  if (found) {
+    sel.value = val;
+    custom.style.display = 'none';
+    custom.value = '';
+  } else {
+    sel.value = '__OTHER__';
+    custom.style.display = '';
+    custom.value = val;
+  }
+}
+
 function calcTotal() {
   let total = 0;
   document.querySelectorAll('#lineItems .line-item').forEach(item => {
@@ -2337,7 +2423,7 @@ function getValidationErrors() {
   const e = [];
   if (!document.getElementById('issueDate').value) e.push('発行日');
   if (!document.getElementById('orderNo').value) e.push('注文No.');
-  if (!document.getElementById('supplier').value) e.push('仕入先');
+  if (!getSupplierValue()) e.push('仕入先');
   if (!document.getElementById('branch').value) e.push('事業所');
   const lines = document.querySelectorAll('#lineItems .line-item');
   if (lines.length === 0) e.push('明細行');
@@ -2386,7 +2472,7 @@ function collectFormData() {
   return {
     issueDate: document.getElementById('issueDate').value,
     orderNo: document.getElementById('orderNo').value,
-    supplier: document.getElementById('supplier').value,
+    supplier: getSupplierValue(),
     branch: document.getElementById('branch').value,
     lines, total,
     siteName: document.getElementById('siteName').value,
@@ -2503,7 +2589,7 @@ function resetForm() {
   const pprog = document.getElementById('poWizardProgress');
   if (pprog) pprog.style.display = '';
   resetPoWizard();
-  document.getElementById('supplier').value = '';
+  setSupplierValue('');
   document.getElementById('branch').value = '';
   document.getElementById('siteName').value = '';
   document.getElementById('notes').value = '';
