@@ -755,6 +755,23 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
 </div>
 
+<!-- 編集モーダル（見積書/発注書共用） -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal" style="max-width:600px;max-height:90vh">
+    <h2 id="editModalTitle" style="color:var(--primary)">📝 編集</h2>
+    <div id="editModalSubtitle" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;text-align:center"></div>
+    <div id="editModalReadonlyBanner" style="display:none;background:#fef7e0;border:1.5px solid #f9ab00;border-radius:8px;padding:10px;margin-bottom:12px;font-size:13px;color:#b06000;font-weight:600">
+      🔒 このステータスでは編集できません（閲覧専用）
+    </div>
+    <div id="editModalBody" style="overflow-y:auto;max-height:60vh;padding-right:4px"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button type="button" id="btnEditSave" class="btn-confirm" onclick="saveEditModal()" style="flex:1">💾 保存して更新</button>
+      <button type="button" id="btnEditPdf" class="btn-view" style="flex:1;padding:14px;border-radius:var(--radius);border:1.5px solid var(--primary);background:white;color:var(--primary);font-weight:700;cursor:pointer;font-family:inherit">📥 PDF</button>
+    </div>
+    <button class="btn-close-modal" onclick="closeEditModal()">閉じる</button>
+  </div>
+</div>
+
 <!-- 下部タブナビ -->
 <nav class="bottom-nav" id="bottomNav">
   <button type="button" class="bottom-nav-btn active" data-tab="home" onclick="switchTab('home')">
@@ -1606,6 +1623,37 @@ function pdfUrl(sheetUrl) {
 }
 
 // PDFダウンロード（GAS経由でblob取得→自動ダウンロード）
+// IDベースPDFダウンロード（NEW_FLOW対応：シートなくてもOK）
+async function downloadPdfById(id, type, filename) {
+  if (!id) { showToast('IDが不明です', 'error'); return; }
+  showToast('📥 PDF準備中... (5〜8秒)', 'info');
+  try {
+    const res = await fetch(GAS_URL + '?action=getPdfById&id=' + id + '&type=' + type);
+    const text = await res.text();
+    let data;
+    try { data = JSON.parse(text); } catch(e) { throw new Error('GAS応答が不正'); }
+    if (!data || !data.success || !data.base64) throw new Error(data.error || 'PDF取得失敗');
+
+    const binary = atob(data.base64);
+    const arr = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'application/pdf' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = (filename || 'document') + '.pdf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
+    showToast('📥 PDFをダウンロードしました', 'success');
+  } catch (err) {
+    console.error('[PDF] 取得失敗:', err);
+    showToast('エラー: ' + err.message, 'error');
+  }
+}
+
 async function downloadPdf(sheetUrl, filename) {
   if (!sheetUrl) { showToast('シートURLが不明です', 'error'); return; }
   const m = sheetUrl.match(/gid=(\d+)/);
@@ -1783,8 +1831,8 @@ function renderEstListArea() {
       '<div class="est-detail">' + formatDate(est.estimateDate) + ' / 担当: ' + (est.staff || '') + '</div>' +
       '<div class="est-amount">¥' + Number(est.grandTotal || 0).toLocaleString() + '</div>' +
       '<div class="est-actions" style="flex-wrap:wrap">' +
-      '<a class="btn-view" href="' + (est.sheetUrl || '#') + '" target="_blank">📄 開く</a>' +
-      '<button class="btn-view" onclick="downloadPdf(\'' + (est.sheetUrl || '') + '\',\'見積_' + (est.estimateNo || '') + '\')" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;border-width:1.5px;border-style:solid">📥 PDF</button>' +
+      '<button class="btn-view" onclick="openEditModal(\'estimate\',\'' + est.id + '\')">📝 編集</button>' +
+      '<button class="btn-view" onclick="downloadPdfById(\'' + est.id + '\',\'estimate\',\'見積_' + (est.estimateNo || '') + '\')" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;border-width:1.5px;border-style:solid">📥 PDF</button>' +
       (est.status === '作成済' ? '<button class="btn-transfer" onclick="showBatchPOModal(\'' + est.id + '\')">📦 メーカー別発注</button>' : '') +
       '</div></div>';
   });
@@ -1831,8 +1879,8 @@ function renderOrderListArea() {
       '<div class="est-detail">' + formatDate(o.issueDate) + ' / 注文者: ' + (o.orderer || '') + ' / 承認: ' + (o.approverName || '-') + '</div>' +
       '<div class="est-amount">¥' + Number(o.total || 0).toLocaleString() + '</div>' +
       '<div class="est-actions" style="flex-wrap:wrap">' +
-      '<a class="btn-view" href="' + (o.sheetUrl || '#') + '" target="_blank">📄 開く</a>' +
-      '<button class="btn-view" onclick="downloadPdf(\'' + (o.sheetUrl || '') + '\',\'発注_' + (o.orderNo || '') + '\')" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;border-width:1.5px;border-style:solid">📥 PDF</button>' +
+      '<button class="btn-view" onclick="openEditModal(\'order\',\'' + o.id + '\')">📝 ' + (st === '申請中' ? '編集' : '詳細') + '</button>' +
+      '<button class="btn-view" onclick="downloadPdfById(\'' + o.id + '\',\'order\',\'発注_' + (o.orderNo || '') + '\')" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;border-width:1.5px;border-style:solid">📥 PDF</button>' +
       ((st === '承認済' || st === '緊急承認済') ? '<button class="btn-transfer" onclick="markPoCompleted(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--success)">✅ 発注完了→非表示</button>' : '') +
       (canCancel ? '<button class="btn-transfer" onclick="cancelOrderById(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--danger)">↩️ 取消</button>' : '') +
       '</div></div>';
@@ -2640,6 +2688,177 @@ function resetForm() {
   validate();
   window.scrollTo(0, 0);
 }
+
+// ============ 編集モーダル ============
+let _editData = null;
+let _editType = null; // 'estimate' | 'order'
+let _editReadonly = false;
+
+async function openEditModal(type, id) {
+  _editType = type;
+  _editData = null;
+  showToast('読込中...', 'info');
+  try {
+    const action = type === 'order' ? 'getOrderDetails' : 'getEstimateDetails';
+    const res = await fetch(GAS_URL + '?action=' + action + '&id=' + id);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || '取得失敗');
+    _editData = data.data;
+    _renderEditModal();
+    document.getElementById('editModal').classList.add('active');
+  } catch (err) {
+    showToast('エラー: ' + err.message, 'error');
+  }
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('active');
+  _editData = null;
+}
+
+function _renderEditModal() {
+  const d = _editData;
+  const type = _editType;
+  const title = type === 'order'
+    ? '📦 発注書 ' + (d.orderNo || '')
+    : '📝 見積書 ' + (d.estimateNo || '');
+  document.getElementById('editModalTitle').textContent = title;
+
+  // 編集可能か判定
+  const status = String(d.status || '').trim();
+  if (type === 'order') {
+    _editReadonly = (status !== '申請中');
+  } else {
+    _editReadonly = (status === '発注済');
+  }
+  document.getElementById('editModalReadonlyBanner').style.display = _editReadonly ? '' : 'none';
+  document.getElementById('btnEditSave').style.display = _editReadonly ? 'none' : '';
+
+  document.getElementById('editModalSubtitle').textContent = 'ステータス: ' + status;
+
+  // フォーム生成
+  const body = document.getElementById('editModalBody');
+  if (type === 'order') {
+    body.innerHTML = _renderOrderEditForm(d);
+  } else {
+    body.innerHTML = _renderEstimateEditForm(d);
+  }
+
+  // PDFボタンのハンドラ
+  const pdfBtn = document.getElementById('btnEditPdf');
+  pdfBtn.onclick = () => {
+    const filename = type === 'order'
+      ? '発注_' + (d.orderNo || '')
+      : '見積_' + (d.estimateNo || '');
+    downloadPdfById(d.id, type, filename);
+  };
+}
+
+function _renderEstimateEditForm(d) {
+  const ro = _editReadonly ? 'disabled' : '';
+  let html = '<div class="field-group"><div class="field-label">見積日</div>' +
+    '<input type="date" id="em-date" value="' + (d.estimateDate || '') + '" ' + ro + '></div>' +
+    '<div class="field-group"><div class="field-label">お客様名</div>' +
+    '<input type="text" id="em-customer" value="' + _esc(d.customerName) + '" ' + ro + '></div>' +
+    '<div class="field-group"><div class="field-label">件名</div>' +
+    '<input type="text" id="em-subject" value="' + _esc(d.subject) + '" ' + ro + '></div>' +
+    '<div class="field-group"><div class="row"><div><div class="field-label">事業所</div>' +
+    '<select id="em-branch" ' + ro + '>' + BRANCHES.map(b => '<option value="' + b + '"' + (b === d.branch ? ' selected' : '') + '>' + b + '</option>').join('') + '</select></div>' +
+    '<div><div class="field-label">担当者</div>' +
+    '<select id="em-staff" ' + ro + '>' + STAFF.map(s => '<option value="' + s + '"' + (s === d.staff ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div></div></div>' +
+    '<div style="background:#f8f9fa;padding:10px;border-radius:8px;margin:12px 0;font-size:13px">' +
+    '<strong>💰 合計(税込): ¥' + Number(d.grandTotal || 0).toLocaleString() + '</strong><br>' +
+    '小計: ¥' + Number(d.subtotal || 0).toLocaleString() + ' / 原価: ¥' + Number(d.costTotal || 0).toLocaleString() + ' / 粗利率: ' + Math.round((d.margin || 0) * 100) + '%</div>' +
+    '<div style="margin-top:8px;font-weight:600">明細 (' + (d.lines || []).length + '件)</div>';
+  (d.lines || []).forEach((ln, i) => {
+    html += '<div style="background:#fafbfc;border:1px solid var(--border);border-radius:6px;padding:8px;margin:6px 0;font-size:12px">' +
+      '<strong>No.' + (i+1) + '</strong> ' + _esc(ln.maker) + ' / ' + _esc(ln.product) + (ln.model ? ' (' + _esc(ln.model) + ')' : '') +
+      '<br>数量: ' + (ln.qty || 0) + ln.unit + ' / 原価: ¥' + Number(ln.cost || 0).toLocaleString() + ' / 粗利: ' + (ln.marginRate || 0) + '% / 売値: ¥' + Number(ln.sellingPrice || 0).toLocaleString() + '</div>';
+  });
+  html += '<div class="field-group" style="margin-top:10px"><div class="field-label">特記事項</div>' +
+    '<textarea id="em-notes" ' + ro + '>' + _esc(d.notes) + '</textarea></div>';
+  if (_editReadonly) html += '<p style="color:var(--text-secondary);font-size:12px;text-align:center;margin-top:8px">※ 明細の編集には「新規見積作成」フォームをご利用ください</p>';
+  return html;
+}
+
+function _renderOrderEditForm(d) {
+  const ro = _editReadonly ? 'disabled' : '';
+  let html = '<div class="field-group"><div class="field-label">発行日</div>' +
+    '<input type="date" id="em-date" value="' + (d.issueDate || '') + '" ' + ro + '></div>' +
+    '<div class="field-group"><div class="field-label">仕入先</div>' +
+    '<input type="text" id="em-supplier" value="' + _esc(d.supplier) + '" ' + ro + '></div>' +
+    '<div class="field-group"><div class="row"><div><div class="field-label">事業所</div>' +
+    '<select id="em-branch" ' + ro + '>' + BRANCHES.map(b => '<option value="' + b + '"' + (b === d.branch ? ' selected' : '') + '>' + b + '</option>').join('') + '</select></div>' +
+    '<div><div class="field-label">注文者</div>' +
+    '<select id="em-orderer" ' + ro + '>' + STAFF.map(s => '<option value="' + s + '"' + (s === d.orderer ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></div></div></div>' +
+    '<div class="field-group"><div class="field-label">現場名</div>' +
+    '<input type="text" id="em-site" value="' + _esc(d.siteName) + '" ' + ro + '></div>' +
+    '<div style="background:#f8f9fa;padding:10px;border-radius:8px;margin:12px 0;font-size:13px">' +
+    '<strong>💰 合計: ¥' + Number(d.total || 0).toLocaleString() + '</strong> / 承認者: ' + _esc(d.approverName) + ' / 緊急: ' + (d.urgent ? '🔴' : 'PASS') + '</div>' +
+    '<div style="margin-top:8px;font-weight:600">明細 (' + (d.lines || []).length + '件)</div>';
+  (d.lines || []).forEach((ln, i) => {
+    html += '<div style="background:#fafbfc;border:1px solid var(--border);border-radius:6px;padding:8px;margin:6px 0;font-size:12px">' +
+      '<strong>No.' + (i+1) + '</strong> ' + _esc(ln.maker) + ' / ' + _esc(ln.product) + (ln.model ? ' (' + _esc(ln.model) + ')' : '') +
+      '<br>数量: ' + (ln.qty || 0) + ' / 単価: ¥' + Number(ln.price || 0).toLocaleString() + ' / 金額: ¥' + Number((ln.qty||0)*(ln.price||0)).toLocaleString() + '</div>';
+  });
+  html += '<div class="field-group" style="margin-top:10px"><div class="field-label">特記事項</div>' +
+    '<textarea id="em-notes" ' + ro + '>' + _esc(d.notes) + '</textarea></div>';
+  if (_editReadonly) html += '<p style="color:var(--text-secondary);font-size:12px;text-align:center;margin-top:8px">※ このステータスでは編集できません</p>';
+  return html;
+}
+
+function _esc(s) {
+  if (!s) return '';
+  return String(s).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function saveEditModal() {
+  if (_editReadonly || !_editData) return;
+  const btn = document.getElementById('btnEditSave');
+  btn.disabled = true; btn.textContent = '保存中...';
+  try {
+    let payload;
+    if (_editType === 'order') {
+      payload = {
+        formType: 'updateOrder',
+        id: _editData.id,
+        issueDate: document.getElementById('em-date').value,
+        supplier: document.getElementById('em-supplier').value,
+        branch: document.getElementById('em-branch').value,
+        orderer: document.getElementById('em-orderer').value,
+        siteName: document.getElementById('em-site').value,
+        notes: document.getElementById('em-notes').value,
+        lines: _editData.lines || []
+      };
+    } else {
+      payload = {
+        formType: 'updateEstimate',
+        id: _editData.id,
+        estimateDate: document.getElementById('em-date').value,
+        customerName: document.getElementById('em-customer').value,
+        subject: document.getElementById('em-subject').value,
+        branch: document.getElementById('em-branch').value,
+        staff: document.getElementById('em-staff').value,
+        notes: document.getElementById('em-notes').value,
+        lines: _editData.lines || []
+      };
+    }
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'text/plain' }
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || '保存失敗');
+    showToast('✅ ' + data.message, 'success');
+    closeEditModal();
+    loadAllLists();
+  } catch (err) {
+    showToast('エラー: ' + err.message, 'error');
+  }
+  btn.disabled = false; btn.textContent = '💾 保存して更新';
+}
+
 
 function showToast(msg, type) {
   const t = document.getElementById('toast');
