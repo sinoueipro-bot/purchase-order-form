@@ -15,7 +15,7 @@ var EST_INDEX_SHEET = '見積一覧';
 
 // ★ 運用切替フラグ（true = 新フロー / 個別シート作らない、false = 旧フロー）
 // 問題があればこれをfalseに戻すだけで旧動作に戻る
-var NEW_FLOW = true;
+var NEW_FLOW = false;
 
 // テンプレート名候補（複数名前でも探す。先頭から順にヒットしたものを使用）
 var PO_TEMPLATE_CANDIDATES = ['発注書(テンプレート)', '発注書（テンプレート）', 'テンプレート', '発注書テンプレート', '発注テンプレート'];
@@ -778,6 +778,7 @@ function processEstimate(data) {
     success: true,
     message: '見積書を作成しました',
     estimateNo: data.estimateNo,
+    id: uniqueId,
     spreadsheetUrl: ss.getUrl(),
     sheetUrl: sheetUrl
   };

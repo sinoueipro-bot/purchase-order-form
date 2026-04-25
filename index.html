@@ -456,8 +456,8 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
   <div class="success-links">
     <a id="estLinkSheet" class="link-spreadsheet" href="#" target="_blank">📊 スプレッドシートを開く</a>
-    <a id="estLinkDirect" class="link-edit" href="#" target="_blank">📄 見積書シートを開く</a>
-    <a id="estLinkPdf" class="link-edit" href="#" onclick="downloadPdf(document.getElementById('estLinkDirect').href, '見積_'+(document.getElementById('estSuccessMsg').dataset.no||'')); return false;" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;cursor:pointer">📥 PDFダウンロード</a>
+    <a id="estLinkDirect" class="link-edit" href="#" onclick="switchTab('list'); return false;">📋 一覧で確認</a>
+    <a id="estLinkPdf" class="link-edit" href="#" onclick="downloadPdfById(document.getElementById('estSuccessMsg').dataset.id||'', 'estimate', '見積_'+(document.getElementById('estSuccessMsg').dataset.no||'')); return false;" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;cursor:pointer">📥 PDFダウンロード</a>
   </div>
   <button class="btn-new" style="background:var(--estimate)" onclick="resetEstForm()">新しい見積書を作成</button>
 </div>
@@ -630,8 +630,8 @@ textarea { resize: vertical; min-height: 60px; }
 
   <div class="success-links">
     <a id="linkSpreadsheet" class="link-spreadsheet" href="#" target="_blank">📊 スプレッドシートを開く</a>
-    <a id="linkEditSheet" class="link-edit" href="#" target="_blank">📄 発注書シートを開く</a>
-    <a id="linkPdf" class="link-edit" href="#" onclick="downloadPdf(document.getElementById('linkEditSheet').href, '発注_'+(document.getElementById('successMessage').dataset.no||'')); return false;" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;cursor:pointer">📥 PDFダウンロード</a>
+    <a id="linkEditSheet" class="link-edit" href="#" onclick="switchTab('list'); return false;">📋 一覧で確認</a>
+    <a id="linkPdf" class="link-edit" href="#" onclick="downloadPdfById(document.getElementById('successMessage').dataset.id||'', 'order', '発注_'+(document.getElementById('successMessage').dataset.no||'')); return false;" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;cursor:pointer">📥 PDFダウンロード</a>
   </div>
   <button class="btn-new" onclick="resetForm()">新しい発注書を作成</button>
 </div>
@@ -1567,9 +1567,10 @@ async function executeEstSend() {
       document.getElementById('estSuccessScreen').classList.add('show');
       document.getElementById('estSuccessMsg').textContent = '見積No.' + result.estimateNo + ' をスプレッドシートに記録しました。';
       document.getElementById('estLinkSheet').href = result.spreadsheetUrl || '#';
-      document.getElementById('estLinkDirect').href = result.sheetUrl || '#';
-      // estLinkPdfはonclickでdownloadPdf()を呼ぶ（hrefセット不要）
+      // estLinkDirect は onclick で switchTab('list') を呼ぶ（hrefは未使用）
+      // estLinkPdf は onclick で downloadPdfById を呼ぶ（hrefは未使用）
       document.getElementById('estSuccessMsg').dataset.no = result.estimateNo || '';
+      document.getElementById('estSuccessMsg').dataset.id = result.id || '';
       showToast('見積書作成完了', 'success');
       loadEstimateList();
     } else {
@@ -2647,9 +2648,10 @@ async function executeSend() {
         ? '【緊急】注文No.' + data.orderNo + ' を登録し、即発注扱いです。'
         : '注文No.' + data.orderNo + ' をスプレッドシートに記録し、承認依頼メールを送信しました。';
       document.getElementById('linkSpreadsheet').href = result.spreadsheetUrl || '#';
-      document.getElementById('linkEditSheet').href = result.sheetUrl || '#';
+      // linkEditSheet は onclick で switchTab('list') を呼ぶ（hrefは未使用）
       document.getElementById('successMessage').dataset.no = data.orderNo || '';
-      // linkPdfはonclickでdownloadPdf()を呼ぶ
+      document.getElementById('successMessage').dataset.id = result.orderId || result.id || '';
+      // linkPdf は onclick で downloadPdfById を呼ぶ
       // 60秒以内の取消パネルを起動
       startUndoCountdown(result.orderId || result.uniqueId || result.id);
       showToast('送信完了', 'success');
