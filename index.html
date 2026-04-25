@@ -660,6 +660,12 @@ textarea { resize: vertical; min-height: 60px; }
     </div>
     <!-- 役割フィルタ（トグルボタン） -->
     <div style="display:flex;gap:8px;margin-top:10px">
+      <button type="button" id="rolePendingTransferBtn" onclick="setRoleFilter('pending_transfer')"
+        style="flex:1;padding:14px 10px;border-radius:10px;border:2px solid var(--border);background:#fef7e0;cursor:pointer;font-family:inherit;text-align:center;transition:all 0.15s">
+        <div style="font-size:22px;line-height:1">📋</div>
+        <div style="font-size:13px;font-weight:700;color:#b06000;margin-top:2px">未発注見積</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:1px">作成済のみ表示</div>
+      </button>
       <button type="button" id="roleApproverBtn" onclick="setRoleFilter('approver')"
         style="flex:1;padding:14px 10px;border-radius:10px;border:2px solid var(--border);background:#e8f0fe;cursor:pointer;font-family:inherit;text-align:center;transition:all 0.15s">
         <div style="font-size:22px;line-height:1">👔</div>
@@ -1609,7 +1615,7 @@ function resetEstForm() {
 let _estListCache = [];
 let _orderListCache = [];
 let _listFilter = 'all';  // 'all' | 'estimate' | 'order'
-let _roleFilter = 'none'; // 'none' | 'approver' (申請中) | 'purchaser' (承認済)
+let _roleFilter = 'none'; // 'none' | 'approver' (申請中) | 'purchaser' (承認済) | 'pending_transfer' (未発注見積=作成済のみ)
 
 // スプシID（PDF URL組立用）
 const SS_ID = '1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s';
@@ -1814,7 +1820,11 @@ function matchesSearch(obj, q) {
 function renderEstListArea() {
   const area = document.getElementById('estListArea');
   const q = (document.getElementById('listSearchBox')?.value || '').trim();
-  const filtered = _estListCache.filter(e => matchesSearch(e, q));
+  let filtered = _estListCache.filter(e => matchesSearch(e, q));
+  // 「未発注見積」フィルタ: 作成済のみ（発注済は除外）
+  if (_roleFilter === 'pending_transfer') {
+    filtered = filtered.filter(e => e.status === '作成済');
+  }
   if (filtered.length === 0) {
     area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center;padding:8px">' + (q ? '該当なし' : '見積書がありません') + '</p>';
     return;
@@ -1882,6 +1892,7 @@ function renderOrderListArea() {
       '<div class="est-actions" style="flex-wrap:wrap">' +
       '<button class="btn-view" onclick="openEditModal(\'order\',\'' + o.id + '\')">📝 ' + (st === '申請中' ? '編集' : '詳細') + '</button>' +
       '<button class="btn-view" onclick="downloadPdfById(\'' + o.id + '\',\'order\',\'発注_' + (o.orderNo || '') + '\')" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;border-width:1.5px;border-style:solid">📥 PDF</button>' +
+      (st === '申請中' ? '<button class="btn-transfer" onclick="approveByUI(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--success)">✅ 承認</button>' : '') +
       ((st === '承認済' || st === '緊急承認済') ? '<button class="btn-transfer" onclick="markPoCompleted(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--success)">✅ 発注完了→非表示</button>' : '') +
       (canCancel ? '<button class="btn-transfer" onclick="cancelOrderById(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--danger)">↩️ 取消</button>' : '') +
       '</div></div>';
@@ -1927,10 +1938,13 @@ function setRoleFilter(role) {
   _roleFilter = (_roleFilter === role) ? 'none' : role;
   updateRoleFilterUI();
 
-  // 役割フィルタONなら自動的に「📦発注」タブに切替（見積は非表示）
-  if (_roleFilter !== 'none' && _listFilter !== 'order') {
+  // 「未発注見積」フィルタONなら見積タブに切替（発注は非表示）
+  if (_roleFilter === 'pending_transfer' && _listFilter !== 'estimate') {
+    setListFilter('estimate');
+  // 「承認者用」「発注担当用」フィルタONなら発注タブに切替（見積は非表示）
+  } else if ((_roleFilter === 'approver' || _roleFilter === 'purchaser') && _listFilter !== 'order') {
     setListFilter('order');
-  } else if (_roleFilter === 'none' && _listFilter === 'order') {
+  } else if (_roleFilter === 'none' && (_listFilter === 'order' || _listFilter === 'estimate')) {
     // OFF時は「全て」に戻す
     setListFilter('all');
   } else {
@@ -1941,10 +1955,21 @@ function setRoleFilter(role) {
 }
 
 function updateRoleFilterUI() {
+  const ptBtn = document.getElementById('rolePendingTransferBtn');
   const apBtn = document.getElementById('roleApproverBtn');
   const puBtn = document.getElementById('rolePurchaserBtn');
   const banner = document.getElementById('filterBanner');
 
+  // 未発注見積ボタン
+  if (ptBtn) {
+    const active = _roleFilter === 'pending_transfer';
+    ptBtn.style.background = active ? '#f9ab00' : '#fef7e0';
+    ptBtn.style.borderColor = active ? '#f9ab00' : 'var(--border)';
+    ptBtn.style.boxShadow = active ? '0 4px 10px rgba(249,171,0,0.3)' : 'none';
+    const divs = ptBtn.querySelectorAll('div');
+    if (divs[1]) divs[1].style.color = active ? 'white' : '#b06000';
+    if (divs[2]) divs[2].style.color = active ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)';
+  }
   // 承認者用ボタン
   if (apBtn) {
     const active = _roleFilter === 'approver';
@@ -1967,7 +1992,14 @@ function updateRoleFilterUI() {
   }
   // 絞込中バナー
   if (banner) {
-    if (_roleFilter === 'approver') {
+    if (_roleFilter === 'pending_transfer') {
+      const cnt = _estListCache.filter(e => e.status === '作成済').length;
+      banner.style.display = 'block';
+      banner.style.background = '#fef7e0';
+      banner.style.color = '#b06000';
+      banner.style.border = '1.5px solid #f9ab00';
+      banner.innerHTML = '📋 未発注見積 <strong>' + cnt + '件</strong> を表示中 　<span style="font-weight:400;font-size:12px">（タップで解除）</span>';
+    } else if (_roleFilter === 'approver') {
       const cnt = _orderListCache.filter(o => o.status === '申請中').length;
       banner.style.display = 'block';
       banner.style.background = '#fef7e0';
@@ -2008,14 +2040,19 @@ function updateResultCount() {
   const q = (document.getElementById('listSearchBox')?.value || '').trim();
   const el = document.getElementById('listResultCount');
   if (!el) return;
-  const eN = _estListCache.filter(e => matchesSearch(e, q)).length;
+  let eFiltered = _estListCache.filter(e => matchesSearch(e, q));
+  if (_roleFilter === 'pending_transfer') {
+    eFiltered = eFiltered.filter(e => e.status === '作成済');
+  }
+  const eN = eFiltered.length;
   const oFiltered = applyRoleFilter(_orderListCache.filter(o => matchesSearch(o, q)));
   const oN = oFiltered.length;
   let prefix = '';
-  if (_roleFilter === 'approver') prefix = '👔 承認待ち: ';
+  if (_roleFilter === 'pending_transfer') prefix = '📋 未発注見積: ';
+  else if (_roleFilter === 'approver') prefix = '👔 承認待ち: ';
   else if (_roleFilter === 'purchaser') prefix = '👷 承認済(発注すべき): ';
   if (q) el.textContent = prefix + '🔍「' + q + '」 見積' + eN + '件 / 発注' + oN + '件';
-  else el.textContent = prefix + '見積' + _estListCache.length + '件 / 発注' + oN + '件';
+  else el.textContent = prefix + '見積' + eN + '件 / 発注' + oN + '件';
 }
 
 // ========= 送信後60秒カウントダウン取消 =========
@@ -2089,6 +2126,27 @@ async function undoLastSend() {
   } catch (err) {
     showToast('エラー: ' + err.message, 'error');
     if (btn) { btn.disabled = false; btn.textContent = '↩️ この発注を取り消す'; }
+  }
+}
+
+// 画面UI経由の承認（パスワード必須）
+async function approveByUI(id, orderNo) {
+  const password = prompt('注文No. ' + orderNo + ' を承認します。\n\n承認パスワードを入力してください:');
+  if (password === null) return; // キャンセル
+  if (!password.trim()) { showToast('パスワードを入力してください', 'error'); return; }
+
+  showToast('承認処理中...', 'info');
+  try {
+    const res = await fetch(GAS_URL + '?action=approveByUI&id=' + encodeURIComponent(id) + '&password=' + encodeURIComponent(password));
+    const data = await res.json();
+    if (data.success) {
+      showToast('✅ 承認完了: 注文No.' + data.orderNo, 'success');
+      loadAllLists(); // 一覧を再読み込み
+    } else {
+      showToast('❌ ' + (data.error || '承認失敗'), 'error');
+    }
+  } catch (err) {
+    showToast('エラー: ' + err.message, 'error');
   }
 }
 
@@ -2178,7 +2236,9 @@ async function showBatchPOModal(estimateId) {
       maker,
       supplier: MAKER_TO_SUPPLIER[maker] || maker,
       lines: groups[maker],
-      estimateNo: data.estimateNo || ''
+      estimateNo: data.estimateNo || '',
+      subject: data.subject || '',
+      customerName: data.customerName || ''
     }));
 
     if (poQueue.length === 0) {
@@ -2291,8 +2351,8 @@ function processNextPOQueue() {
   setSupplierValue('');
   document.getElementById('supplier').focus();
 
-  // 現場名に見積情報
-  document.getElementById('siteName').value = current.estimateNo ? '見積No.' + current.estimateNo : '';
+  // 現場名は見積書の「件名」を引き継ぐ（件名なければお客様名にフォールバック）
+  document.getElementById('siteName').value = current.subject || current.customerName || '';
 
   // 明細をクリアしてセット
   document.getElementById('lineItems').innerHTML = '';

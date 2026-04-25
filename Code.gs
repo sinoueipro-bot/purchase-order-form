@@ -17,6 +17,10 @@ var EST_INDEX_SHEET = '見積一覧';
 // 問題があればこれをfalseに戻すだけで旧動作に戻る
 var NEW_FLOW = false;
 
+// ★ 画面承認用のパスワード（メール承認は不要。画面UI経由の承認のみ要求）
+// 変更したい場合はここを書き換えてGASを再デプロイ
+var APPROVAL_PASSWORD = 'ipro1234';
+
 // テンプレート名候補（複数名前でも探す。先頭から順にヒットしたものを使用）
 var PO_TEMPLATE_CANDIDATES = ['発注書(テンプレート)', '発注書（テンプレート）', 'テンプレート', '発注書テンプレート', '発注テンプレート'];
 var EST_TEMPLATE_CANDIDATES = ['見積書(テンプレート)', '見積書（テンプレート）', '見積テンプレート', '見積書テンプレート', 'テンプレート見積'];
@@ -139,6 +143,8 @@ function doGet(e) {
   if (action === 'getPdfById') return jsonResponse(getPdfById(id, e.parameter.type));
   if (action === 'getEstimateDetails') return jsonResponse(getEstimateDetails(id));
   if (action === 'getOrderDetails') return jsonResponse(getOrderDetails(id));
+  // 画面UI経由の承認API（パスワード必須）
+  if (action === 'approveByUI') return jsonResponse(approveOrderByUI(id, e.parameter.password));
 
   if (!action || !id) return HtmlService.createHtmlOutput('<h2>発注書・見積書APIは稼働中です</h2>');
 
@@ -178,6 +184,57 @@ function doGet(e) {
   }
 
   return HtmlService.createHtmlOutput(resultPage('エラー', '不明なアクション', '#d93025'));
+}
+
+// ============ API: 画面UI経由の承認（パスワード必須・JSON応答） ============
+// メール承認はパスワード不要（メール到達自体が認証）
+// 画面UI承認は誰でもアクセスできる公開ページなのでパスワード必須
+function approveOrderByUI(id, password) {
+  // パスワード検証（GAS側で必ず実施。クライアント側だけだと開発者ツールで回避可能）
+  if (!password) return { success: false, error: 'パスワードが必要です' };
+  if (password !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
+  if (!id) return { success: false, error: 'IDが必要です' };
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(INDEX_SHEET);
+  if (!sheet) return { success: false, error: '発注一覧が見つかりません' };
+
+  var data = sheet.getDataRange().getValues();
+  var rowIdx = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][12] === id) { rowIdx = i + 1; break; }
+  }
+  if (rowIdx === -1) return { success: false, error: '該当する発注書が見つかりません' };
+
+  var row = data[rowIdx - 1];
+  var currentStatus = row[10];
+  if (currentStatus !== '申請中') {
+    return { success: false, error: 'この発注書は既に処理済みです（現在: ' + currentStatus + '）' };
+  }
+
+  // ステータスを承認済に変更
+  applyStatusColor(sheet, rowIdx, '承認済');
+
+  var orderNo = row[1];
+  var supplier = row[3];
+  var orderer = row[7];
+  var total = row[6];
+  var approverName = row[9]; // J列: 承認者名
+  var sheetUrl = row[11];
+
+  // 発注書シートの承認欄に承認者名を書き込む（既存ロジック流用）
+  try { writeApproverToOrderSheet(ss, sheetUrl, approverName); } catch(e) { Logger.log('承認者名書込エラー: ' + e.toString()); }
+
+  // 発注担当者に通知メール（既存ロジック流用）
+  try { notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl); } catch(e) { Logger.log('通知メール送信エラー: ' + e.toString()); }
+
+  return {
+    success: true,
+    message: '承認しました',
+    orderNo: orderNo,
+    supplier: supplier,
+    total: total
+  };
 }
 
 // 結果表示HTML
