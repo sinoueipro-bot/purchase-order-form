@@ -1566,7 +1566,7 @@ async function executeEstSend() {
       if (wnav) wnav.style.display = 'none';
       document.getElementById('estSuccessScreen').classList.add('show');
       document.getElementById('estSuccessMsg').textContent = '見積No.' + result.estimateNo + ' をスプレッドシートに記録しました。';
-      document.getElementById('estLinkSheet').href = result.spreadsheetUrl || '#';
+      document.getElementById('estLinkSheet').href = result.sheetUrl || result.spreadsheetUrl || '#';
       // estLinkDirect は onclick で switchTab('list') を呼ぶ（hrefは未使用）
       // estLinkPdf は onclick で downloadPdfById を呼ぶ（hrefは未使用）
       document.getElementById('estSuccessMsg').dataset.no = result.estimateNo || '';
@@ -2647,7 +2647,7 @@ async function executeSend() {
       document.getElementById('successMessage').textContent = data.urgent
         ? '【緊急】注文No.' + data.orderNo + ' を登録し、即発注扱いです。'
         : '注文No.' + data.orderNo + ' をスプレッドシートに記録し、承認依頼メールを送信しました。';
-      document.getElementById('linkSpreadsheet').href = result.spreadsheetUrl || '#';
+      document.getElementById('linkSpreadsheet').href = result.sheetUrl || result.spreadsheetUrl || '#';
       // linkEditSheet は onclick で switchTab('list') を呼ぶ（hrefは未使用）
       document.getElementById('successMessage').dataset.no = data.orderNo || '';
       document.getElementById('successMessage').dataset.id = result.orderId || result.id || '';
