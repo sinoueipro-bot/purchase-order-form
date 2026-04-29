@@ -1233,6 +1233,28 @@ function getEstimateData(id) {
     }
   }
 
+  // 二重発注防止: この見積から既に発注書を作成したメーカーを抽出
+  // 発注一覧の特記事項(O列, idx=14)に "見積No.XXX / メーカー: YYY" が入っているのでパース
+  // ステータスが「取消」「却下」のものは無効として除外（再発注可能）
+  var estimateNo = data[rowIdx][1];
+  var orderedMakers = [];
+  var orderSheet = ss.getSheetByName(INDEX_SHEET);
+  if (orderSheet && estimateNo) {
+    var orderData = orderSheet.getDataRange().getValues();
+    for (var oi = 1; oi < orderData.length; oi++) {
+      var oRow = orderData[oi];
+      var oStatus = String(oRow[10] || '');
+      if (oStatus === '取消' || oStatus === '却下') continue;
+      var oNotes = String(oRow[14] || '');
+      if (oNotes.indexOf('見積No.' + estimateNo) === -1) continue;
+      var makerMatch = oNotes.match(/メーカー[:：]\s*([^\s\/]+)/);
+      if (makerMatch && makerMatch[1]) {
+        var mk = makerMatch[1].trim();
+        if (orderedMakers.indexOf(mk) === -1) orderedMakers.push(mk);
+      }
+    }
+  }
+
   return {
     success: true,
     estimateNo: data[rowIdx][1],
@@ -1242,7 +1264,8 @@ function getEstimateData(id) {
     staff: data[rowIdx][5],          // 担当者 → 発注書の注文者に使う
     branch: data[rowIdx][15] || '本社',
     notes: data[rowIdx][16] || '',
-    lines: lines
+    lines: lines,
+    orderedMakers: orderedMakers     // 既に発注済みのメーカー一覧（二重発注防止用）
   };
 }
 

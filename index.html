@@ -2251,12 +2251,18 @@ async function showBatchPOModal(estimateId) {
     poQueueEstimateId = estimateId;
     poQueueDone = 0;
 
+    // 既にこの見積から発注書を作成したメーカー（取消・却下を除く）
+    const orderedMakers = data.orderedMakers || [];
+
     // メーカーごとにグルーピング
     const groups = {};
     const skipped = [];
+    const alreadyOrdered = []; // 既発注済みメーカーの明細（参考表示用）
     data.lines.forEach(ln => {
       if (!ln.maker || ln.maker === '発注なし' || ln.maker === '工事') {
         skipped.push(ln);
+      } else if (orderedMakers.indexOf(ln.maker) !== -1) {
+        alreadyOrdered.push(ln); // 二重発注防止: 既発注メーカーはキューから除外
       } else {
         if (!groups[ln.maker]) groups[ln.maker] = [];
         groups[ln.maker].push(ln);
@@ -2276,7 +2282,12 @@ async function showBatchPOModal(estimateId) {
     }));
 
     if (poQueue.length === 0) {
-      showToast('発注対象のメーカーがありません', 'error');
+      if (alreadyOrdered.length > 0) {
+        // 全メーカーが既発注済 → 二重発注を防ぐためモーダルを開かない
+        showToast('✅ このメーカーは全て発注済みです（二重発注を防ぐためスキップ）', 'info');
+      } else {
+        showToast('発注対象のメーカーがありません', 'error');
+      }
       return;
     }
 
@@ -2286,6 +2297,19 @@ async function showBatchPOModal(estimateId) {
       '<strong style="color:var(--primary)">見積No. ' + (data.estimateNo || '') + '</strong>' +
       (data.customerName ? ' / ' + data.customerName : '') +
       '<div style="color:var(--text-secondary);font-size:12px;margin-top:4px">メーカーごとに1枚ずつ発注書を確認・送信します</div></div>';
+
+    // 既発注済みメーカーを参考表示（クリック不可・グレー）
+    if (alreadyOrdered.length > 0) {
+      const orderedByMaker = {};
+      alreadyOrdered.forEach(ln => {
+        if (!orderedByMaker[ln.maker]) orderedByMaker[ln.maker] = [];
+        orderedByMaker[ln.maker].push(ln);
+      });
+      Object.keys(orderedByMaker).forEach(maker => {
+        html += '<div style="background:#e6f4ea;border-radius:6px;padding:8px 12px;margin-bottom:6px;font-size:13px;border:1.5px solid #137333">' +
+          '<div style="color:#137333;font-weight:700">✅ ' + maker + ' は発注済（' + orderedByMaker[maker].length + '行・再発注しない）</div></div>';
+      });
+    }
 
     poQueue.forEach((q, i) => {
       const total = q.lines.reduce((s, l) => s + (l.qty || 0) * (l.price || 0), 0);
