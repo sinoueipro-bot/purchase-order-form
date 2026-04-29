@@ -1276,8 +1276,11 @@ function addEstLine() {
     (num > 1 ? '<button type="button" class="btn-remove-line" onclick="removeEstLine(' + num + ')">&times;</button>' : '') +
     '</div>' +
     '<div class="row"><div style="flex:2"><div class="field-label"><span class="required-badge">必須</span>メーカー/発注先</div>' +
-    '<select id="est-maker-' + num + '" onchange="validateEst()" style="font-size:14px"><option value="">選択</option>' +
-    EST_MAKERS.map(m => '<option value="' + m + '"' + (m==='発注なし'?' style="color:#999"':m==='工事'?' style="color:#b06000"':'') + '>' + m + '</option>').join('') + '</select></div>' +
+    '<select id="est-maker-' + num + '" onchange="onEstMakerChange(' + num + ')" style="font-size:14px"><option value="">選択</option>' +
+    EST_MAKERS.map(m => '<option value="' + m + '"' + (m==='発注なし'?' style="color:#999"':m==='工事'?' style="color:#b06000"':'') + '>' + m + '</option>').join('') +
+    '<option value="__OTHER__" style="color:var(--primary);font-weight:700">✏️ その他（自由入力）</option></select>' +
+    '<input type="text" id="est-maker-custom-' + num + '" placeholder="メーカー/発注先を自由入力" oninput="validateEst()" style="display:none;margin-top:6px;font-size:14px">' +
+    '</div>' +
     '<div style="flex:3"><div class="field-label"><span class="required-badge">必須</span>品名</div>' +
     '<select id="est-product-' + num + '" onchange="onEstProductChange(' + num + ')" style="font-size:14px"><option value="">選択してください</option>' +
     PRODUCTS.map(p => p === 'その他' ? '' : '<option value="' + p + '">' + p + '</option>').join('') +
@@ -1353,6 +1356,31 @@ function getEstProductValue(num) {
   if (!sel) return '';
   if (sel.value === '__OTHER__') {
     return (document.getElementById('est-product-custom-' + num)?.value || '').trim();
+  }
+  return sel.value;
+}
+
+// メーカー/発注先の「その他」選択時の自由入力切替
+function onEstMakerChange(num) {
+  const sel = document.getElementById('est-maker-' + num);
+  const custom = document.getElementById('est-maker-custom-' + num);
+  if (!sel || !custom) return;
+  if (sel.value === '__OTHER__') {
+    custom.style.display = '';
+    custom.focus();
+  } else {
+    custom.style.display = 'none';
+    custom.value = '';
+  }
+  validateEst();
+}
+
+// メーカー/発注先の実値を取得（「その他」の場合は自由入力欄の値）
+function getEstMakerValue(num) {
+  const sel = document.getElementById('est-maker-' + num);
+  if (!sel) return '';
+  if (sel.value === '__OTHER__') {
+    return (document.getElementById('est-maker-custom-' + num)?.value || '').trim();
   }
   return sel.value;
 }
@@ -1453,7 +1481,7 @@ function getEstErrors() {
   if (!document.getElementById('estStaff').value) e.push('担当者');
   document.querySelectorAll('[id^="est-line-"]').forEach(item => {
     const n = item.id.replace('est-line-', '');
-    if (!document.getElementById('est-maker-' + n)?.value) e.push('明細:メーカー');
+    if (!getEstMakerValue(n)) e.push('明細:メーカー');
     if (!getEstProductValue(n)) e.push('明細:品名');
     if (!(parseInt(document.getElementById('est-cost-' + n)?.value) > 0)) e.push('明細:原価');
   });
@@ -1470,7 +1498,7 @@ function collectEstData() {
     const rounding = document.getElementById('est-round-' + n)?.value || '0';
     const qty = parseInt(document.getElementById('est-qty-' + n)?.value) || 0;
     lines.push({
-      maker: document.getElementById('est-maker-' + n)?.value || '',
+      maker: getEstMakerValue(n),
       product: getEstProductValue(n),
       model: document.getElementById('est-model-' + n)?.value || '',
       qty: qty,
