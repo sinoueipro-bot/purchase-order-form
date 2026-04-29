@@ -525,10 +525,7 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge">必須</span>仕入先</div>
-    <select id="supplier" onchange="onSupplierChange()" required>
-      <option value="">選択してください</option>
-    </select>
-    <input type="text" id="supplier-custom" placeholder="仕入先を自由入力" oninput="validate()" style="display:none;margin-top:6px">
+    <input type="text" id="supplier" list="supplierList" placeholder="選択 or 自由入力" oninput="validate()" required>
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge">必須</span>事業所</div>
@@ -1221,17 +1218,11 @@ function renderEstConfirm() {
 
 // ============ ドロップダウン初期化 ============
 function initAllDropdowns() {
-  // datalist (互換用・未使用でも残す)
+  // datalist (input list で参照される候補リスト)
   addDatalist('supplierList', SUPPLIERS);
   addDatalist('makerList', MAKERS);
+  addDatalist('estMakerList', EST_MAKERS); // 見積書用（'発注なし','工事' を含む）
   addDatalist('productList', PRODUCTS);
-  // 発注書: 仕入先select + その他
-  const supSel = document.getElementById('supplier');
-  SUPPLIERS.forEach(s => supSel.add(new Option(typeof s === 'object' ? s.name : s, typeof s === 'object' ? s.name : s)));
-  const otherOpt = new Option('✏️ その他（自由入力）', '__OTHER__');
-  otherOpt.style.color = 'var(--primary)';
-  otherOpt.style.fontWeight = '700';
-  supSel.add(otherOpt);
   // 発注書
   fillSelect('branch', BRANCHES);
   fillSelect('orderer', STAFF);
@@ -1276,13 +1267,9 @@ function addEstLine() {
     (num > 1 ? '<button type="button" class="btn-remove-line" onclick="removeEstLine(' + num + ')">&times;</button>' : '') +
     '</div>' +
     '<div class="row"><div style="flex:2"><div class="field-label"><span class="required-badge">必須</span>メーカー/発注先</div>' +
-    '<select id="est-maker-' + num + '" onchange="validateEst()" style="font-size:14px"><option value="">選択</option>' +
-    EST_MAKERS.map(m => '<option value="' + m + '"' + (m==='発注なし'?' style="color:#999"':m==='工事'?' style="color:#b06000"':'') + '>' + m + '</option>').join('') + '</select></div>' +
+    '<input type="text" id="est-maker-' + num + '" list="estMakerList" placeholder="選択 or 自由入力" oninput="validateEst()" style="font-size:14px"></div>' +
     '<div style="flex:3"><div class="field-label"><span class="required-badge">必須</span>品名</div>' +
-    '<select id="est-product-' + num + '" onchange="onEstProductChange(' + num + ')" style="font-size:14px"><option value="">選択してください</option>' +
-    PRODUCTS.map(p => p === 'その他' ? '' : '<option value="' + p + '">' + p + '</option>').join('') +
-    '<option value="__OTHER__" style="color:var(--primary);font-weight:700">✏️ その他（自由入力）</option></select>' +
-    '<input type="text" id="est-product-custom-' + num + '" placeholder="品名を自由入力" oninput="validateEst()" style="display:none;margin-top:6px;font-size:14px">' +
+    '<input type="text" id="est-product-' + num + '" list="productList" placeholder="選択 or 自由入力" oninput="validateEst()" style="font-size:14px">' +
     '</div></div>' +
     '<div class="row"><div style="flex:2"><div class="field-label">型式・仕様</div>' +
     '<input type="text" id="est-model-' + num + '" placeholder="型式"></div>' +
@@ -1333,28 +1320,15 @@ function calcSellingPriceJS(cost, marginPct, roundingStr) {
 }
 
 // 品名select切替: 「その他」選択時のみ自由入力欄を表示
+// datalist方式に統一したため不要になったが、互換のため残す（旧呼び出しがあれば validateEst を呼ぶだけ）
 function onEstProductChange(num) {
-  const sel = document.getElementById('est-product-' + num);
-  const custom = document.getElementById('est-product-custom-' + num);
-  if (!sel || !custom) return;
-  if (sel.value === '__OTHER__') {
-    custom.style.display = '';
-    custom.focus();
-  } else {
-    custom.style.display = 'none';
-    custom.value = '';
-  }
   validateEst();
 }
 
-// 品名の実値を取得（「その他」の場合は自由入力欄の値）
+// 品名の実値を取得（datalist input なので value を直接返す）
 function getEstProductValue(num) {
-  const sel = document.getElementById('est-product-' + num);
-  if (!sel) return '';
-  if (sel.value === '__OTHER__') {
-    return (document.getElementById('est-product-custom-' + num)?.value || '').trim();
-  }
-  return sel.value;
+  const el = document.getElementById('est-product-' + num);
+  return el ? (el.value || '').trim() : '';
 }
 
 function calcEstLine(num) {
@@ -2483,50 +2457,25 @@ function calcLineAmount(num) {
   calcTotal(); validate();
 }
 // 仕入先select切替: 「その他」選択時のみ自由入力欄を表示
+// datalist方式に統一したため不要になったが、互換のため残す
 function onSupplierChange() {
-  const sel = document.getElementById('supplier');
-  const custom = document.getElementById('supplier-custom');
-  if (!sel || !custom) return;
-  if (sel.value === '__OTHER__') {
-    custom.style.display = '';
-    custom.focus();
-  } else {
-    custom.style.display = 'none';
-    custom.value = '';
-  }
   validate();
 }
 
-// 仕入先の実値取得
+// 仕入先の実値取得（datalist input なので value を直接返す）
 function getSupplierValue() {
-  const sel = document.getElementById('supplier');
-  if (!sel) return '';
-  if (sel.value === '__OTHER__') {
-    return (document.getElementById('supplier-custom')?.value || '').trim();
-  }
-  return sel.value;
+  const el = document.getElementById('supplier');
+  return el ? (el.value || '').trim() : '';
 }
 
-// 仕入先を値から自動選択（転記時などに使用）
+// 仕入先を値から自動セット（転記時などに使用）。datalist input なので候補にあるかは不問
 function setSupplierValue(val) {
   const sel = document.getElementById('supplier');
+  if (!sel) return;
+  sel.value = val || '';
+  // 旧UIの custom フィールドがまだ DOM に残っていれば非表示化（互換）
   const custom = document.getElementById('supplier-custom');
-  if (!sel || !custom) return;
-  if (!val) { sel.value = ''; custom.style.display = 'none'; custom.value = ''; return; }
-  // optionに存在するかチェック
-  let found = false;
-  for (let i = 0; i < sel.options.length; i++) {
-    if (sel.options[i].value === val) { found = true; break; }
-  }
-  if (found) {
-    sel.value = val;
-    custom.style.display = 'none';
-    custom.value = '';
-  } else {
-    sel.value = '__OTHER__';
-    custom.style.display = '';
-    custom.value = val;
-  }
+  if (custom) { custom.style.display = 'none'; custom.value = ''; }
 }
 
 function calcTotal() {
