@@ -2270,7 +2270,9 @@ async function showBatchPOModal(estimateId) {
       lines: groups[maker],
       estimateNo: data.estimateNo || '',
       subject: data.subject || '',
-      customerName: data.customerName || ''
+      customerName: data.customerName || '',
+      staff: data.staff || '',
+      branch: data.branch || ''
     }));
 
     if (poQueue.length === 0) {
@@ -2379,9 +2381,20 @@ function processNextPOQueue() {
     '<div style="color:var(--danger);font-size:13px;margin-top:6px;font-weight:700">⚠️ 仕入先を必ず選び直してください（単価は原価ベース）</div>' +
     '<div style="color:var(--text-secondary);font-size:11px;margin-top:2px">参考マッピング: ' + current.supplier + '</div>';
 
-  // 仕入先は空欄（ユーザーに必ず選ばせる）
-  setSupplierValue('');
-  document.getElementById('supplier').focus();
+  // 仕入先は見積書のメーカーから逆引きで自動セット（ユーザーは必要に応じて変更可）
+  setSupplierValue(current.supplier || '');
+
+  // 事業所も見積書から引き継ぐ（任意・あれば）
+  if (current.branch) {
+    const branchSel = document.getElementById('branch');
+    if (branchSel) branchSel.value = current.branch;
+  }
+
+  // 注文者も見積書の担当者から引き継ぐ（任意・あれば）
+  if (current.staff) {
+    const ordererSel = document.getElementById('orderer');
+    if (ordererSel) ordererSel.value = current.staff;
+  }
 
   // 現場名は見積書の「件名」を引き継ぐ（件名なければお客様名にフォールバック）
   document.getElementById('siteName').value = current.subject || current.customerName || '';

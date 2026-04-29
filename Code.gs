@@ -1202,38 +1202,46 @@ function getEstimateData(id) {
   }
   if (rowIdx === -1) return { success: false, error: '見積書が見つかりません' };
 
-  // 見積書シートから明細を読み取る
-  var sheetUrl = data[rowIdx][11];
-  var match = sheetUrl.match(/gid=(\d+)/);
-  if (!match) return { success: false, error: 'シートURLが不正です' };
-  var gid = parseInt(match[1]);
-  var estSheet = null;
-  var sheets = ss.getSheets();
-  for (var j = 0; j < sheets.length; j++) {
-    if (sheets[j].getSheetId() === gid) { estSheet = sheets[j]; break; }
-  }
-  if (!estSheet) return { success: false, error: '見積書シートが見つかりません' };
-
-  // 明細行を読み取り（行15-32, K列=原価, E列=数量 etc）
+  // 明細は見積一覧の O列(idx=14)に保存されている明細JSONから取得
+  // 見積書シートのセル直読みは列構造変更で破綻するため、addToEstimateIndex で保存されたJSONを単一の真実とする
   var lines = [];
-  for (var r = 15; r <= 32; r++) {
-    var maker = estSheet.getRange(r, 2).getValue();
-    if (!maker) continue;
-    lines.push({
-      maker: maker,
-      product: estSheet.getRange(r, 3).getValue(),
-      model: estSheet.getRange(r, 4).getValue(),
-      qty: estSheet.getRange(r, 5).getValue(),
-      price: estSheet.getRange(r, 11).getValue(),  // K列=原価 → 発注書の単価
-      remark: ''
-    });
+  var jsonStr = data[rowIdx][14];
+  if (jsonStr) {
+    try {
+      var parsed = JSON.parse(jsonStr);
+      if (Array.isArray(parsed)) {
+        for (var k = 0; k < parsed.length; k++) {
+          var ln = parsed[k] || {};
+          var qtyN = parseInt(ln.qty);
+          var costN = parseInt(ln.cost);
+          var sellingN = parseInt(ln.sellingPrice);
+          lines.push({
+            maker: String(ln.maker || ''),
+            product: String(ln.product || ''),
+            model: String(ln.model || ''),
+            qty: isNaN(qtyN) ? 0 : qtyN,
+            unit: String(ln.unit || '台'),
+            cost: isNaN(costN) ? 0 : costN,                    // 原価（仕入価格）
+            sellingPrice: isNaN(sellingN) ? 0 : sellingN,      // 売値
+            price: isNaN(costN) ? 0 : costN,                   // 発注書の単価＝原価（仕入先への発注価格）
+            remark: ''
+          });
+        }
+      }
+    } catch (e) {
+      Logger.log('明細JSON parse error: ' + e.toString());
+    }
   }
 
   return {
     success: true,
     estimateNo: data[rowIdx][1],
+    estimateDate: data[rowIdx][2],
     customerName: data[rowIdx][3],
     subject: data[rowIdx][4],
+    staff: data[rowIdx][5],          // 担当者 → 発注書の注文者に使う
+    branch: data[rowIdx][15] || '本社',
+    notes: data[rowIdx][16] || '',
     lines: lines
   };
 }
