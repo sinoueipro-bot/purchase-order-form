@@ -2423,6 +2423,13 @@ function processNextPOQueue() {
   // 現場名は見積書の「件名」を引き継ぐ（件名なければお客様名にフォールバック）
   document.getElementById('siteName').value = current.subject || current.customerName || '';
 
+  // 特記事項に「見積No.XXX / メーカー: YYY」を自動セット（二重発注防止のマーカーとして使用）
+  // ユーザーが必要に応じて編集追加可能
+  const notesEl = document.getElementById('notes');
+  if (notesEl) {
+    notesEl.value = '見積No.' + current.estimateNo + ' / メーカー: ' + current.maker;
+  }
+
   // 明細をクリアしてセット
   document.getElementById('lineItems').innerHTML = '';
   lineItemCount = 0;
