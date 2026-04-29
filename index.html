@@ -2419,6 +2419,21 @@ function processNextPOQueue() {
   transferredEstimateId = null; // 個別転記ではなくキュー管理
   window._poQueueActive = true;
 
+  // 発注書ウィザードを Step 1 にリセット（前のメーカーの Step 3 のまま残るのを防ぐ）
+  resetPoWizard();
+
+  // formArea/btnSubmit/Stepナビが前回送信で隠されている可能性があるので確実に表示
+  const formArea = document.getElementById('formArea');
+  if (formArea) formArea.style.display = '';
+  const btnSubmit = document.getElementById('btnSubmit');
+  if (btnSubmit) btnSubmit.style.display = '';
+  const successScreen = document.getElementById('successScreen');
+  if (successScreen) successScreen.classList.remove('show');
+  const pnav = document.getElementById('poWizardNav');
+  if (pnav) pnav.style.display = '';
+  const pprog = document.getElementById('poWizardProgress');
+  if (pprog) pprog.style.display = '';
+
   validate();
   window.scrollTo(0, 0);
   showToast(current.maker + ' の発注書を確認してください', 'info');
