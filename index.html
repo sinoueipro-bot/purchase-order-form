@@ -1659,6 +1659,7 @@ function pdfUrl(sheetUrl) {
 
 // PDFダウンロード（GAS経由でblob取得→自動ダウンロード）
 // IDベースPDFダウンロード（NEW_FLOW対応：シートなくてもOK）
+// ファイル名は GAS が返す sheetName/filename を優先（=スプシのタブ名）。無ければ呼び出し側 filename を使用
 async function downloadPdfById(id, type, filename) {
   if (!id) { showToast('IDが不明です', 'error'); return; }
   showToast('📥 PDF準備中... (5〜8秒)', 'info');
@@ -1675,9 +1676,12 @@ async function downloadPdfById(id, type, filename) {
     const blob = new Blob([arr], { type: 'application/pdf' });
     const blobUrl = URL.createObjectURL(blob);
 
+    // GAS が返した filename（スプシのタブ名）優先 → なければ呼び出し側 filename → 最後に 'document'
+    const finalName = (data.filename || filename || 'document');
+
     const a = document.createElement('a');
     a.href = blobUrl;
-    a.download = (filename || 'document') + '.pdf';
+    a.download = finalName + '.pdf';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

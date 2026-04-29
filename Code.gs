@@ -1633,7 +1633,20 @@ function getPdfById(id, type) {
   var existingUrl = details.data.sheetUrl;
   if (existingUrl) {
     var m = existingUrl.match(/gid=(\d+)/);
-    if (m) return getSheetPdfBase64(m[1]);
+    if (m) {
+      var pdfRes = getSheetPdfBase64(m[1]);
+      // PDF成功時は対応するシート名を filename として付与（ダウンロード時のファイル名に使用）
+      if (pdfRes && pdfRes.success) {
+        var sheetsAll = ss.getSheets();
+        for (var si = 0; si < sheetsAll.length; si++) {
+          if (String(sheetsAll[si].getSheetId()) === String(m[1])) {
+            pdfRes.filename = sheetsAll[si].getName();
+            break;
+          }
+        }
+      }
+      return pdfRes;
+    }
   }
 
   // 一時シート生成
@@ -1649,6 +1662,17 @@ function getPdfById(id, type) {
     SpreadsheetApp.flush();
     // PDF取得
     var result = getSheetPdfBase64(tmp.getSheetId());
+    // NEW_FLOW（一時シート）の場合は、対応する番号でファイル名を組み立てる
+    if (result && result.success) {
+      if (type === 'order') {
+        result.filename = (details.data.issueDate ? String(details.data.issueDate).replace(/-/g,'') + '_' : '')
+          + (details.data.orderer || '') + (details.data.siteName ? '_' + details.data.siteName : '');
+      } else {
+        result.filename = '見積_' + (details.data.estimateDate ? String(details.data.estimateDate).replace(/-/g,'') : '')
+          + (details.data.customerName ? '_' + details.data.customerName : '')
+          + (details.data.staff ? '_' + details.data.staff : '');
+      }
+    }
     return result;
   } finally {
     // 一時シートを削除
