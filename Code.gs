@@ -1234,7 +1234,7 @@ function getEstimateData(id) {
   }
 
   // 二重発注防止: この見積から既に発注書を作成したメーカーを抽出
-  // 発注一覧の特記事項(O列, idx=14)に "見積No.XXX / メーカー: YYY" が入っているのでパース
+  // 発注一覧の特記事項(O列, idx=14)と明細JSON(N列, idx=13)の両方をチェック
   // ステータスが「取消」「却下」のものは無効として除外（再発注可能）
   var estimateNo = data[rowIdx][1];
   var orderedMakers = [];
@@ -1245,8 +1245,29 @@ function getEstimateData(id) {
       var oRow = orderData[oi];
       var oStatus = String(oRow[10] || '');
       if (oStatus === '取消' || oStatus === '却下') continue;
+
       var oNotes = String(oRow[14] || '');
-      if (oNotes.indexOf('見積No.' + estimateNo) === -1) continue;
+      var oLinesJson = String(oRow[13] || '');
+
+      // 見積No.が notes・linesJson のどちらかに含まれているか判定
+      var keyword = '見積No.' + estimateNo;
+      var matchesEstimate = (oNotes.indexOf(keyword) !== -1) ||
+                            (oLinesJson.indexOf(keyword) !== -1);
+      if (!matchesEstimate) continue;
+
+      // メーカー抽出: 明細JSONを優先（複数行ある場合に全メーカー取得可能）
+      if (oLinesJson) {
+        try {
+          var oLines = JSON.parse(oLinesJson);
+          if (Array.isArray(oLines)) {
+            for (var li = 0; li < oLines.length; li++) {
+              var lnMk = oLines[li] && oLines[li].maker;
+              if (lnMk && orderedMakers.indexOf(lnMk) === -1) orderedMakers.push(String(lnMk));
+            }
+          }
+        } catch (e) { Logger.log('orderedMakers JSON parse error: ' + e.toString()); }
+      }
+      // 補助: notes の "メーカー: XXX" もパース
       var makerMatch = oNotes.match(/メーカー[:：]\s*([^\s\/]+)/);
       if (makerMatch && makerMatch[1]) {
         var mk = makerMatch[1].trim();
