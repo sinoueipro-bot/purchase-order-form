@@ -1298,11 +1298,9 @@ function addEstLine() {
     '<div class="help-tooltip">仕入値を入れてください。例: 10000</div></div>' +
     '<div><div class="field-label"><span class="required-badge">必須</span>粗利率%<span class="help-icon" onclick="toggleHelp(this)">?</span></div>' +
     '<input type="number" id="est-margin-' + num + '" min="0" max="99" step="1" value="30" oninput="calcEstLine(' + num + ')">' +
-    '<div class="help-tooltip">30 と入れると30%の利益が乗ります。仕入10,000円なら売値は約14,290円です</div></div>' +
-    '<div><div class="field-label">丸め<span class="help-icon" onclick="toggleHelp(this)">?</span></div>' +
-    '<select id="est-round-' + num + '" onchange="calcEstLine(' + num + ')">' +
-    ROUNDING_OPTIONS.map(r => '<option value="' + r.value + '">' + r.label + '</option>').join('') + '</select>' +
-    '<div class="help-tooltip">売値のキリを決めます。0=十の位切上(¥14,290)、8=末尾8(¥14,288)</div></div></div>' +
+    '<div class="help-tooltip">粗利率(売値ベース)。仕入10,000円・粗利30%なら売値は14,285円(=10000÷0.7)です</div></div>' +
+    '<input type="hidden" id="est-round-' + num + '" value="0">' +
+    '</div>' +
     '<div class="row" style="margin-top:4px"><div><label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">' +
     '<input type="checkbox" id="est-zerocost-' + num + '" onchange="calcEstLine(' + num + ')" style="width:auto"> 原価0対象</label></div></div>' +
     '<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;border-top:1px solid #eee;margin-top:8px">' +
@@ -1321,22 +1319,16 @@ function removeEstLine(num) {
 }
 
 // ============ 売値計算（粗利率方式: 売値 = 原価 ÷ (1 - 粗利率)）============
-// 例: 原価10,000 + 粗利率20% = 10,000 / 0.8 = 12,500
+// 丸めなし。小数点以下を単純切り捨て（Math.floor）
+// 例: 原価10,000 + 粗利率30% = 10,000 / 0.7 = 14,285.71 → 14,285円
 // 粗利率 = (売値 - 原価) / 売値 (業界標準)
+// roundingStr 引数は互換性のため残す（無視）
 function calcSellingPriceJS(cost, marginPct, roundingStr) {
   if (!cost) return 0;
   let m = (marginPct || 0) / 100;
   if (m >= 1) m = 0.99;   // 0除算防止
   if (m < 0) m = 0;
-  const raw = cost / (1 - m);
-  const rStr = String(roundingStr || '0');
-  const digits = rStr.length;
-  const factor = Math.pow(10, digits);
-  if (rStr.charAt(0) === '8') {
-    return Math.floor(raw / factor) * factor + parseInt(rStr);
-  } else {
-    return Math.ceil(raw / factor) * factor;
-  }
+  return Math.floor(cost / (1 - m));
 }
 
 // 品名select切替: 「その他」選択時のみ自由入力欄を表示

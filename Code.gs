@@ -759,25 +759,16 @@ function cleanupSheets() {
 }
 
 // ============ 売値計算（粗利率方式: 原価 ÷ (1 - 粗利率)）============
-// 例: 原価10,000 + 粗利率20% = 10,000 / 0.8 = 12,500 (売値に対する粗利率)
-// 粗利率 = (売値 - 原価) / 売値 になる業界標準の計算方式
+// 丸めなし。小数点以下を単純切り捨て（Math.floor）
+// 例: 原価10,000 + 粗利率30% = 10,000 / 0.7 = 14,285.71... → 14,285円
+// 粗利率 = (売値 - 原価) / 売値 (業界標準)
+// roundingStr 引数は互換性のため残す（無視）
 function calcSellingPrice(cost, marginRate, roundingStr) {
   if (!cost) return 0;
-  var m = marginRate || 0; // 小数 (0.2 = 20%)
+  var m = marginRate || 0; // 小数 (0.3 = 30%)
   if (m >= 1) m = 0.99;    // 0除算防止 (粗利100%以上は不可)
   if (m < 0) m = 0;
-  var raw = cost / (1 - m);
-  var rStr = String(roundingStr || '0');
-  var digits = rStr.length;
-  var factor = Math.pow(10, digits);
-
-  if (rStr.charAt(0) === '8') {
-    // ROUNDDOWN + 丸め値を加算 (例: 12500 → 12500)
-    return Math.floor(raw / factor) * factor + parseInt(rStr);
-  } else {
-    // ROUNDUP (例: 12510 → 12520)
-    return Math.ceil(raw / factor) * factor;
-  }
+  return Math.floor(cost / (1 - m));
 }
 
 // ============ 見積書処理 ============
