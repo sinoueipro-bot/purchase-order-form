@@ -863,42 +863,41 @@ function createEstimateFromTemplate(ss, template, tabName, data) {
   try { sh.getRange('H1').setValue(new Date(parseInt(d[0]), parseInt(d[1])-1, parseInt(d[2]))); } catch(e) {}
   if (data.seq) { try { sh.getRange('K2').setValue(data.seq); } catch(e) {} }
   try { sh.getRange('A4').setValue(data.customerName || ''); } catch(e) {}
-  try { sh.getRange('I5').setValue(data.branch || '本社'); } catch(e) {}
+  try { sh.getRange('J5').setValue(data.branch || '本社'); } catch(e) {}                    // J5: 事業所名（テンプレ確認済み）
   try { sh.getRange('I10').setValue(data.staff || ''); } catch(e) {}
   if (data.subject) { try { sh.getRange('C9').setValue(data.subject); } catch(e) {} }
 
-  // 事業所に応じた住所を書き込み（▽本社 / ▽福岡 を含む）
-  // テンプレートの F6:I7 結合セルに書き込み（事業所固定値の上書き）
+  // 事業所に応じた住所を G7 セルに書き込み（テンプレ確認済みのセル位置）
+  // テンプレ固定値「▽本社\n〒820-0073\n福岡県飯塚市平恒477-7\nTEL...」を上書き
   var bi = getBranchInfo(data.branch || '本社');
   var branchLabel = (data.branch === '福岡店') ? '▽福岡' :
                      (data.branch === '飯塚ガスセンター') ? '▽飯塚ガスセンター' : '▽本社';
   var addressBlock = branchLabel + '\n' + bi.zip + '\n' + bi.addr + '\n' + bi.tel + ' ' + bi.fax;
-  try { sh.getRange('F6').setValue(addressBlock); } catch(e) {}
+  try { sh.getRange('G7').setValue(addressBlock); } catch(e) {}
 
   // 明細行（15-32行）- 新テンプレ構造に合わせる
-  // 列構成: A=No. B=品名 C=型式・仕様 D=数量 E=単位 F=単価 G=金額 H=備考
-  // 備考(H列)にはメーカー名は記載しない（顧客向け見積書なので非表示）
-  // メーカー情報は明細JSONに保持され、発注書作成時に使われる
+  // 列構成: A=No. B=メーカー C=品名 D=型式・仕様 E=数量 F=単位 G=単価 H=金額 I=備考
+  // 備考(I列)にはメーカー名は記載しない（B列のメーカー欄を使うため）
   var lines = data.lines || [];
   for (var idx2 = 0; idx2 < 18; idx2++) {
     var r = 15 + idx2;
     var ln = lines[idx2];
     if (ln && ln.cost) {
       try { sh.getRange(r, 1).setValue(idx2 + 1); } catch(e) {}                                          // A: No.
-      try { sh.getRange(r, 2).setValue(ln.product || ''); } catch(e) {}                                   // B: 品名
-      try { sh.getRange(r, 3).setValue(ln.model || ''); } catch(e) {}                                     // C: 型式・仕様
-      try { sh.getRange(r, 4).setValue(ln.qty || 0); } catch(e) {}                                        // D: 数量
-      try { sh.getRange(r, 5).setValue(ln.unit || '台'); } catch(e) {}                                    // E: 単位
-      try { sh.getRange(r, 6).setValue(ln.sellingPrice || 0).setNumberFormat('#,##0'); } catch(e) {}      // F: 単価(売値)
-      try { sh.getRange(r, 7).setValue(ln.amount || 0).setNumberFormat('#,##0'); } catch(e) {}            // G: 金額
-      // H列(備考)はメーカー名を書き込まない（テンプレに残っていれば空で上書き）
-      try { sh.getRange(r, 8).setValue(''); } catch(e) {}
+      try { sh.getRange(r, 2).setValue(ln.maker || ''); } catch(e) {}                                    // B: メーカー
+      try { sh.getRange(r, 3).setValue(ln.product || ''); } catch(e) {}                                  // C: 品名
+      try { sh.getRange(r, 4).setValue(ln.model || ''); } catch(e) {}                                    // D: 型式・仕様
+      try { sh.getRange(r, 5).setValue(ln.qty || 0); } catch(e) {}                                       // E: 数量
+      try { sh.getRange(r, 6).setValue(ln.unit || '台'); } catch(e) {}                                   // F: 単位
+      try { sh.getRange(r, 7).setValue(ln.sellingPrice || 0).setNumberFormat('#,##0'); } catch(e) {}     // G: 単価(売値)
+      try { sh.getRange(r, 8).setValue(ln.amount || 0).setNumberFormat('#,##0'); } catch(e) {}           // H: 金額
+      try { sh.getRange(r, 9).setValue(''); } catch(e) {}                                                // I: 備考（空）
     }
   }
-  // 合計行 (33-35)
-  try { sh.getRange('G33').setValue(data.subtotal || 0).setNumberFormat('#,##0'); } catch(e) {}          // 小計
-  try { sh.getRange('G34').setValue(data.tax || 0).setNumberFormat('#,##0'); } catch(e) {}               // 消費税
-  try { sh.getRange('G35').setValue(data.grandTotal || 0).setNumberFormat('#,##0'); } catch(e) {}        // 合計
+  // 合計行 (33-35) H列に変更（金額列が H に移動したため）
+  try { sh.getRange('H33').setValue(data.subtotal || 0).setNumberFormat('#,##0'); } catch(e) {}          // 小計
+  try { sh.getRange('H34').setValue(data.tax || 0).setNumberFormat('#,##0'); } catch(e) {}               // 消費税
+  try { sh.getRange('H35').setValue(data.grandTotal || 0).setNumberFormat('#,##0'); } catch(e) {}        // 合計
   // 御見積金額欄 C7
   try { sh.getRange('C7').setValue(data.grandTotal || 0).setNumberFormat('#,##0"円"'); } catch(e) {}
 
@@ -1741,21 +1740,20 @@ function getPdfById(id, type) {
 function _fillEstimateTemplate(sh, data) {
   var d = (data.estimateDate || '').split('-');
   try { if (d.length === 3) sh.getRange('H1').setValue(new Date(parseInt(d[0]), parseInt(d[1])-1, parseInt(d[2]))); } catch(e) {}
-  try { sh.getRange('H2').setValue(data.estimateNo || ''); } catch(e) {}
+  try { sh.getRange('I2').setValue(data.estimateNo || ''); } catch(e) {}
   try { sh.getRange('A4').setValue(data.customerName || ''); } catch(e) {}
-  try { sh.getRange('I5').setValue(data.branch || '本社'); } catch(e) {}
+  try { sh.getRange('J5').setValue(data.branch || '本社'); } catch(e) {}                    // J5: 事業所名
   try { sh.getRange('I10').setValue(data.staff || ''); } catch(e) {}
   if (data.subject) try { sh.getRange('C9').setValue(data.subject); } catch(e) {}
 
-  // 事業所に応じた住所を書き込み（▽本社 / ▽福岡 を含む）
+  // 事業所に応じた住所を G7 セルに書き込み（テンプレ確認済み）
   var bi = getBranchInfo(data.branch || '本社');
   var branchLabel = (data.branch === '福岡店') ? '▽福岡' :
                      (data.branch === '飯塚ガスセンター') ? '▽飯塚ガスセンター' : '▽本社';
   var addressBlock = branchLabel + '\n' + bi.zip + '\n' + bi.addr + '\n' + bi.tel + ' ' + bi.fax;
-  try { sh.getRange('F6').setValue(addressBlock); } catch(e) {}
+  try { sh.getRange('G7').setValue(addressBlock); } catch(e) {}
 
-  // 明細（B=品名 C=型式 D=数量 E=単位 F=単価 G=金額 H=備考）
-  // 備考(H列)にはメーカー名を記載しない（顧客向けPDFなので非表示）
+  // 明細（A=No. B=メーカー C=品名 D=型式 E=数量 F=単位 G=単価 H=金額 I=備考）
   var lines = data.lines || [];
   var subtotal = 0;
   for (var idx = 0; idx < 18; idx++) {
@@ -1763,21 +1761,22 @@ function _fillEstimateTemplate(sh, data) {
     var ln = lines[idx];
     if (ln) {
       try { sh.getRange(r, 1).setValue(idx + 1); } catch(e) {}
-      try { sh.getRange(r, 2).setValue(ln.product || ''); } catch(e) {}
-      try { sh.getRange(r, 3).setValue(ln.model || ''); } catch(e) {}
-      try { sh.getRange(r, 4).setValue(ln.qty || 0); } catch(e) {}
-      try { sh.getRange(r, 5).setValue(ln.unit || '台'); } catch(e) {}
-      try { sh.getRange(r, 6).setValue(ln.sellingPrice || 0).setNumberFormat('#,##0'); } catch(e) {}
-      try { sh.getRange(r, 7).setValue(ln.amount || 0).setNumberFormat('#,##0'); } catch(e) {}
-      try { sh.getRange(r, 8).setValue(''); } catch(e) {}  // 備考はメーカー名書かず空
+      try { sh.getRange(r, 2).setValue(ln.maker || ''); } catch(e) {}                                    // B: メーカー
+      try { sh.getRange(r, 3).setValue(ln.product || ''); } catch(e) {}                                  // C: 品名
+      try { sh.getRange(r, 4).setValue(ln.model || ''); } catch(e) {}                                    // D: 型式
+      try { sh.getRange(r, 5).setValue(ln.qty || 0); } catch(e) {}                                       // E: 数量
+      try { sh.getRange(r, 6).setValue(ln.unit || '台'); } catch(e) {}                                   // F: 単位
+      try { sh.getRange(r, 7).setValue(ln.sellingPrice || 0).setNumberFormat('#,##0'); } catch(e) {}     // G: 単価
+      try { sh.getRange(r, 8).setValue(ln.amount || 0).setNumberFormat('#,##0'); } catch(e) {}           // H: 金額
+      try { sh.getRange(r, 9).setValue(''); } catch(e) {}                                                // I: 備考（空）
       subtotal += (ln.amount || 0);
     }
   }
   var tax = Math.floor(subtotal * 0.1);
   var grandTotal = subtotal + tax;
-  try { sh.getRange('G33').setValue(subtotal).setNumberFormat('#,##0'); } catch(e) {}
-  try { sh.getRange('G34').setValue(tax).setNumberFormat('#,##0'); } catch(e) {}
-  try { sh.getRange('G35').setValue(grandTotal).setNumberFormat('#,##0'); } catch(e) {}
+  try { sh.getRange('H33').setValue(subtotal).setNumberFormat('#,##0'); } catch(e) {}
+  try { sh.getRange('H34').setValue(tax).setNumberFormat('#,##0'); } catch(e) {}
+  try { sh.getRange('H35').setValue(grandTotal).setNumberFormat('#,##0'); } catch(e) {}
   try { sh.getRange('C7').setValue(grandTotal).setNumberFormat('#,##0"円"'); } catch(e) {}
   if (data.notes) try { sh.getRange('B36').setValue(data.notes); } catch(e) {}
 }
