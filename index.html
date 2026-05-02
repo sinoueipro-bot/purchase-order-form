@@ -1320,11 +1320,15 @@ function removeEstLine(num) {
   if (el) { el.remove(); calcEstTotal(); validateEst(); }
 }
 
-// ============ 売値計算（上乗せ方式: 売値 = 原価 × (1 + 粗利率)）============
+// ============ 売値計算（粗利率方式: 売値 = 原価 ÷ (1 - 粗利率)）============
+// 例: 原価10,000 + 粗利率20% = 10,000 / 0.8 = 12,500
+// 粗利率 = (売値 - 原価) / 売値 (業界標準)
 function calcSellingPriceJS(cost, marginPct, roundingStr) {
   if (!cost) return 0;
-  const marginDec = (marginPct || 0) / 100;
-  const raw = cost * (1 + marginDec);  // 原価 × (1 + 上乗せ率)
+  let m = (marginPct || 0) / 100;
+  if (m >= 1) m = 0.99;   // 0除算防止
+  if (m < 0) m = 0;
+  const raw = cost / (1 - m);
   const rStr = String(roundingStr || '0');
   const digits = rStr.length;
   const factor = Math.pow(10, digits);

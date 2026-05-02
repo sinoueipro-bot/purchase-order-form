@@ -360,10 +360,10 @@ function createFromTemplate(ss, tabName, data) {
 function getBranchInfo(b) {
   var m = {
     '本社':{zip:'〒820-0081',addr:'福岡県飯塚市枝国507番地',tel:'TEL：(0948)22-1234',fax:'FAX：(0948)22-5777'},
-    '福岡店':{zip:'〒814-0174',addr:'福岡県福岡市早良区田隈1-29-21',tel:'TEL：(092)861-2071',fax:'FAX：(092)861-4175'},
+    '福岡店':{zip:'〒814-0174',addr:'福岡市早良区田隈1-29-21 アイプロビル1F',tel:'TEL：(092)861-2071',fax:'FAX：(092)861-4175'},
     '飯塚ガスセンター':{zip:'〒820-0073',addr:'福岡県飯塚市平恒477-7',tel:'TEL：(0948)22-3611',fax:'FAX：(0948)22-9302'}
   };
-  return m[b]||m['福岡店'];
+  return m[b]||m['本社'];
 }
 
 // ============ 一覧シート ============
@@ -758,20 +758,24 @@ function cleanupSheets() {
   Logger.log('残り: ' + order.join(', '));
 }
 
-// ============ 売値計算（上乗せ方式: 原価 × (1 + 粗利率)）============
-// 例: 原価10,000 + 粗利率20% = 12,000 (原価への上乗せ率)
+// ============ 売値計算（粗利率方式: 原価 ÷ (1 - 粗利率)）============
+// 例: 原価10,000 + 粗利率20% = 10,000 / 0.8 = 12,500 (売値に対する粗利率)
+// 粗利率 = (売値 - 原価) / 売値 になる業界標準の計算方式
 function calcSellingPrice(cost, marginRate, roundingStr) {
   if (!cost) return 0;
-  var raw = cost * (1 + (marginRate || 0));  // marginRate は小数 (0.2 = 20%)
+  var m = marginRate || 0; // 小数 (0.2 = 20%)
+  if (m >= 1) m = 0.99;    // 0除算防止 (粗利100%以上は不可)
+  if (m < 0) m = 0;
+  var raw = cost / (1 - m);
   var rStr = String(roundingStr || '0');
   var digits = rStr.length;
   var factor = Math.pow(10, digits);
 
   if (rStr.charAt(0) === '8') {
-    // ROUNDDOWN + 丸め値を加算 (例: 12000 → 12000 + 0 = 12000)
+    // ROUNDDOWN + 丸め値を加算 (例: 12500 → 12500)
     return Math.floor(raw / factor) * factor + parseInt(rStr);
   } else {
-    // ROUNDUP (例: 12030 → 12040)
+    // ROUNDUP (例: 12510 → 12520)
     return Math.ceil(raw / factor) * factor;
   }
 }
@@ -872,8 +876,18 @@ function createEstimateFromTemplate(ss, template, tabName, data) {
   try { sh.getRange('I10').setValue(data.staff || ''); } catch(e) {}
   if (data.subject) { try { sh.getRange('C9').setValue(data.subject); } catch(e) {} }
 
+  // 事業所に応じた住所を書き込み（▽本社 / ▽福岡 を含む）
+  // テンプレートの F6:I7 結合セルに書き込み（事業所固定値の上書き）
+  var bi = getBranchInfo(data.branch || '本社');
+  var branchLabel = (data.branch === '福岡店') ? '▽福岡' :
+                     (data.branch === '飯塚ガスセンター') ? '▽飯塚ガスセンター' : '▽本社';
+  var addressBlock = branchLabel + '\n' + bi.zip + '\n' + bi.addr + '\n' + bi.tel + ' ' + bi.fax;
+  try { sh.getRange('F6').setValue(addressBlock); } catch(e) {}
+
   // 明細行（15-32行）- 新テンプレ構造に合わせる
   // 列構成: A=No. B=品名 C=型式・仕様 D=数量 E=単位 F=単価 G=金額 H=備考
+  // 備考(H列)にはメーカー名は記載しない（顧客向け見積書なので非表示）
+  // メーカー情報は明細JSONに保持され、発注書作成時に使われる
   var lines = data.lines || [];
   for (var idx2 = 0; idx2 < 18; idx2++) {
     var r = 15 + idx2;
@@ -886,8 +900,8 @@ function createEstimateFromTemplate(ss, template, tabName, data) {
       try { sh.getRange(r, 5).setValue(ln.unit || '台'); } catch(e) {}                                    // E: 単位
       try { sh.getRange(r, 6).setValue(ln.sellingPrice || 0).setNumberFormat('#,##0'); } catch(e) {}      // F: 単価(売値)
       try { sh.getRange(r, 7).setValue(ln.amount || 0).setNumberFormat('#,##0'); } catch(e) {}            // G: 金額
-      // H列は備考 (メーカー名を記載してPO作成時の参考に)
-      try { sh.getRange(r, 8).setValue(ln.maker || ''); } catch(e) {}                                     // H: 備考（メーカー）
+      // H列(備考)はメーカー名を書き込まない（テンプレに残っていれば空で上書き）
+      try { sh.getRange(r, 8).setValue(''); } catch(e) {}
     }
   }
   // 合計行 (33-35)
@@ -1742,7 +1756,15 @@ function _fillEstimateTemplate(sh, data) {
   try { sh.getRange('I10').setValue(data.staff || ''); } catch(e) {}
   if (data.subject) try { sh.getRange('C9').setValue(data.subject); } catch(e) {}
 
+  // 事業所に応じた住所を書き込み（▽本社 / ▽福岡 を含む）
+  var bi = getBranchInfo(data.branch || '本社');
+  var branchLabel = (data.branch === '福岡店') ? '▽福岡' :
+                     (data.branch === '飯塚ガスセンター') ? '▽飯塚ガスセンター' : '▽本社';
+  var addressBlock = branchLabel + '\n' + bi.zip + '\n' + bi.addr + '\n' + bi.tel + ' ' + bi.fax;
+  try { sh.getRange('F6').setValue(addressBlock); } catch(e) {}
+
   // 明細（B=品名 C=型式 D=数量 E=単位 F=単価 G=金額 H=備考）
+  // 備考(H列)にはメーカー名を記載しない（顧客向けPDFなので非表示）
   var lines = data.lines || [];
   var subtotal = 0;
   for (var idx = 0; idx < 18; idx++) {
@@ -1756,7 +1778,7 @@ function _fillEstimateTemplate(sh, data) {
       try { sh.getRange(r, 5).setValue(ln.unit || '台'); } catch(e) {}
       try { sh.getRange(r, 6).setValue(ln.sellingPrice || 0).setNumberFormat('#,##0'); } catch(e) {}
       try { sh.getRange(r, 7).setValue(ln.amount || 0).setNumberFormat('#,##0'); } catch(e) {}
-      try { sh.getRange(r, 8).setValue(ln.maker || ''); } catch(e) {}
+      try { sh.getRange(r, 8).setValue(''); } catch(e) {}  // 備考はメーカー名書かず空
       subtotal += (ln.amount || 0);
     }
   }
