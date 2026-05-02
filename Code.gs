@@ -859,11 +859,12 @@ function createEstimateFromTemplate(ss, template, tabName, data) {
   } catch(e) {}
 
   // ヘッダー部の埋め込み
+  // テンプレ構造: H1=「発行日」(ラベル) I1=日付値、H2=「見積No.」(ラベル) I2=No.値、J5=事業所
   var d = data.estimateDate.split('-');
-  try { sh.getRange('H1').setValue(new Date(parseInt(d[0]), parseInt(d[1])-1, parseInt(d[2]))); } catch(e) {}
-  if (data.seq) { try { sh.getRange('K2').setValue(data.seq); } catch(e) {} }
+  try { sh.getRange('I1').setValue(new Date(parseInt(d[0]), parseInt(d[1])-1, parseInt(d[2]))); } catch(e) {}    // I1: 発行日値
+  try { sh.getRange('I2').setValue(data.estimateNo || ''); } catch(e) {}                                          // I2: 見積No.
   try { sh.getRange('A4').setValue(data.customerName || ''); } catch(e) {}
-  try { sh.getRange('J5').setValue(data.branch || '本社'); } catch(e) {}                    // J5: 事業所名（テンプレ確認済み）
+  try { sh.getRange('J5').setValue(data.branch || '本社'); } catch(e) {}                    // J5: 事業所名
   try { sh.getRange('I10').setValue(data.staff || ''); } catch(e) {}
   if (data.subject) { try { sh.getRange('C9').setValue(data.subject); } catch(e) {} }
 
@@ -1739,7 +1740,7 @@ function getPdfById(id, type) {
 // 見積テンプレートにデータを埋め込む
 function _fillEstimateTemplate(sh, data) {
   var d = (data.estimateDate || '').split('-');
-  try { if (d.length === 3) sh.getRange('H1').setValue(new Date(parseInt(d[0]), parseInt(d[1])-1, parseInt(d[2]))); } catch(e) {}
+  try { if (d.length === 3) sh.getRange('I1').setValue(new Date(parseInt(d[0]), parseInt(d[1])-1, parseInt(d[2]))); } catch(e) {}  // I1: 発行日値
   try { sh.getRange('I2').setValue(data.estimateNo || ''); } catch(e) {}
   try { sh.getRange('A4').setValue(data.customerName || ''); } catch(e) {}
   try { sh.getRange('J5').setValue(data.branch || '本社'); } catch(e) {}                    // J5: 事業所名
