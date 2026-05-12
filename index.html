@@ -272,23 +272,18 @@ textarea { resize: vertical; min-height: 60px; }
       <span class="big-desc">今まで作成したものを確認します</span>
     </button>
 
-    <!-- 非表示シートを復活 -->
+    <a href="https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit#gid=0" target="_blank" class="home-big-btn secondary" style="text-decoration:none">
+      <span class="big-icon">📊</span>
+      <span class="big-title">スプレッドシートを開く</span>
+      <span class="big-desc">発注一覧で承認状況を直接確認します</span>
+    </a>
+
+    <!-- 非表示シートを復活（小サイズで残す） -->
     <div style="background:white;border:1.5px dashed var(--border);border-radius:12px;padding:14px 16px;margin-top:16px">
       <button type="button" onclick="showAllHidden()" style="width:100%;padding:12px;background:white;color:var(--text-secondary);border:1.5px solid var(--border);border-radius:8px;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">
         👀 非表示にしたシートを全て表示
         <div style="font-size:11px;font-weight:400;color:var(--text-secondary);margin-top:2px">発注完了で隠したものを元に戻す</div>
       </button>
-    </div>
-
-    <!-- スプレッドシートリンク -->
-    <div style="background:white;border:1.5px dashed var(--border);border-radius:12px;padding:14px 16px;margin-top:16px">
-      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;font-weight:600">📊 スプレッドシートを開く</div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <a href="https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit#gid=0" target="_blank"
-           style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fef7e0;border-radius:8px;text-decoration:none;color:#b06000;font-weight:600;font-size:13px">
-          📦 発注一覧（承認状況の確認）
-        </a>
-      </div>
     </div>
   </div>
 </div>
