@@ -137,6 +137,10 @@ function doGet(e) {
   if (action === 'getOrderDetails') return jsonResponse(getOrderDetails(id));
   // 画面UI経由の承認API（パスワード必須）
   if (action === 'approveByUI') return jsonResponse(approveOrderByUI(id, e.parameter.password));
+  // 一時: 発注書シート構造調査
+  if (action === 'debugOrderSheet') return jsonResponse(_debugOrderSheet(id));
+  // 一時: 直近発注の明細JSON確認
+  if (action === 'debugLastOrder') return jsonResponse(_debugLastOrder());
   // 見積関連API (listEstimates / getEstimateData / markTransferred / getEstimateDetails)
   // と一時API hideEstimateAll は 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md
 
@@ -314,27 +318,34 @@ function createFromTemplate(ss, tabName, data) {
   sh.getRange('AB15').setValue(bi.tel + ' ' + bi.fax);
 
   var lines = data.lines || [];
+  Logger.log('createFromTemplate: lines.length=' + lines.length);
   for (var idx = 0; idx < 16; idx++) {
     var r = 18 + idx;
     var ln = lines[idx];
     if (ln && ln.maker) {
-      sh.getRange('A'+r).setValue(idx+1);
-      sh.getRange('C'+r).setValue(ln.maker);
-      sh.getRange('H'+r).setValue(ln.product);
-      sh.getRange('P'+r).setValue(ln.model||'');
-      sh.getRange('Z'+r).setValue(ln.qty);
-      sh.getRange('AB'+r).setValue(ln.price);
-      sh.getRange('AG'+r).setValue(ln.qty*ln.price);
-      sh.getRange('AL'+r).setValue(ln.remark||'');
+      Logger.log('明細 idx=' + idx + ' r=' + r + ' maker=' + ln.maker);
+      try { sh.getRange('A'+r).setValue(idx+1); } catch(e) { Logger.log('A'+r+' err: '+e); }
+      try { sh.getRange('C'+r).setValue(ln.maker); } catch(e) { Logger.log('C'+r+' err: '+e); }
+      try { sh.getRange('H'+r).setValue(ln.product); } catch(e) { Logger.log('H'+r+' err: '+e); }
+      try { sh.getRange('P'+r).setValue(ln.model||''); } catch(e) { Logger.log('P'+r+' err: '+e); }
+      try { sh.getRange('Z'+r).setValue(ln.qty); } catch(e) { Logger.log('Z'+r+' err: '+e); }
+      try { sh.getRange('AB'+r).setValue(ln.price); } catch(e) { Logger.log('AB'+r+' err: '+e); }
+      try { sh.getRange('AG'+r).setValue(ln.qty*ln.price); } catch(e) { Logger.log('AG'+r+' err: '+e); }
+      try { sh.getRange('AL'+r).setValue(ln.remark||''); } catch(e) { Logger.log('AL'+r+' err: '+e); }
     } else {
-      ['A','C','H','P','Z','AB','AG','AL'].forEach(function(c){sh.getRange(c+r).setValue('');});
+      ['A','C','H','P','Z','AB','AG','AL'].forEach(function(c){
+        try { sh.getRange(c+r).setValue(''); } catch(e) {}
+      });
     }
   }
-  sh.getRange('AG49').setValue(data.total);
+  try { sh.getRange('AG49').setValue(data.total); } catch(e) {}
 
-  sh.getRange('F51').setValue(data.branch==='本社'?'○':'');
-  sh.getRange('L51').setValue(data.branch==='福岡店'?'○':'');
-  sh.getRange('P51').setValue(data.branch!=='本社'&&data.branch!=='福岡店'?'○':'');
+  // 51行は「納入先」行。○ではなくユーザー入力の納品先文字列を書き込む（旧コードのバグ修正 2026-05-12）
+  // F51 に納入先の値、L51/P51 は空でクリア
+  try { sh.getRange('F51').setValue(data.deliveryPlace || ''); } catch(e) {}
+  try { sh.getRange('L51').setValue(''); } catch(e) {}
+  try { sh.getRange('P51').setValue(''); } catch(e) {}
+  // 53行は「請求先」行。本社/福岡店の○マーク
   sh.getRange('F53').setValue(data.branch==='本社'?'○':'');
   sh.getRange('L53').setValue(data.branch==='福岡店'||data.branch==='飯塚ガスセンター'?'○':'');
 
@@ -351,8 +362,7 @@ function createFromTemplate(ss, tabName, data) {
     try { sh.getRange('R53').setValue(''); } catch(e) {}
     try { sh.getRange('V53').setValue(''); } catch(e) {}
   }
-  // 納品先（A51=ラベル、隣の結合セル C51 に書き込み）
-  try { sh.getRange('C51').setValue(data.deliveryPlace || ''); } catch(e) {}
+  // 納品先は上の F51 で書き込み済み（C51 は既存テンプレでは未使用）
   // 現場名
   sh.getRange('D55').setValue(data.siteName||'');
   // 特記事項(C58) は 2026-05-12 削除。発注全体の備考は廃止し商品毎の備考に置き換えたため空にする
@@ -1816,9 +1826,11 @@ function _fillOrderTemplate(sh, data) {
     }
   }
   try { sh.getRange('AG49').setValue(data.total || 0); } catch(e) {}
-  try { sh.getRange('F51').setValue(data.branch==='本社'?'○':''); } catch(e) {}
-  try { sh.getRange('L51').setValue(data.branch==='福岡店'?'○':''); } catch(e) {}
-  try { sh.getRange('P51').setValue(data.branch!=='本社'&&data.branch!=='福岡店'?'○':''); } catch(e) {}
+  // 51行は「納入先」行。F51 にユーザー入力の納品先を書く（L51/P51 は空でクリア）
+  try { sh.getRange('F51').setValue(data.deliveryPlace || ''); } catch(e) {}
+  try { sh.getRange('L51').setValue(''); } catch(e) {}
+  try { sh.getRange('P51').setValue(''); } catch(e) {}
+  // 53行は「請求先」行。本社/福岡店の○マーク
   try { sh.getRange('F53').setValue(data.branch==='本社'?'○':''); } catch(e) {}
   try { sh.getRange('L53').setValue(data.branch==='福岡店'||data.branch==='飯塚ガスセンター'?'○':''); } catch(e) {}
   var today = new Date();
@@ -1833,8 +1845,7 @@ function _fillOrderTemplate(sh, data) {
     try { sh.getRange('R53').setValue(''); } catch(e) {}
     try { sh.getRange('V53').setValue(''); } catch(e) {}
   }
-  // 納品先 (A51の隣 C51)
-  try { sh.getRange('C51').setValue(data.deliveryPlace || ''); } catch(e) {}
+  // 納品先は上の F51 で書き込み済み
   try { sh.getRange('D55').setValue(data.siteName||''); } catch(e) {}
   // 特記事項は廃止（商品毎の備考に置き換え）
   try { sh.getRange('C58').setValue(''); } catch(e) {}
@@ -1844,6 +1855,64 @@ function _fillOrderTemplate(sh, data) {
 
 // _hideEstimateAll は 2026-05-12 の見積シート非表示化作業で使用し、削除済み。
 // 復元時に再度シートを非表示にしたい場合は docs/RESTORE_ESTIMATE.md の手順参照
+
+// ============ 一時: 既存の発注書シート構造調査 ============
+function _debugOrderSheet(id) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // id が無ければ最後に作成した発注書シートを取得
+  var sheets = ss.getSheets();
+  var target = null;
+  for (var i = sheets.length - 1; i >= 0; i--) {
+    var n = sheets[i].getName();
+    if (n.indexOf('20260514_') === 0 || (/^\d{8}_/.test(n) && n.indexOf('20260514') !== -1)) {
+      target = sheets[i]; break;
+    }
+  }
+  if (!target) {
+    for (var j = sheets.length - 1; j >= 0; j--) {
+      if (/^\d{8}_/.test(sheets[j].getName()) && !sheets[j].isSheetHidden()) {
+        target = sheets[j]; break;
+      }
+    }
+  }
+  if (!target) return { success: false, error: '発注書シートが見つかりません' };
+
+  // 18-22行（明細）と 51行（納入先）周辺を取得
+  var range1 = target.getRange('A18:AT22').getValues();
+  var range2 = target.getRange('A51:AT52').getValues();
+  var cells = [];
+  function dump(range, startRow) {
+    for (var i = 0; i < range.length; i++) {
+      for (var j = 0; j < range[i].length; j++) {
+        var val = range[i][j];
+        if (val !== '' && val !== null) {
+          var col = (j < 26) ? String.fromCharCode(65 + j) : String.fromCharCode(64 + Math.floor(j/26)) + String.fromCharCode(65 + j%26);
+          cells.push(col + (i+startRow) + '=' + String(val).substring(0, 40));
+        }
+      }
+    }
+  }
+  dump(range1, 18);
+  dump(range2, 51);
+  return { success: true, name: target.getName(), cells: cells };
+}
+
+// ============ 一時: 直近発注の明細JSON確認 ============
+function _debugLastOrder() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(INDEX_SHEET);
+  if (!s) return { success: false, error: '発注一覧なし' };
+  var data = s.getDataRange().getValues();
+  if (data.length < 2) return { success: false, error: 'データなし' };
+  var last = data[data.length - 1];
+  return {
+    success: true,
+    orderNo: last[1],
+    supplier: last[3],
+    linesJsonLength: String(last[13] || '').length,
+    linesJson: String(last[13] || '').substring(0, 800)
+  };
+}
 
 // ============ メーカー→仕入先マッピング ============
 var MAKER_TO_SUPPLIER = {
