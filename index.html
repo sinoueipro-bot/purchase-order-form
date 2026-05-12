@@ -486,11 +486,7 @@ textarea { resize: vertical; min-height: 60px; }
              oninput="filterList()"
              style="width:100%;padding:12px 12px 12px 38px;font-size:15px;border:1.5px solid var(--border);border-radius:8px">
     </div>
-    <!-- 種類フィルタ -->
-    <div style="display:flex;gap:6px;margin-top:10px">
-      <button type="button" class="list-filter-btn active" data-filter="all" onclick="setListFilter('all')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--border);background:var(--primary);color:white;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">全て</button>
-      <button type="button" class="list-filter-btn" data-filter="order" onclick="setListFilter('order')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--border);background:white;color:var(--text);font-weight:600;font-size:13px;cursor:pointer;font-family:inherit">📦 発注</button>
-    </div>
+    <!-- 種類フィルタは発注専用化で削除（2026-05-12） -->
     <!-- 役割フィルタ（トグルボタン） -->
     <div style="display:flex;gap:8px;margin-top:10px">
       <button type="button" id="roleApproverBtn" onclick="setRoleFilter('approver')"
