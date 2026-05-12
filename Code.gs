@@ -448,8 +448,9 @@ function buildDetailTable(lines) {
 }
 
 // ============ 通常メール: 承認者へ（承認/却下リンク付き） ============
+// 画面で選んだ承認者(data.approverEmail)に直接送信。未指定時のみ固定値にフォールバック
 function sendApprovalEmail(data, os, uniqueId) {
-  var approver = data.urgent ? APPROVER_URGENT : APPROVER_PASS;
+  var approverEmail = data.approverEmail || (data.urgent ? APPROVER_URGENT.email : APPROVER_PASS.email);
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheetUrl = ss.getUrl() + '#gid=' + os.getSheetId();
   var gasUrl = ScriptApp.getService().getUrl();
@@ -471,12 +472,13 @@ function sendApprovalEmail(data, os, uniqueId) {
     '<div style="text-align:center;margin-top:12px"><a href="'+sheetUrl+'" style="color:#1a73e8;font-weight:bold">スプレッドシートで詳細確認</a></div>' +
     '</div></div>';
 
-  MailApp.sendEmail({ to: approver.email, subject: subj, body: '承認: '+approveUrl+'\n却下: '+rejectUrl, htmlBody: hb });
+  MailApp.sendEmail({ to: approverEmail, subject: subj, body: '承認: '+approveUrl+'\n却下: '+rejectUrl, htmlBody: hb });
 }
 
 // ============ ★ 緊急メール: 承認者+発注担当者に同時送信 ============
+// 画面で選んだ承認者(data.approverEmail)に直接送信
 function sendUrgentEmail(data, os, uniqueId) {
-  var approver = APPROVER_URGENT;
+  var approverEmail = data.approverEmail || APPROVER_URGENT.email;
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheetUrl = ss.getUrl() + '#gid=' + os.getSheetId();
 
@@ -500,8 +502,8 @@ function sendUrgentEmail(data, os, uniqueId) {
     '\n合計: ' + Number(data.total).toLocaleString() + '円\n\n緊急のため即発注扱い\nスプレッドシート: ' + ss.getUrl();
 
   // 承認者と発注担当者の宛先を統合（重複排除）
-  var toList = [approver.email];
-  if (PURCHASER.email !== approver.email) {
+  var toList = [approverEmail];
+  if (PURCHASER.email && PURCHASER.email !== approverEmail) {
     toList.push(PURCHASER.email);
   }
 
