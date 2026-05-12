@@ -137,10 +137,6 @@ function doGet(e) {
   if (action === 'getOrderDetails') return jsonResponse(getOrderDetails(id));
   // 画面UI経由の承認API（パスワード必須）
   if (action === 'approveByUI') return jsonResponse(approveOrderByUI(id, e.parameter.password));
-  // 一時: 発注書シート構造調査
-  if (action === 'debugOrderSheet') return jsonResponse(_debugOrderSheet(id));
-  // 一時: 直近発注の明細JSON確認
-  if (action === 'debugLastOrder') return jsonResponse(_debugLastOrder());
   // 見積関連API (listEstimates / getEstimateData / markTransferred / getEstimateDetails)
   // と一時API hideEstimateAll は 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md
 
@@ -313,9 +309,14 @@ function createFromTemplate(ss, tabName, data) {
   sh.getRange('AH3').setValue(data.orderNo);
   sh.getRange('A9').setValue(data.supplier);  // A9:H10結合セル
   sh.getRange('AL12').setValue(data.branch);
-  sh.getRange('AB13').setValue(bi.zip);
-  sh.getRange('AB14').setValue(bi.addr);
-  sh.getRange('AB15').setValue(bi.tel + ' ' + bi.fax);
+  // 住所/TEL は結合主セル Z12/Z13/Z14 に直接書く（debugで確認済み）
+  try { sh.getRange('Z12').setValue(bi.zip); } catch(e) {}
+  try { sh.getRange('Z13').setValue(bi.addr); } catch(e) {}
+  try { sh.getRange('Z14').setValue(bi.tel + ' ' + bi.fax); } catch(e) {}
+  // テンプレに残っている古い TEL/FAX (飯塚ガスセンター) を消す
+  try { sh.getRange('AB13').setValue(''); } catch(e) {}
+  try { sh.getRange('AB14').setValue(''); } catch(e) {}
+  try { sh.getRange('AB15').setValue(''); } catch(e) {}
 
   var lines = data.lines || [];
   Logger.log('createFromTemplate: lines.length=' + lines.length);
@@ -345,9 +346,11 @@ function createFromTemplate(ss, tabName, data) {
   try { sh.getRange('F51').setValue(data.deliveryPlace || ''); } catch(e) {}
   try { sh.getRange('L51').setValue(''); } catch(e) {}
   try { sh.getRange('P51').setValue(''); } catch(e) {}
-  // 53行は「請求先」行。本社/福岡店の○マーク
-  sh.getRange('F53').setValue(data.branch==='本社'?'○':'');
-  sh.getRange('L53').setValue(data.branch==='福岡店'||data.branch==='飯塚ガスセンター'?'○':'');
+  // 53行は「請求先」行。本社/福岡店の○マーク（debug確認: G53=本社ラベル,K53=福岡店ラベル）
+  // ○マークはラベルの左隣の F53/J53
+  try { sh.getRange('F53').setValue(data.branch==='本社'?'○':''); } catch(e) {}
+  try { sh.getRange('J53').setValue(data.branch==='福岡店'||data.branch==='飯塚ガスセンター'?'○':''); } catch(e) {}
+  try { sh.getRange('L53').setValue(''); } catch(e) {}  // 旧コードがL53に書いていたのでクリア
 
   var today = new Date();
   // 納入希望日（テンプレ実構造: R53=月、V53=日）
@@ -1806,9 +1809,14 @@ function _fillOrderTemplate(sh, data) {
   try { sh.getRange('AH3').setValue(data.orderNo); } catch(e) {}
   try { sh.getRange('A9').setValue(data.supplier); } catch(e) {}
   try { sh.getRange('AL12').setValue(data.branch); } catch(e) {}
-  try { sh.getRange('AB13').setValue(bi.zip); } catch(e) {}
-  try { sh.getRange('AB14').setValue(bi.addr); } catch(e) {}
-  try { sh.getRange('AB15').setValue(bi.tel + ' ' + bi.fax); } catch(e) {}
+  // 住所/TEL は結合主セル Z12/Z13/Z14 に直接書く
+  try { sh.getRange('Z12').setValue(bi.zip); } catch(e) {}
+  try { sh.getRange('Z13').setValue(bi.addr); } catch(e) {}
+  try { sh.getRange('Z14').setValue(bi.tel + ' ' + bi.fax); } catch(e) {}
+  // テンプレに残っている古い TEL/FAX をクリア
+  try { sh.getRange('AB13').setValue(''); } catch(e) {}
+  try { sh.getRange('AB14').setValue(''); } catch(e) {}
+  try { sh.getRange('AB15').setValue(''); } catch(e) {}
 
   var lines = data.lines || [];
   for (var idx = 0; idx < 16; idx++) {
@@ -1830,9 +1838,10 @@ function _fillOrderTemplate(sh, data) {
   try { sh.getRange('F51').setValue(data.deliveryPlace || ''); } catch(e) {}
   try { sh.getRange('L51').setValue(''); } catch(e) {}
   try { sh.getRange('P51').setValue(''); } catch(e) {}
-  // 53行は「請求先」行。本社/福岡店の○マーク
+  // 53行は「請求先」行。本社/福岡店の○マーク（debug確認: F53=本社○,J53=福岡店○）
   try { sh.getRange('F53').setValue(data.branch==='本社'?'○':''); } catch(e) {}
-  try { sh.getRange('L53').setValue(data.branch==='福岡店'||data.branch==='飯塚ガスセンター'?'○':''); } catch(e) {}
+  try { sh.getRange('J53').setValue(data.branch==='福岡店'||data.branch==='飯塚ガスセンター'?'○':''); } catch(e) {}
+  try { sh.getRange('L53').setValue(''); } catch(e) {}
   var today = new Date();
   // 納入希望日（R53=月、V53=日）
   if (data.deliveryDate) {
@@ -1855,64 +1864,6 @@ function _fillOrderTemplate(sh, data) {
 
 // _hideEstimateAll は 2026-05-12 の見積シート非表示化作業で使用し、削除済み。
 // 復元時に再度シートを非表示にしたい場合は docs/RESTORE_ESTIMATE.md の手順参照
-
-// ============ 一時: 既存の発注書シート構造調査 ============
-function _debugOrderSheet(id) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  // id が無ければ最後に作成した発注書シートを取得
-  var sheets = ss.getSheets();
-  var target = null;
-  for (var i = sheets.length - 1; i >= 0; i--) {
-    var n = sheets[i].getName();
-    if (n.indexOf('20260514_') === 0 || (/^\d{8}_/.test(n) && n.indexOf('20260514') !== -1)) {
-      target = sheets[i]; break;
-    }
-  }
-  if (!target) {
-    for (var j = sheets.length - 1; j >= 0; j--) {
-      if (/^\d{8}_/.test(sheets[j].getName()) && !sheets[j].isSheetHidden()) {
-        target = sheets[j]; break;
-      }
-    }
-  }
-  if (!target) return { success: false, error: '発注書シートが見つかりません' };
-
-  // 18-22行（明細）と 51行（納入先）周辺を取得
-  var range1 = target.getRange('A18:AT22').getValues();
-  var range2 = target.getRange('A51:AT52').getValues();
-  var cells = [];
-  function dump(range, startRow) {
-    for (var i = 0; i < range.length; i++) {
-      for (var j = 0; j < range[i].length; j++) {
-        var val = range[i][j];
-        if (val !== '' && val !== null) {
-          var col = (j < 26) ? String.fromCharCode(65 + j) : String.fromCharCode(64 + Math.floor(j/26)) + String.fromCharCode(65 + j%26);
-          cells.push(col + (i+startRow) + '=' + String(val).substring(0, 40));
-        }
-      }
-    }
-  }
-  dump(range1, 18);
-  dump(range2, 51);
-  return { success: true, name: target.getName(), cells: cells };
-}
-
-// ============ 一時: 直近発注の明細JSON確認 ============
-function _debugLastOrder() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var s = ss.getSheetByName(INDEX_SHEET);
-  if (!s) return { success: false, error: '発注一覧なし' };
-  var data = s.getDataRange().getValues();
-  if (data.length < 2) return { success: false, error: 'データなし' };
-  var last = data[data.length - 1];
-  return {
-    success: true,
-    orderNo: last[1],
-    supplier: last[3],
-    linesJsonLength: String(last[13] || '').length,
-    linesJson: String(last[13] || '').substring(0, 800)
-  };
-}
 
 // ============ メーカー→仕入先マッピング ============
 var MAKER_TO_SUPPLIER = {
