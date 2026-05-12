@@ -320,19 +320,19 @@ function createFromTemplate(ss, tabName, data) {
 
   var lines = data.lines || [];
   Logger.log('createFromTemplate: lines.length=' + lines.length);
-  for (var idx = 0; idx < 16; idx++) {
-    var r = 18 + idx;
+  // 明細は2行結合 (A18:B19, A20:B21, ...) なので idx*2 で2行ステップ
+  for (var idx = 0; idx < 8; idx++) {
+    var r = 18 + idx * 2;
     var ln = lines[idx];
     if (ln && ln.maker) {
-      Logger.log('明細 idx=' + idx + ' r=' + r + ' maker=' + ln.maker);
-      try { sh.getRange('A'+r).setValue(idx+1); } catch(e) { Logger.log('A'+r+' err: '+e); }
-      try { sh.getRange('C'+r).setValue(ln.maker); } catch(e) { Logger.log('C'+r+' err: '+e); }
-      try { sh.getRange('H'+r).setValue(ln.product); } catch(e) { Logger.log('H'+r+' err: '+e); }
-      try { sh.getRange('P'+r).setValue(ln.model||''); } catch(e) { Logger.log('P'+r+' err: '+e); }
-      try { sh.getRange('Z'+r).setValue(ln.qty); } catch(e) { Logger.log('Z'+r+' err: '+e); }
-      try { sh.getRange('AB'+r).setValue(ln.price); } catch(e) { Logger.log('AB'+r+' err: '+e); }
-      try { sh.getRange('AG'+r).setValue(ln.qty*ln.price); } catch(e) { Logger.log('AG'+r+' err: '+e); }
-      try { sh.getRange('AL'+r).setValue(ln.remark||''); } catch(e) { Logger.log('AL'+r+' err: '+e); }
+      try { sh.getRange('A'+r).setValue(idx+1); } catch(e) {}
+      try { sh.getRange('C'+r).setValue(ln.maker); } catch(e) {}
+      try { sh.getRange('H'+r).setValue(ln.product); } catch(e) {}
+      try { sh.getRange('P'+r).setValue(ln.model||''); } catch(e) {}
+      try { sh.getRange('Z'+r).setValue(ln.qty); } catch(e) {}
+      try { sh.getRange('AB'+r).setValue(ln.price); } catch(e) {}
+      try { sh.getRange('AG'+r).setValue(ln.qty*ln.price); } catch(e) {}
+      try { sh.getRange('AL'+r).setValue(ln.remark||''); } catch(e) {}
     } else {
       ['A','C','H','P','Z','AB','AG','AL'].forEach(function(c){
         try { sh.getRange(c+r).setValue(''); } catch(e) {}
@@ -366,8 +366,10 @@ function createFromTemplate(ss, tabName, data) {
     try { sh.getRange('V53').setValue(''); } catch(e) {}
   }
   // 納品先は上の F51 で書き込み済み（C51 は既存テンプレでは未使用）
-  // 現場名
-  sh.getRange('D55').setValue(data.siteName||'');
+  // 現場名（件名）: テンプレ確認済み F55:AQ56 結合の主セル F55 に書き込む
+  try { sh.getRange('F55').setValue(data.siteName||''); } catch(e) {}
+  // 旧 D55 への書き込みは無視されていた（結合外）。念のためクリア
+  try { sh.getRange('D55').setValue(''); } catch(e) {}
   // 特記事項(C58) は 2026-05-12 削除。発注全体の備考は廃止し商品毎の備考に置き換えたため空にする
   try { sh.getRange('C58').setValue(''); } catch(e) {}
   sh.getRange('X62').setValue(today.getMonth()+1);
@@ -1819,8 +1821,9 @@ function _fillOrderTemplate(sh, data) {
   try { sh.getRange('AB15').setValue(''); } catch(e) {}
 
   var lines = data.lines || [];
-  for (var idx = 0; idx < 16; idx++) {
-    var r = 18 + idx;
+  // 明細は2行結合なので idx*2 で2行ステップ
+  for (var idx = 0; idx < 8; idx++) {
+    var r = 18 + idx * 2;
     var ln = lines[idx];
     if (ln && ln.maker) {
       try { sh.getRange('A'+r).setValue(idx+1); } catch(e) {}
@@ -1855,7 +1858,9 @@ function _fillOrderTemplate(sh, data) {
     try { sh.getRange('V53').setValue(''); } catch(e) {}
   }
   // 納品先は上の F51 で書き込み済み
-  try { sh.getRange('D55').setValue(data.siteName||''); } catch(e) {}
+  // 現場名（件名）F55 結合主セル
+  try { sh.getRange('F55').setValue(data.siteName||''); } catch(e) {}
+  try { sh.getRange('D55').setValue(''); } catch(e) {}
   // 特記事項は廃止（商品毎の備考に置き換え）
   try { sh.getRange('C58').setValue(''); } catch(e) {}
   try { sh.getRange('AJ60').setValue(data.orderer); } catch(e) {}
@@ -1864,6 +1869,95 @@ function _fillOrderTemplate(sh, data) {
 
 // _hideEstimateAll は 2026-05-12 の見積シート非表示化作業で使用し、削除済み。
 // 復元時に再度シートを非表示にしたい場合は docs/RESTORE_ESTIMATE.md の手順参照
+
+// ============ DEPRECATED 一時: 最新発注書の全データ確認 ============
+function __unused_debugLatest() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(INDEX_SHEET);
+  if (!s) return { success: false, error: '発注一覧なし' };
+  var data = s.getDataRange().getValues();
+  if (data.length < 2) return { success: false, error: 'データなし' };
+  var last = data[data.length - 1];
+  // 個別シート（最新の20260514_など）の明細書き込み行 18-22 を確認
+  var sheets = ss.getSheets();
+  var target = null;
+  for (var j = sheets.length - 1; j >= 0; j--) {
+    if (/^\d{8}_/.test(sheets[j].getName()) && !sheets[j].isSheetHidden()) {
+      target = sheets[j]; break;
+    }
+  }
+  var rows = [];
+  if (target) {
+    for (var r = 18; r <= 22; r++) {
+      ['A','C','H','P','Z','AB','AG','AL'].forEach(function(col) {
+        var v = target.getRange(col + r).getValue();
+        if (v !== '' && v !== null) rows.push(col + r + '=' + String(v).substring(0, 30));
+      });
+    }
+    // 現場名 D55
+    var siteName = target.getRange('D55').getValue();
+    rows.push('D55=' + String(siteName));
+  }
+  return {
+    success: true,
+    sheetName: target ? target.getName() : null,
+    listOrderNo: last[1],
+    listSiteName: last[5],  // F列 = 現場名
+    linesJsonRaw: String(last[13] || '').substring(0, 1000),
+    sheetRows: rows
+  };
+}
+
+// ============ DEPRECATED ============
+function __unused_debug55() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tpl = findTemplateSheet(ss, PO_TEMPLATE_CANDIDATES);
+  if (!tpl) return { success: false, error: 'テンプレなし' };
+  var merged = [];
+  var mr = tpl.getRange('A55:AT56').getMergedRanges();
+  for (var i = 0; i < mr.length; i++) merged.push(mr[i].getA1Notation());
+  // 各セルの値
+  var cells = [];
+  for (var c = 1; c <= 26; c++) {
+    var col = String.fromCharCode(64 + c);
+    [55, 56].forEach(function(r) {
+      var v = tpl.getRange(col + r).getValue();
+      if (v !== '' && v !== null) cells.push(col + r + '=' + JSON.stringify(v));
+    });
+  }
+  return { success: true, mergedRanges: merged, cells: cells };
+}
+
+// ============ DEPRECATED ============
+function __unused_debugDetail() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var tpl = findTemplateSheet(ss, PO_TEMPLATE_CANDIDATES);
+  if (!tpl) return { success: false, error: 'テンプレなし' };
+  // 18-30行で明細書き込み位置 A,C,H,P,Z,AB,AG,AL の値を取得
+  var cells = [];
+  var mergedRanges = tpl.getRange('A18:AT30').getMergedRanges();
+  var merged = [];
+  for (var i = 0; i < mergedRanges.length; i++) {
+    merged.push(mergedRanges[i].getA1Notation());
+  }
+  // 同時に各行の高さ確認
+  var rowH = [];
+  for (var r = 18; r <= 30; r++) {
+    rowH.push('r' + r + 'h=' + tpl.getRowHeight(r));
+  }
+  // D55 の場所も確認
+  var d55Merged = '';
+  var d55Range = tpl.getRange('D55');
+  if (d55Range.isPartOfMerge()) {
+    d55Merged = d55Range.getMergedRanges()[0].getA1Notation();
+  }
+  return {
+    success: true,
+    mergedRanges: merged.slice(0, 30),
+    rowHeights: rowH,
+    d55MergedAt: d55Merged
+  };
+}
 
 // ============ メーカー→仕入先マッピング ============
 var MAKER_TO_SUPPLIER = {
