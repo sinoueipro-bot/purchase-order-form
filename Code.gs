@@ -337,10 +337,24 @@ function createFromTemplate(ss, tabName, data) {
   sh.getRange('L53').setValue(data.branch==='福岡店'||data.branch==='飯塚ガスセンター'?'○':'');
 
   var today = new Date();
-  sh.getRange('S53').setValue(today.getMonth()+1);
-  sh.getRange('V53').setValue(today.getDate());
+  // 納入希望日（テンプレ実構造: R53=月、V53=日）
+  // 旧バージョンの S53/V53 への today 書き込みはユーザー指定の納期に置き換え
+  if (data.deliveryDate) {
+    var dParts = String(data.deliveryDate).split('-');
+    if (dParts.length === 3) {
+      try { sh.getRange('R53').setValue(parseInt(dParts[1])); } catch(e) {}
+      try { sh.getRange('V53').setValue(parseInt(dParts[2])); } catch(e) {}
+    }
+  } else {
+    try { sh.getRange('R53').setValue(''); } catch(e) {}
+    try { sh.getRange('V53').setValue(''); } catch(e) {}
+  }
+  // 納品先（A51=ラベル、隣の結合セル C51 に書き込み）
+  try { sh.getRange('C51').setValue(data.deliveryPlace || ''); } catch(e) {}
+  // 現場名
   sh.getRange('D55').setValue(data.siteName||'');
-  sh.getRange('C58').setValue(data.notes||'');
+  // 特記事項(C58) は 2026-05-12 削除。発注全体の備考は廃止し商品毎の備考に置き換えたため空にする
+  try { sh.getRange('C58').setValue(''); } catch(e) {}
   sh.getRange('X62').setValue(today.getMonth()+1);
   sh.getRange('AA62').setValue(today.getDate());
   sh.getRange('AJ60').setValue(data.orderer);
@@ -1801,10 +1815,22 @@ function _fillOrderTemplate(sh, data) {
   try { sh.getRange('F53').setValue(data.branch==='本社'?'○':''); } catch(e) {}
   try { sh.getRange('L53').setValue(data.branch==='福岡店'||data.branch==='飯塚ガスセンター'?'○':''); } catch(e) {}
   var today = new Date();
-  try { sh.getRange('S53').setValue(today.getMonth()+1); } catch(e) {}
-  try { sh.getRange('V53').setValue(today.getDate()); } catch(e) {}
+  // 納入希望日（R53=月、V53=日）
+  if (data.deliveryDate) {
+    var dParts = String(data.deliveryDate).split('-');
+    if (dParts.length === 3) {
+      try { sh.getRange('R53').setValue(parseInt(dParts[1])); } catch(e) {}
+      try { sh.getRange('V53').setValue(parseInt(dParts[2])); } catch(e) {}
+    }
+  } else {
+    try { sh.getRange('R53').setValue(''); } catch(e) {}
+    try { sh.getRange('V53').setValue(''); } catch(e) {}
+  }
+  // 納品先 (A51の隣 C51)
+  try { sh.getRange('C51').setValue(data.deliveryPlace || ''); } catch(e) {}
   try { sh.getRange('D55').setValue(data.siteName||''); } catch(e) {}
-  try { sh.getRange('C58').setValue(data.notes||''); } catch(e) {}
+  // 特記事項は廃止（商品毎の備考に置き換え）
+  try { sh.getRange('C58').setValue(''); } catch(e) {}
   try { sh.getRange('AJ60').setValue(data.orderer); } catch(e) {}
   try { sh.getRange('AF66').setValue(data.urgent?'緊急':'PASS'); } catch(e) {}
 }

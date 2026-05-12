@@ -274,7 +274,7 @@ textarea { resize: vertical; min-height: 60px; }
 
     <a href="https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit#gid=0" target="_blank" class="home-big-btn secondary" style="text-decoration:none">
       <span class="big-icon">📊</span>
-      <span class="big-title">スプレッドシートを開く</span>
+      <span class="big-title">発注書を開く</span>
       <span class="big-desc">発注一覧で承認状況を直接確認します</span>
     </a>
 
@@ -364,6 +364,18 @@ textarea { resize: vertical; min-height: 60px; }
     <div class="field-label">現場名</div>
     <input type="text" id="siteName" placeholder="現場名を入力">
   </div>
+  <div class="field-group">
+    <div class="row">
+      <div>
+        <div class="field-label">納期</div>
+        <input type="date" id="deliveryDate" placeholder="納期">
+      </div>
+      <div>
+        <div class="field-label">納品先</div>
+        <input type="text" id="deliveryPlace" placeholder="納品先（例: 現場・本社など）">
+      </div>
+    </div>
+  </div>
 </div>
 </div><!-- /po step 1 -->
 
@@ -389,12 +401,8 @@ textarea { resize: vertical; min-height: 60px; }
   <span class="label">合計金額</span>
   <span class="amount" id="totalAmount">&yen;0</span>
 </div>
-<div class="section">
-  <div class="section-title">特記事項</div>
-  <div class="field-group">
-    <textarea id="notes" placeholder="特記事項があれば入力"></textarea>
-  </div>
-</div>
+<!-- 発注全体の特記事項は 2026-05-12 削除（商品毎の備考欄に置き換え） -->
+<input type="hidden" id="notes" value="">
 </div><!-- /po step 2 -->
 
 <!-- ==================== STEP 3: 送信先・確認 ==================== -->
@@ -2299,7 +2307,9 @@ function collectFormData() {
     branch: document.getElementById('branch').value,
     lines, total,
     siteName: document.getElementById('siteName').value,
-    notes: document.getElementById('notes').value,
+    deliveryDate: document.getElementById('deliveryDate')?.value || '',
+    deliveryPlace: document.getElementById('deliveryPlace')?.value || '',
+    notes: document.getElementById('notes')?.value || '',  // 互換用（実質未使用）
     orderer: document.getElementById('orderer').value,
     urgent: document.getElementById('urgent').checked,
     approverEmail: email,
