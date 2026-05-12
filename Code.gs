@@ -49,9 +49,11 @@ function initSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var s = ss.getSheetByName(INDEX_SHEET);
   if (!s) s = ss.insertSheet(INDEX_SHEET);
-  s.getRange(1,1,1,13).setValues([['受付日時','注文No.','発行日','仕入先','事業所','現場名','合計金額','注文者','緊急','承認者','ステータス','シートリンク','ID']]);
-  s.getRange(1,1,1,13).setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
+  // 列構造: A〜M=基本情報, N=明細JSON, O=特記事項, P=更新日時, Q=発注完了日(2026-05-12追加)
+  s.getRange(1,1,1,17).setValues([['受付日時','注文No.','発行日','仕入先','事業所','現場名','合計金額','注文者','緊急','承認者','ステータス','シートリンク','ID','明細JSON','特記事項','更新日時','発注完了日']]);
+  s.getRange(1,1,1,17).setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
   s.setFrozenRows(1);
+  s.setColumnWidth(17, 150);
   Logger.log('initSheet完了');
 }
 
@@ -1360,6 +1362,11 @@ function markOrderCompleted(id) {
         return { success: false, error: '承認済の発注のみ完了にできます (現在: ' + currentStatus + ')' };
       }
       applyStatusColor(s, i + 1, '発注済');
+      // 発注完了日を Q列(17) に記録
+      try {
+        var completedAt = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
+        s.getRange(i + 1, 17).setValue(completedAt);
+      } catch(e) { Logger.log('発注完了日書込エラー: ' + e.toString()); }
       // シートを非表示化
       try {
         var sheet = findSheetByUrl(ss, data[i][11]);
