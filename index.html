@@ -415,11 +415,11 @@ textarea { resize: vertical; min-height: 60px; }
   <div class="section-title">送信先</div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge">必須</span>注文者</div>
-    <select id="orderer" required><option value="">選択してください</option></select>
+    <select id="orderer" required onchange="validate()"><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge">必須</span>承認者</div>
-    <select id="approver" required><option value="">選択してください</option></select>
+    <select id="approver" required onchange="validate()"><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
     <div class="field-label">緊急（即発注扱い）</div>
@@ -801,6 +801,9 @@ function goToPoWizardStep(step) {
   document.getElementById('btnSubmit').style.display = (step === MAX_PO_WIZARD_STEP) ? '' : 'none';
   document.getElementById('sendArea').style.display = (step === MAX_PO_WIZARD_STEP) ? '' : 'none';
   if (step === MAX_PO_WIZARD_STEP) renderPoConfirm();
+
+  // ステップ移動後にバリデーション再評価（送信ボタン disabled 状態を更新）
+  try { validate(); } catch(e) {}
 
   window.scrollTo(0, 0);
 }
