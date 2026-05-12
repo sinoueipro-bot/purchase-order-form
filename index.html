@@ -260,13 +260,7 @@ textarea { resize: vertical; min-height: 60px; }
       <p>今日は何をしますか？</p>
     </div>
 
-    <button type="button" class="home-big-btn primary" onclick="switchTab('estimate')">
-      <span class="big-icon">📝</span>
-      <span class="big-title">お見積りを作る</span>
-      <span class="big-desc">お客さんに出す見積書を新しく作成します</span>
-    </button>
-
-    <button type="button" class="home-big-btn secondary" onclick="switchTab('order')">
+    <button type="button" class="home-big-btn primary" onclick="switchTab('order')">
       <span class="big-icon">📦</span>
       <span class="big-title">発注する</span>
       <span class="big-desc">業者へ発注書を直接作成して送ります</span>
@@ -274,8 +268,8 @@ textarea { resize: vertical; min-height: 60px; }
 
     <button type="button" class="home-big-btn tertiary" onclick="switchTab('list')">
       <span class="big-icon">📋</span>
-      <span class="big-title">過去の見積・発注を見る</span>
-      <span class="big-desc">今まで作成したものを確認・発注します</span>
+      <span class="big-title">過去の発注を見る</span>
+      <span class="big-desc">今まで作成したものを確認します</span>
     </button>
 
     <!-- 非表示シートを復活 -->
@@ -290,179 +284,16 @@ textarea { resize: vertical; min-height: 60px; }
     <div style="background:white;border:1.5px dashed var(--border);border-radius:12px;padding:14px 16px;margin-top:16px">
       <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;font-weight:600">📊 スプレッドシートを開く</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <a href="https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit" target="_blank"
-           style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#e8f0fe;border-radius:8px;text-decoration:none;color:var(--primary);font-weight:600;font-size:13px">
-          📋 発注一覧・見積一覧シート
-        </a>
         <a href="https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit#gid=0" target="_blank"
            style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fef7e0;border-radius:8px;text-decoration:none;color:#b06000;font-weight:600;font-size:13px">
           📦 発注一覧（承認状況の確認）
         </a>
-        <a href="https://docs.google.com/spreadsheets/d/1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s/edit" target="_blank"
-           style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#e6f4ea;border-radius:8px;text-decoration:none;color:var(--estimate);font-weight:600;font-size:13px">
-          📝 見積一覧
-        </a>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ============================================================ -->
-<!-- 見積書タブ（ウィザード形式） -->
-<!-- ============================================================ -->
-<div class="tab-content" id="tab-estimate">
-
-<!-- Step進捗インジケーター -->
-<div class="wizard-progress" id="wizardProgress">
-  <div class="wizard-step active" data-step="1">
-    <div class="step-circle"><span class="step-circle-num">1</span></div>
-    <div class="step-label">お客様情報</div>
-  </div>
-  <div class="wizard-step" data-step="2">
-    <div class="step-circle"><span class="step-circle-num">2</span></div>
-    <div class="step-label">商品明細</div>
-  </div>
-  <div class="wizard-step" data-step="3">
-    <div class="step-circle"><span class="step-circle-num">3</span></div>
-    <div class="step-label">確認</div>
-  </div>
-</div>
-
-<!-- エラー常時表示バナー -->
-<div class="error-banner" id="estErrorBanner" onclick="focusFirstError()">
-  <div class="err-title">⚠️ 未入力の項目があります</div>
-  <div class="err-list" id="estErrorList"></div>
-</div>
-
-<div id="estFormArea">
-
-<!-- ==================== STEP 1: お客様情報 ==================== -->
-<div class="wizard-step-view active" data-step="1">
-<div class="step-title">
-  <h2>👤 お客様情報を入力</h2>
-  <p>お客様の情報と担当者を選んでください</p>
-</div>
-<!-- 見積書 基本情報 -->
-<div class="section">
-  <div class="section-title est">基本情報</div>
-  <div class="field-group">
-    <div class="row">
-      <div>
-        <div class="field-label"><span class="required-badge">必須</span>見積日</div>
-        <input type="date" id="estDate" required>
-      </div>
-      <div>
-        <div class="field-label">日付連番</div>
-        <input type="text" id="estSeq" placeholder="空欄可">
-      </div>
-    </div>
-  </div>
-  <div class="field-group">
-    <div class="field-label"><span class="required-badge">必須</span>お客様名</div>
-    <input type="text" id="estCustomer" placeholder="お客様名を入力" required>
-  </div>
-  <div class="field-group">
-    <div class="field-label">件名</div>
-    <input type="text" id="estSubject" placeholder="件名を入力">
-  </div>
-  <div class="field-group">
-    <div class="row">
-      <div>
-        <div class="field-label"><span class="required-badge">必須</span>事業所</div>
-        <select id="estBranch" required><option value="">選択</option></select>
-      </div>
-      <div>
-        <div class="field-label"><span class="required-badge">必須</span>担当者</div>
-        <select id="estStaff" required><option value="">選択</option></select>
-      </div>
-    </div>
-  </div>
-</div>
-</div><!-- /step 1 -->
-
-<!-- ==================== STEP 2: 商品明細 ==================== -->
-<div class="wizard-step-view" data-step="2">
-<div class="step-title">
-  <h2>📦 商品を入力</h2>
-  <p>売りたい商品とメーカーを追加してください</p>
-</div>
-
-<!-- 金額大型表示 -->
-<div class="price-display">
-  <div class="label">💰 現在の合計（税込）</div>
-  <div class="big-amount" id="estGrandTotalBig">¥0</div>
-  <div class="formula"><strong>税抜:</strong> <span id="estSubtotalMini">¥0</span> ＋ <strong>消費税:</strong> <span id="estTaxMini">¥0</span></div>
-</div>
-
-<!-- 見積書 明細行 -->
-<div class="section">
-  <div class="section-title est">見積明細</div>
-  <div id="estLineItems"></div>
-  <button type="button" class="btn-add-line" onclick="addEstLine()">+ もう1件追加</button>
-</div>
-
-<!-- 見積 集計（社内用詳細） -->
-<div class="est-summary" id="estSummaryBlock">
-  <div class="row"><span>小計（税抜）</span><span id="estSubtotal">&yen;0</span></div>
-  <div class="row"><span>消費税（10%）</span><span id="estTax">&yen;0</span></div>
-  <div class="row total"><span>合計（税込）</span><span id="estGrandTotal">&yen;0</span></div>
-  <div class="row" style="color:var(--danger);font-size:12px;margin-top:6px"><span>原価合計</span><span id="estCostTotal">&yen;0</span></div>
-  <div class="row" style="color:var(--success);font-size:12px"><span>粗利益高</span><span id="estProfitTotal">&yen;0</span></div>
-  <div class="row" style="color:var(--success);font-size:12px"><span>粗利率</span><span id="estMarginRate">0.0%</span></div>
-</div>
-
-<!-- 特記事項 -->
-<div class="section">
-  <div class="section-title est">特記事項</div>
-  <div class="field-group">
-    <textarea id="estNotes" placeholder="特記事項があれば入力"></textarea>
-  </div>
-</div>
-</div><!-- /step 2 -->
-
-<!-- ==================== STEP 3: 確認 ==================== -->
-<div class="wizard-step-view" data-step="3">
-<div class="step-title">
-  <h2>✅ 内容を確認</h2>
-  <p>この内容で見積書を作ります。間違いがないか確認してください</p>
-</div>
-<div class="section">
-  <div class="section-title est">確認内容</div>
-  <div id="estConfirmArea" style="padding:12px 16px"></div>
-</div>
-
-<!-- 確認画面の大型合計 -->
-<div class="price-display" style="margin-top:0">
-  <div class="label">💰 お客様へのご請求額（税込）</div>
-  <div class="big-amount" id="estGrandTotalConfirm">¥0</div>
-</div>
-</div><!-- /step 3 -->
-
-</div><!-- /estFormArea -->
-
-<!-- ウィザードナビ -->
-<div class="wizard-nav" id="estWizardNav">
-  <button type="button" class="btn-back" id="btnWizardBack" onclick="wizardPrev()">← 戻る</button>
-  <button type="button" class="btn-next" id="btnWizardNext" onclick="wizardNext()">次へ →</button>
-</div>
-
-<!-- 見積 完了画面 -->
-<div class="success-screen" id="estSuccessScreen">
-  <div class="icon">&#10004;&#65039;</div>
-  <h2>見積書を作成しました</h2>
-  <p id="estSuccessMsg"></p>
-  <div style="background:#e8f0fe;border-radius:10px;padding:12px;margin:12px auto;max-width:340px;font-size:13px;color:var(--primary);font-weight:600;text-align:center">
-    💡 営業担当の方は 📥 PDFダウンロード でお客様にお渡しください
-  </div>
-  <div class="success-links">
-    <a id="estLinkSheet" class="link-spreadsheet" href="#" target="_blank">📊 スプレッドシートを開く</a>
-    <a id="estLinkDirect" class="link-edit" href="#" onclick="switchTab('list'); return false;">📋 一覧で確認</a>
-    <a id="estLinkPdf" class="link-edit" href="#" onclick="downloadPdfById(document.getElementById('estSuccessMsg').dataset.id||'', 'estimate', '見積_'+(document.getElementById('estSuccessMsg').dataset.no||'')); return false;" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;cursor:pointer">📥 PDFダウンロード</a>
-  </div>
-  <button class="btn-new" style="background:var(--estimate)" onclick="resetEstForm()">新しい見積書を作成</button>
-</div>
-
-</div><!-- /tab-estimate -->
+<!-- 見積書タブは 2026-05-12 に削除されました。復元は docs/RESTORE_ESTIMATE.md 参照 -->
 
 
 <!-- ============================================================ -->
@@ -660,12 +491,6 @@ textarea { resize: vertical; min-height: 60px; }
     </div>
     <!-- 役割フィルタ（トグルボタン） -->
     <div style="display:flex;gap:8px;margin-top:10px">
-      <button type="button" id="rolePendingTransferBtn" onclick="setRoleFilter('pending_transfer')"
-        style="flex:1;padding:14px 10px;border-radius:10px;border:2px solid var(--border);background:#fef7e0;cursor:pointer;font-family:inherit;text-align:center;transition:all 0.15s">
-        <div style="font-size:22px;line-height:1">📋</div>
-        <div style="font-size:13px;font-weight:700;color:#b06000;margin-top:2px">未発注見積</div>
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:1px">作成済のみ表示</div>
-      </button>
       <button type="button" id="roleApproverBtn" onclick="setRoleFilter('approver')"
         style="flex:1;padding:14px 10px;border-radius:10px;border:2px solid var(--border);background:#e8f0fe;cursor:pointer;font-family:inherit;text-align:center;transition:all 0.15s">
         <div style="font-size:22px;line-height:1">👔</div>
@@ -685,14 +510,6 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
 </div>
 
-<!-- 見積一覧 -->
-<div class="section" id="estListSection">
-  <div class="section-title est">📝 見積一覧</div>
-  <div id="estListArea" style="padding:12px 16px">
-    <p style="color:var(--text-secondary);font-size:13px;text-align:center">読み込み中...</p>
-  </div>
-</div>
-
 <!-- 発注一覧 -->
 <div class="section" id="orderListSection">
   <div class="section-title">📦 発注一覧</div>
@@ -706,11 +523,8 @@ textarea { resize: vertical; min-height: 60px; }
 </div><!-- /tab-list -->
 
 
-<!-- 送信ボタン（タブで切替） -->
+<!-- 送信ボタン -->
 <div class="send-area" id="sendArea">
-  <button type="button" class="btn-submit est-btn" id="btnEstSubmit" onclick="handleEstSend()">
-    📝 見積書を作成（スプシに記録）
-  </button>
   <button type="button" class="btn-submit" id="btnSubmit" onclick="handleSend()" disabled style="display:none">
     📦 送信（スプシ記録 + メール通知）
   </button>
@@ -728,38 +542,8 @@ textarea { resize: vertical; min-height: 60px; }
 </div>
 
 
-<!-- メーカー別一括発注モーダル -->
-<div class="modal-overlay" id="batchPOModal">
-  <div class="modal">
-    <h2 style="color:var(--primary)">📦 メーカー別一括発注</h2>
-    <div id="batchPOInfo" style="margin-bottom:12px"></div>
-    <div id="batchPOGroups" style="margin-bottom:16px"></div>
-    <div class="field-group">
-      <div class="field-label"><span class="required-badge">必須</span>承認者</div>
-      <select id="batchApprover" style="font-size:16px"><option value="">選択</option></select>
-    </div>
-    <div class="field-group">
-      <div class="field-label"><span class="required-badge">必須</span>注文者</div>
-      <select id="batchOrderer" style="font-size:16px"><option value="">選択</option></select>
-    </div>
-    <div class="field-group">
-      <div class="row">
-        <div>
-          <div class="field-label">事業所</div>
-          <select id="batchBranch" style="font-size:16px"></select>
-        </div>
-        <div style="display:flex;align-items:flex-end">
-          <div class="toggle-wrapper">
-            <label class="toggle"><input type="checkbox" id="batchUrgent"><span class="toggle-slider"></span></label>
-            <span class="urgent-label" id="batchUrgentLabel">PASS</span>
-          </div>
-        </div>
-      </div>
-    </div>
-    <button class="btn-confirm" id="btnBatchPO" onclick="executeBatchPO()" style="background:var(--primary)">📦 一括発注を実行</button>
-    <button class="btn-close-modal" onclick="closeBatchPO()">キャンセル</button>
-  </div>
-</div>
+<!-- メーカー別一括発注モーダル: 2026-05-12 削除済み (見積→発注の転記機能) -->
+<!-- 復元は docs/RESTORE_ESTIMATE.md 参照 -->
 
 <!-- 編集モーダル（見積書/発注書共用） -->
 <div class="modal-overlay" id="editModal">
@@ -782,9 +566,6 @@ textarea { resize: vertical; min-height: 60px; }
 <nav class="bottom-nav" id="bottomNav">
   <button type="button" class="bottom-nav-btn active" data-tab="home" onclick="switchTab('home')">
     <span class="icon">🏠</span><span>ホーム</span>
-  </button>
-  <button type="button" class="bottom-nav-btn" data-tab="estimate" onclick="switchTab('estimate')">
-    <span class="icon">📝</span><span>見積</span>
   </button>
   <button type="button" class="bottom-nav-btn" data-tab="order" onclick="switchTab('order')">
     <span class="icon">📦</span><span>発注</span>
@@ -911,28 +692,23 @@ document.addEventListener('DOMContentLoaded', () => {
   setDefaultDate();
   generateOrderNo();
   addLineItem();
-  addEstLine();
   setupValidation();
   switchTab('home');
-  // URLパラメータ ?quickPO=<estimateId> → メーカー別発注モーダルを表示
-  const params = new URLSearchParams(window.location.search);
-  const qpId = params.get('quickPO');
-  if (qpId) {
-    setTimeout(() => showBatchPOModal(qpId), 500);
-  }
-  loadEstimateList();
+  // 見積関連の初期化（addEstLine, loadEstimateList, quickPO 経由のメーカー別発注）は
+  // 2026-05-12 の発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md 参照
 });
 
 // ============ タブ/画面切替 ============
 const TAB_TITLES = {
   home: '発注システム',
-  estimate: '📝 お見積り作成',
   order: '📦 発注書',
   list: '📋 一覧'
 };
 
 function switchTab(tab) {
   currentTab = tab;
+  // 見積タブは削除済み。誤って 'estimate' が指定されたら 'order' にフォールバック
+  if (tab === 'estimate') tab = 'order';
   // ビュー切替
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   const view = document.getElementById('tab-' + tab);
@@ -949,32 +725,24 @@ function switchTab(tab) {
   // 戻るボタン表示（ホーム以外で表示）
   document.getElementById('backBtn').classList.toggle('show', tab !== 'home');
 
-  // 送信ボタン表示制御（両タブともStep 3のみ表示）
-  document.getElementById('btnEstSubmit').style.display = (tab === 'estimate' && currentWizardStep === MAX_WIZARD_STEP) ? '' : 'none';
+  // 送信ボタン表示制御（発注書のみ）
   document.getElementById('btnSubmit').style.display = (tab === 'order' && currentPoWizardStep === MAX_PO_WIZARD_STEP) ? '' : 'none';
-  // Step 3のみ送信エリア表示、それ以外は隠す
-  const showSend = (tab === 'order' && currentPoWizardStep === MAX_PO_WIZARD_STEP) ||
-                    (tab === 'estimate' && currentWizardStep === MAX_WIZARD_STEP);
-  document.getElementById('sendArea').style.display = showSend ? '' : 'none';
+  // Step 3のみ送信エリア表示
+  const showSend = (tab === 'order' && currentPoWizardStep === MAX_PO_WIZARD_STEP);
+  const sendArea = document.getElementById('sendArea');
+  if (sendArea) sendArea.style.display = showSend ? '' : 'none';
 
   if (tab === 'list') loadAllLists();
 
-  // 見積タブ: ウィザードをStep 1から開始（完了画面表示中は除く）
-  if (tab === 'estimate' && !document.getElementById('estSuccessScreen').classList.contains('show')) {
-    resetWizard();
-  }
   // 発注タブ: ウィザードをStep 1から開始（完了画面表示中・キューモード時は除く）
   if (tab === 'order' && !document.getElementById('successScreen').classList.contains('show') && !window._poQueueActive) {
     resetPoWizard();
   }
 
   // ウィザードナビの表示制御
-  const wnav = document.getElementById('estWizardNav');
-  if (wnav) wnav.style.display = (tab === 'estimate' && !document.getElementById('estSuccessScreen').classList.contains('show')) ? '' : 'none';
   const pnav = document.getElementById('poWizardNav');
   if (pnav) pnav.style.display = (tab === 'order' && !document.getElementById('successScreen').classList.contains('show')) ? '' : 'none';
 
-  validateEst();
   validate();
   window.scrollTo(0, 0);
 }
@@ -986,46 +754,19 @@ function toggleHelp(el) {
 }
 
 function goHome() {
-  // ウィザード途中なら確認
-  if (currentTab === 'estimate' && currentWizardStep > 1) {
+  // 発注書ウィザード途中なら確認
+  if (currentTab === 'order' && typeof currentPoWizardStep !== 'undefined' && currentPoWizardStep > 1) {
     if (!confirm('入力内容が失われます。ホームに戻りますか？')) return;
-    resetWizard();
+    resetPoWizard();
   }
   switchTab('home');
 }
 
-// ============ 見積書ウィザード制御 ============
+// ============ 見積書ウィザード制御（2026-05-12 削除済み・空関数化） ============
 let currentWizardStep = 1;
 const MAX_WIZARD_STEP = 3;
 
-function goToWizardStep(step) {
-  currentWizardStep = step;
-  // ステップビューの表示切替
-  document.querySelectorAll('.wizard-step-view').forEach(v => v.classList.remove('active'));
-  const view = document.querySelector('.wizard-step-view[data-step="' + step + '"]');
-  if (view) view.classList.add('active');
-
-  // 進捗インジケーター更新
-  document.querySelectorAll('.wizard-step').forEach((el, idx) => {
-    const n = idx + 1;
-    el.classList.remove('active', 'done');
-    if (n < step) el.classList.add('done');
-    else if (n === step) el.classList.add('active');
-  });
-
-  // ナビボタンの状態
-  document.getElementById('btnWizardBack').style.visibility = step === 1 ? 'hidden' : 'visible';
-  const nextBtn = document.getElementById('btnWizardNext');
-  nextBtn.textContent = step === MAX_WIZARD_STEP ? '確認完了' : '次へ →';
-  nextBtn.style.display = step === MAX_WIZARD_STEP ? 'none' : '';
-
-  // Step 3なら送信ボタン表示・確認内容描画
-  document.getElementById('btnEstSubmit').style.display = (step === MAX_WIZARD_STEP) ? '' : 'none';
-  document.getElementById('sendArea').style.display = (step === MAX_WIZARD_STEP) ? '' : 'none';
-  if (step === MAX_WIZARD_STEP) renderEstConfirm();
-
-  window.scrollTo(0, 0);
-}
+function goToWizardStep(step) { /* no-op: estimate disabled */ }
 
 // ============ 発注書ウィザード制御 ============
 let currentPoWizardStep = 1;
@@ -1148,76 +889,10 @@ function renderPoConfirm() {
   document.getElementById('totalAmountConfirm').textContent = '¥' + Number(data.total || 0).toLocaleString();
 }
 
-function wizardNext() {
-  // バリデーション
-  if (currentWizardStep === 1) {
-    const errs = [];
-    if (!document.getElementById('estDate').value) errs.push('見積日');
-    if (!document.getElementById('estCustomer').value) errs.push('お客様名');
-    if (!document.getElementById('estBranch').value) errs.push('事業所');
-    if (!document.getElementById('estStaff').value) errs.push('担当者');
-    if (errs.length > 0) {
-      showToast('⚠️ 未入力: ' + errs.join(', '), 'error');
-      return;
-    }
-  } else if (currentWizardStep === 2) {
-    if (!validateEst()) {
-      showToast('⚠️ 商品明細に未入力があります', 'error');
-      return;
-    }
-  }
-  if (currentWizardStep < MAX_WIZARD_STEP) goToWizardStep(currentWizardStep + 1);
-}
-
-function wizardPrev() {
-  if (currentWizardStep > 1) goToWizardStep(currentWizardStep - 1);
-}
-
-function resetWizard() {
-  currentWizardStep = 1;
-  goToWizardStep(1);
-}
-
-// Step 3の確認内容を描画
-function renderEstConfirm() {
-  const data = collectEstData();
-  let html = '<div style="background:#f8f9fa;padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px">' +
-    '<div><strong>見積日:</strong> ' + data.estimateDate + '</div>' +
-    '<div><strong>お客様:</strong> ' + (data.customerName || '-') + '様</div>' +
-    (data.subject ? '<div><strong>件名:</strong> ' + data.subject + '</div>' : '') +
-    '<div><strong>事業所:</strong> ' + data.branch + '</div>' +
-    '<div><strong>担当者:</strong> ' + data.staff + '</div></div>';
-
-  html += '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead>' +
-    '<tr style="background:#e6f4ea"><th style="padding:6px;border:1px solid #ddd">No</th>' +
-    '<th style="padding:6px;border:1px solid #ddd">メーカー</th>' +
-    '<th style="padding:6px;border:1px solid #ddd">品名</th>' +
-    '<th style="padding:6px;border:1px solid #ddd">数量</th>' +
-    '<th style="padding:6px;border:1px solid #ddd">売値</th>' +
-    '<th style="padding:6px;border:1px solid #ddd">金額</th></tr></thead><tbody>';
-  data.lines.forEach((l, i) => {
-    const selling = calcSellingPriceJS(l.cost, l.marginRate, l.rounding);
-    const amount = selling * l.qty;
-    html += '<tr><td style="padding:4px;border:1px solid #ddd;text-align:center">' + (i+1) + '</td>' +
-      '<td style="padding:4px;border:1px solid #ddd">' + l.maker + '</td>' +
-      '<td style="padding:4px;border:1px solid #ddd">' + l.product + '</td>' +
-      '<td style="padding:4px;border:1px solid #ddd;text-align:center">' + l.qty + '</td>' +
-      '<td style="padding:4px;border:1px solid #ddd;text-align:right">¥' + selling.toLocaleString() + '</td>' +
-      '<td style="padding:4px;border:1px solid #ddd;text-align:right;font-weight:700">¥' + amount.toLocaleString() + '</td></tr>';
-  });
-  html += '</tbody></table>';
-
-  let sub = 0;
-  data.lines.forEach(l => { sub += calcSellingPriceJS(l.cost, l.marginRate, l.rounding) * l.qty; });
-  const tax = Math.floor(sub * 0.1);
-  const grand = sub + tax;
-
-  html += '<div style="text-align:right;margin-top:12px;font-size:13px;color:var(--text-secondary)">' +
-    '小計(税抜): ¥' + sub.toLocaleString() + '<br>消費税: ¥' + tax.toLocaleString() + '</div>';
-
-  document.getElementById('estConfirmArea').innerHTML = html;
-  document.getElementById('estGrandTotalConfirm').textContent = '¥' + grand.toLocaleString();
-}
+function wizardNext() { /* no-op: estimate disabled */ }
+function wizardPrev() { /* no-op: estimate disabled */ }
+function resetWizard() { /* no-op: estimate disabled */ }
+function renderEstConfirm() { /* no-op: estimate disabled */ }
 
 // ============ ドロップダウン初期化 ============
 function initAllDropdowns() {
@@ -1263,9 +938,15 @@ function generateOrderNo() {
 }
 
 // ============================================================
-// ============ 見積書 明細行 ============
+// ============ 見積書関連の JS 関数群（2026-05-12 削除済み） ============
+// 復元は docs/RESTORE_ESTIMATE.md 参照
+// archive/with-estimate ブランチに完全版が保管されている
 // ============================================================
-function addEstLine() {
+function executeCurrentSend() { executeSend(); }
+
+// 旧コード（削除済み）— 復元用にコメント保管。実コードは archive/with-estimate を参照
+/*
+function _legacy_addEstLine() {
   estLineCount++;
   const num = estLineCount;
   const c = document.getElementById('estLineItems');
@@ -1613,28 +1294,13 @@ async function executeEstSend() {
   }
 }
 
-function resetEstForm() {
-  document.getElementById('estFormArea').style.display = '';
-  document.getElementById('estSummaryBlock').style.display = '';
-  document.getElementById('btnEstSubmit').style.display = '';
-  document.getElementById('estSuccessScreen').classList.remove('show');
-  // ウィザードナビを再表示
-  const wnav = document.getElementById('estWizardNav');
-  if (wnav) wnav.style.display = '';
-  resetWizard();
-  document.getElementById('estCustomer').value = '';
-  document.getElementById('estSubject').value = '';
-  document.getElementById('estNotes').value = '';
-  document.getElementById('estSeq').value = '';
-  document.getElementById('estLineItems').innerHTML = '';
-  estLineCount = 0;
-  document.getElementById('estDate').value = new Date().toISOString().split('T')[0];
-  addEstLine();
-  validateEst();
-  window.scrollTo(0, 0);
+function _legacy_resetEstForm() {
+  // 旧見積書フォーム関連の処理（参考用）
 }
+*/
+// 旧コード保管ここまで
 
-// ============ 見積一覧 ============
+// ============ 見積一覧（削除済み） ============
 // ============ 一覧キャッシュ（検索フィルタ用） ============
 let _estListCache = [];
 let _orderListCache = [];
@@ -1802,24 +1468,14 @@ async function printSheetDirect(sheetUrl) {
   }
 }
 
-// 全リスト読込
+// 全リスト読込（発注専用化以降は発注一覧のみ）
 async function loadAllLists() {
-  await Promise.all([loadEstimateList(), loadOrderList()]);
+  await loadOrderList();
   filterList();
 }
 
-async function loadEstimateList() {
-  const area = document.getElementById('estListArea');
-  area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center">読み込み中...</p>';
-  try {
-    const res = await fetch(GAS_URL + '?action=listEstimates');
-    const data = await res.json();
-    _estListCache = (data.success && data.estimates) ? data.estimates.slice().reverse() : [];
-    renderEstListArea();
-  } catch (err) {
-    area.innerHTML = '<p style="color:var(--danger);font-size:13px;text-align:center">読込エラー: ' + err.message + '</p>';
-  }
-}
+// 見積一覧読み込みは発注専用化（2026-05-12）で無効化。互換のため空関数として残す
+async function loadEstimateList() { /* no-op: estimate disabled */ }
 
 async function loadOrderList() {
   const area = document.getElementById('orderListArea');
@@ -1845,38 +1501,8 @@ function matchesSearch(obj, q) {
   return fields.some(f => f && String(f).toLowerCase().indexOf(ql) !== -1);
 }
 
-function renderEstListArea() {
-  const area = document.getElementById('estListArea');
-  const q = (document.getElementById('listSearchBox')?.value || '').trim();
-  let filtered = _estListCache.filter(e => matchesSearch(e, q));
-  // 「未発注見積」フィルタ: 作成済のみ（発注済は除外）
-  if (_roleFilter === 'pending_transfer') {
-    filtered = filtered.filter(e => e.status === '作成済');
-  }
-  if (filtered.length === 0) {
-    area.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;text-align:center;padding:8px">' + (q ? '該当なし' : '見積書がありません') + '</p>';
-    return;
-  }
-  let html = '';
-  filtered.forEach(est => {
-    const statusColor = est.status === '作成済' ? 'background:#e6f4ea;color:#137333' :
-                         est.status === '発注済' ? 'background:#e8f0fe;color:#1a73e8' :
-                         'background:#f1f3f4;color:#5f6368';
-    const pdf = pdfUrl(est.sheetUrl);
-    html += '<div class="est-list-card">' +
-      '<div class="est-header"><span class="est-no">' + (est.estimateNo || '-') + '</span>' +
-      '<span class="est-status" style="' + statusColor + '">' + est.status + '</span></div>' +
-      '<div class="est-detail">' + (est.customerName || '') + (est.subject ? ' / ' + est.subject : '') + '</div>' +
-      '<div class="est-detail">' + formatDate(est.estimateDate) + ' / 担当: ' + (est.staff || '') + '</div>' +
-      '<div class="est-amount">¥' + Number(est.grandTotal || 0).toLocaleString() + '</div>' +
-      '<div class="est-actions" style="flex-wrap:wrap">' +
-      '<button class="btn-view" onclick="openEditModal(\'estimate\',\'' + est.id + '\')">📝 編集</button>' +
-      '<button class="btn-view" onclick="downloadPdfById(\'' + est.id + '\',\'estimate\',\'見積_' + (est.estimateNo || '') + '\')" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;border-width:1.5px;border-style:solid">📥 PDF</button>' +
-      (est.status === '作成済' ? '<button class="btn-transfer" onclick="showBatchPOModal(\'' + est.id + '\')">📦 メーカー別発注</button>' : '') +
-      '</div></div>';
-  });
-  area.innerHTML = html;
-}
+// 見積一覧描画は発注専用化（2026-05-12）で無効化。互換のため空関数として残す
+function renderEstListArea() { /* no-op: estimate disabled */ }
 
 function renderOrderListArea() {
   const area = document.getElementById('orderListArea');
@@ -1965,39 +1591,15 @@ function setRoleFilter(role) {
   // 同じボタンをもう一度押すとOFF (toggle)
   _roleFilter = (_roleFilter === role) ? 'none' : role;
   updateRoleFilterUI();
-
-  // 「未発注見積」フィルタONなら見積タブに切替（発注は非表示）
-  if (_roleFilter === 'pending_transfer' && _listFilter !== 'estimate') {
-    setListFilter('estimate');
-  // 「承認者用」「発注担当用」フィルタONなら発注タブに切替（見積は非表示）
-  } else if ((_roleFilter === 'approver' || _roleFilter === 'purchaser') && _listFilter !== 'order') {
-    setListFilter('order');
-  } else if (_roleFilter === 'none' && (_listFilter === 'order' || _listFilter === 'estimate')) {
-    // OFF時は「全て」に戻す
-    setListFilter('all');
-  } else {
-    renderOrderListArea();
-    renderEstListArea();
-    updateResultCount();
-  }
+  renderOrderListArea();
+  updateResultCount();
 }
 
 function updateRoleFilterUI() {
-  const ptBtn = document.getElementById('rolePendingTransferBtn');
   const apBtn = document.getElementById('roleApproverBtn');
   const puBtn = document.getElementById('rolePurchaserBtn');
   const banner = document.getElementById('filterBanner');
 
-  // 未発注見積ボタン
-  if (ptBtn) {
-    const active = _roleFilter === 'pending_transfer';
-    ptBtn.style.background = active ? '#f9ab00' : '#fef7e0';
-    ptBtn.style.borderColor = active ? '#f9ab00' : 'var(--border)';
-    ptBtn.style.boxShadow = active ? '0 4px 10px rgba(249,171,0,0.3)' : 'none';
-    const divs = ptBtn.querySelectorAll('div');
-    if (divs[1]) divs[1].style.color = active ? 'white' : '#b06000';
-    if (divs[2]) divs[2].style.color = active ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)';
-  }
   // 承認者用ボタン
   if (apBtn) {
     const active = _roleFilter === 'approver';
@@ -2020,14 +1622,7 @@ function updateRoleFilterUI() {
   }
   // 絞込中バナー
   if (banner) {
-    if (_roleFilter === 'pending_transfer') {
-      const cnt = _estListCache.filter(e => e.status === '作成済').length;
-      banner.style.display = 'block';
-      banner.style.background = '#fef7e0';
-      banner.style.color = '#b06000';
-      banner.style.border = '1.5px solid #f9ab00';
-      banner.innerHTML = '📋 未発注見積 <strong>' + cnt + '件</strong> を表示中 　<span style="font-weight:400;font-size:12px">（タップで解除）</span>';
-    } else if (_roleFilter === 'approver') {
+    if (_roleFilter === 'approver') {
       const cnt = _orderListCache.filter(o => o.status === '申請中').length;
       banner.style.display = 'block';
       banner.style.background = '#fef7e0';
@@ -2048,10 +1643,9 @@ function updateRoleFilterUI() {
 }
 
 function applyListFilter() {
-  const est = document.getElementById('estListSection');
+  // 発注専用化以降、リスト切替は実質なし（発注一覧のみ表示）
   const ord = document.getElementById('orderListSection');
-  if (est) est.style.display = (_listFilter === 'all' || _listFilter === 'estimate') ? '' : 'none';
-  if (ord) ord.style.display = (_listFilter === 'all' || _listFilter === 'order') ? '' : 'none';
+  if (ord) ord.style.display = '';
 }
 
 // 役割フィルタの適用
@@ -2068,19 +1662,13 @@ function updateResultCount() {
   const q = (document.getElementById('listSearchBox')?.value || '').trim();
   const el = document.getElementById('listResultCount');
   if (!el) return;
-  let eFiltered = _estListCache.filter(e => matchesSearch(e, q));
-  if (_roleFilter === 'pending_transfer') {
-    eFiltered = eFiltered.filter(e => e.status === '作成済');
-  }
-  const eN = eFiltered.length;
   const oFiltered = applyRoleFilter(_orderListCache.filter(o => matchesSearch(o, q)));
   const oN = oFiltered.length;
   let prefix = '';
-  if (_roleFilter === 'pending_transfer') prefix = '📋 未発注見積: ';
-  else if (_roleFilter === 'approver') prefix = '👔 承認待ち: ';
+  if (_roleFilter === 'approver') prefix = '👔 承認待ち: ';
   else if (_roleFilter === 'purchaser') prefix = '👷 承認済(発注すべき): ';
-  if (q) el.textContent = prefix + '🔍「' + q + '」 見積' + eN + '件 / 発注' + oN + '件';
-  else el.textContent = prefix + '見積' + eN + '件 / 発注' + oN + '件';
+  if (q) el.textContent = prefix + '🔍「' + q + '」 発注' + oN + '件';
+  else el.textContent = prefix + '発注' + oN + '件';
 }
 
 // ========= 送信後60秒カウントダウン取消 =========
@@ -2231,13 +1819,21 @@ async function cancelOrderById(id, orderNo) {
   }
 }
 
-// ============ メーカー別ステップ発注 ============
-// キュー: [{maker, supplier, lines, estimateNo}] を1件ずつ発注書タブに転記→確認→送信→次へ
-let poQueue = [];          // 残りのメーカーキュー
+// ============ メーカー別ステップ発注（2026-05-12 削除済み） ============
+// 見積→発注の自動転記機能。発注専用化に伴い無効化。互換のため変数・空関数のみ残す
+let poQueue = [];
 let poQueueEstimateId = null;
-let poQueueDone = 0;       // 完了件数
+let poQueueDone = 0;
 
-async function showBatchPOModal(estimateId) {
+async function showBatchPOModal() { /* no-op: estimate→PO transfer disabled */ }
+function closeBatchPO() { /* no-op */ }
+function executeBatchPO() { /* no-op */ }
+function processNextPOQueue() { /* no-op */ }
+async function transferToPO() { /* no-op */ }
+let transferredEstimateId = null;
+
+/* --- 旧コード保管（archive/with-estimate ブランチに完全版あり） ---
+async function _legacy_showBatchPOModal(estimateId) {
   showToast('見積データを取得中...', 'info');
   try {
     const res = await fetch(GAS_URL + '?action=getEstimateData&id=' + estimateId);
@@ -2526,7 +2122,8 @@ async function transferToPO(estimateId) {
     showToast('転記エラー: ' + err.message, 'error');
   }
 }
-
+*/
+// 旧コード保管ここまで
 
 
 // ============================================================

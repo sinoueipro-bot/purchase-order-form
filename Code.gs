@@ -97,19 +97,13 @@ function fixIndexSheet() {
 }
 
 // ============ POST ============
+// 見積関連の formType (estimate / quickPO / batchPO / updateEstimate) は
+// 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md 参照
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     var result;
-    if (data.formType === 'estimate') {
-      result = processEstimate(data);
-    } else if (data.formType === 'quickPO') {
-      result = quickTransferToPO(data);
-    } else if (data.formType === 'batchPO') {
-      result = batchTransferToPO(data);
-    } else if (data.formType === 'updateEstimate') {
-      result = updateEstimate(data);
-    } else if (data.formType === 'updateOrder') {
+    if (data.formType === 'updateOrder') {
       result = updateOrder(data);
     } else {
       result = processOrder(data);
@@ -130,10 +124,7 @@ function doGet(e) {
   var action = e.parameter.action;
   var id = e.parameter.id;
 
-  // 見積書API（JSON応答）
-  if (action === 'listEstimates') return jsonResponse(getEstimateList());
-  if (action === 'getEstimateData') return jsonResponse(getEstimateData(id));
-  if (action === 'markTransferred') return jsonResponse(markEstimateTransferred(id));
+  // 発注関連API
   if (action === 'listOrders') return jsonResponse(getOrderList());
   if (action === 'cancelOrder') return jsonResponse(cancelOrder(id));
   if (action === 'markOrderCompleted') return jsonResponse(markOrderCompleted(id));
@@ -141,10 +132,11 @@ function doGet(e) {
   if (action === 'showAllSheets') return jsonResponse(showAllSheets());
   if (action === 'getPdf') return jsonResponse(getSheetPdfBase64(e.parameter.gid));
   if (action === 'getPdfById') return jsonResponse(getPdfById(id, e.parameter.type));
-  if (action === 'getEstimateDetails') return jsonResponse(getEstimateDetails(id));
   if (action === 'getOrderDetails') return jsonResponse(getOrderDetails(id));
   // 画面UI経由の承認API（パスワード必須）
   if (action === 'approveByUI') return jsonResponse(approveOrderByUI(id, e.parameter.password));
+  // 見積関連API (listEstimates / getEstimateData / markTransferred / getEstimateDetails)
+  // と一時API hideEstimateAll は 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md
 
   if (!action || !id) return HtmlService.createHtmlOutput('<h2>発注書・見積書APIは稼働中です</h2>');
 
@@ -1670,20 +1662,12 @@ function updateOrder(data) {
 // ============ API: IDベースのPDF生成（NEW_FLOW用 - 一時シート生成→PDF→削除） ============
 function getPdfById(id, type) {
   if (!id) return { success: false, error: 'IDが必要です' };
+  // 発注専用化（2026-05-12）: type='estimate' は無効
+  if (type !== 'order') return { success: false, error: '発注書以外のPDF出力は無効です' };
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var details;
-  var tplCandidates;
-  var fillFunc;
-
-  if (type === 'order') {
-    details = getOrderDetails(id);
-    tplCandidates = PO_TEMPLATE_CANDIDATES;
-    fillFunc = _fillOrderTemplate;
-  } else {
-    details = getEstimateDetails(id);
-    tplCandidates = EST_TEMPLATE_CANDIDATES;
-    fillFunc = _fillEstimateTemplate;
-  }
+  var details = getOrderDetails(id);
+  var tplCandidates = PO_TEMPLATE_CANDIDATES;
+  var fillFunc = _fillOrderTemplate;
   if (!details.success) return details;
 
   // 既にシートがある場合（旧フロー）はgidから直接PDF
@@ -1824,6 +1808,9 @@ function _fillOrderTemplate(sh, data) {
   try { sh.getRange('AJ60').setValue(data.orderer); } catch(e) {}
   try { sh.getRange('AF66').setValue(data.urgent?'緊急':'PASS'); } catch(e) {}
 }
+
+// _hideEstimateAll は 2026-05-12 の見積シート非表示化作業で使用し、削除済み。
+// 復元時に再度シートを非表示にしたい場合は docs/RESTORE_ESTIMATE.md の手順参照
 
 // ============ メーカー→仕入先マッピング ============
 var MAKER_TO_SUPPLIER = {
