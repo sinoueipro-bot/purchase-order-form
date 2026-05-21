@@ -49,11 +49,24 @@ function initSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var s = ss.getSheetByName(INDEX_SHEET);
   if (!s) s = ss.insertSheet(INDEX_SHEET);
-  // 列構造: A〜M=基本情報, N=明細JSON, O=特記事項, P=更新日時, Q=発注完了日(2026-05-12追加)
-  s.getRange(1,1,1,17).setValues([['受付日時','注文No.','発行日','仕入先','事業所','現場名','合計金額','注文者','緊急','承認者','ステータス','シートリンク','ID','明細JSON','特記事項','更新日時','発注完了日']]);
-  s.getRange(1,1,1,17).setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
+  // 列構造（2026-05-21 拡張）:
+  //   A〜M: 基本情報
+  //   N=明細JSON, O=特記事項, P=更新日時
+  //   Q=発注完了日 (2026-05-12 追加)
+  //   R=事務員通知不要 (2026-05-21 追加・申請時の選択)
+  //   S=入荷チェック (2026-05-21 追加・事務員手動入力)
+  //   T=保安費, U=消耗品費, V=器具仕入れ, W=顧客設備 (2026-05-21 追加・事務員手動入力)
+  var headers = ['受付日時','注文No.','発行日','仕入先','事業所','現場名','合計金額','注文者','緊急','承認者','ステータス','シートリンク','ID','明細JSON','特記事項','更新日時','発注完了日','事務員通知不要','入荷チェック','保安費','消耗品費','器具仕入れ','顧客設備'];
+  s.getRange(1,1,1,headers.length).setValues([headers]);
+  s.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
   s.setFrozenRows(1);
-  s.setColumnWidth(17, 150);
+  s.setColumnWidth(17, 150); // 発注完了日
+  s.setColumnWidth(18, 120); // 事務員通知不要
+  s.setColumnWidth(19, 110); // 入荷チェック
+  s.setColumnWidth(20, 100); // 保安費
+  s.setColumnWidth(21, 100); // 消耗品費
+  s.setColumnWidth(22, 110); // 器具仕入れ
+  s.setColumnWidth(23, 110); // 顧客設備
   Logger.log('initSheet完了');
 }
 
@@ -166,15 +179,26 @@ function doGet(e) {
     var approverName = data[rowIdx-1][9]; // J列: 承認者名
     writeApproverToOrderSheet(ss, sheetUrl, approverName);
 
-    notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl);
+    // R列 (idx=17): 事務員通知不要フラグ
+    var skipPurchaser = String(data[rowIdx-1][17] || '') === 'YES';
+
+    // 承認時の通知: 申請者(注文者)に必ず通知 + 事務員(PURCHASER)にも通知（skipPurchaser=true は除外）
+    try { notifyOrderer(id, orderNo, supplier, orderer, total, sheetUrl, '承認済'); } catch(e) { Logger.log('申請者通知エラー: ' + e.toString()); }
+    if (!skipPurchaser) {
+      try { notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl); } catch(e) { Logger.log('事務員通知エラー: ' + e.toString()); }
+    }
+
+    var notifyMsg = skipPurchaser ? '申請者に通知しました（事務員通知はスキップ）' : '申請者と事務員に通知しました';
     return HtmlService.createHtmlOutput(resultPage('承認しました',
       '注文No.: ' + orderNo + '<br>仕入先: ' + supplier + '<br>金額: &yen;' + Number(total).toLocaleString() +
-      '<br><br>発注担当者に通知しました。', '#188038', sheetUrl));
+      '<br><br>' + notifyMsg + '。', '#188038', sheetUrl));
 
   } else if (action === 'reject') {
     if (currentStatus !== '申請中') return HtmlService.createHtmlOutput(resultPage('処理済', 'この発注書は既に処理済みです', '#5f6368'));
     applyStatusColor(sheet, rowIdx, '却下');
-    return HtmlService.createHtmlOutput(resultPage('却下しました', '注文No.: ' + orderNo, '#d93025', sheetUrl));
+    // 却下時: 申請者に通知
+    try { notifyOrderer(id, orderNo, supplier, orderer, total, sheetUrl, '却下'); } catch(e) { Logger.log('却下通知エラー: ' + e.toString()); }
+    return HtmlService.createHtmlOutput(resultPage('却下しました', '注文No.: ' + orderNo + '<br><br>申請者に通知しました。', '#d93025', sheetUrl));
   }
 
   return HtmlService.createHtmlOutput(resultPage('エラー', '不明なアクション', '#d93025'));
@@ -215,12 +239,16 @@ function approveOrderByUI(id, password) {
   var total = row[6];
   var approverName = row[9]; // J列: 承認者名
   var sheetUrl = row[11];
+  var skipPurchaser = String(row[17] || '') === 'YES'; // R列: 事務員通知不要
 
   // 発注書シートの承認欄に承認者名を書き込む（既存ロジック流用）
   try { writeApproverToOrderSheet(ss, sheetUrl, approverName); } catch(e) { Logger.log('承認者名書込エラー: ' + e.toString()); }
 
-  // 発注担当者に通知メール（既存ロジック流用）
-  try { notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl); } catch(e) { Logger.log('通知メール送信エラー: ' + e.toString()); }
+  // 申請者通知 + 事務員通知（事務員はskipPurchaser=false時のみ）
+  try { notifyOrderer(id, orderNo, supplier, orderer, total, sheetUrl, '承認済'); } catch(e) { Logger.log('申請者通知エラー: ' + e.toString()); }
+  if (!skipPurchaser) {
+    try { notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl); } catch(e) { Logger.log('事務員通知エラー: ' + e.toString()); }
+  }
 
   return {
     success: true,
@@ -396,7 +424,15 @@ function addToIndex(ss, data, os, uniqueId) {
   var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
   var url = os ? (ss.getUrl() + '#gid=' + os.getSheetId()) : '';
   var linesJson = JSON.stringify(data.lines || []);
-  s.appendRow([now, data.orderNo, data.issueDate, data.supplier, data.branch, data.siteName||'', data.total, data.orderer, data.urgent?'緊急':'PASS', data.approverName, '申請中', url, uniqueId, linesJson, data.notes || '', now]);
+  // 16列(A-P) + Q=発注完了日(空, markOrderCompleted で書き込む) + R=事務員通知不要 + S-W=事務員手動入力(空)
+  s.appendRow([
+    now, data.orderNo, data.issueDate, data.supplier, data.branch, data.siteName||'',
+    data.total, data.orderer, data.urgent?'緊急':'PASS', data.approverName, '申請中',
+    url, uniqueId, linesJson, data.notes || '', now,
+    '',  // Q: 発注完了日
+    data.skipPurchaserNotify ? 'YES' : '',  // R: 事務員通知不要フラグ
+    '', '', '', '', ''  // S-W: 入荷チェック / 保安費 / 消耗品費 / 器具仕入れ / 顧客設備
+  ]);
   var lr = s.getLastRow();
   s.getRange(lr, 7).setNumberFormat('#,##0');
   applyStatusColor(s, lr, '申請中');
@@ -508,6 +544,38 @@ function sendUrgentEmail(data, os, uniqueId) {
   }
 
   MailApp.sendEmail({ to: toList.join(','), subject: subj, body: plainBody, htmlBody: hb });
+}
+
+// ============ 申請者(注文者)に通知（承認/却下時） ============
+// 現状: STAFFに個別メアド未登録のため、暫定で PURCHASER.email に送信し
+// 件名に「申請者: 〇〇 様」と明記。後でSTAFFをオブジェクト化したら data.ordererEmail で個別送信に切替可
+function notifyOrderer(id, orderNo, supplier, orderer, total, sheetUrl, status) {
+  var isApproved = (status === '承認済');
+  var headerColor = isApproved ? '#188038' : '#d93025';
+  var headerText = isApproved ? '【発注承認】あなたの申請が承認されました' : '【発注却下】あなたの申請が却下されました';
+  var msg = isApproved
+    ? '<p>あなたが申請した発注書が承認されました。事務員にも通知済みです。</p>'
+    : '<p>申し訳ありませんが、あなたが申請した発注書は<strong style="color:#d93025">却下</strong>されました。<br>必要があれば再度申請してください。</p>';
+
+  var hb = '<div style="font-family:sans-serif;max-width:600px;margin:0 auto">' +
+    '<div style="background:' + headerColor + ';color:white;padding:16px;border-radius:8px 8px 0 0"><h2 style="margin:0;font-size:16px">' + headerText + '</h2></div>' +
+    '<div style="border:1px solid #ddd;border-top:none;padding:20px;border-radius:0 0 8px 8px">' +
+    '<p style="font-size:14px;color:#666">申請者: <strong>' + orderer + ' 様</strong></p>' +
+    msg +
+    '<table style="width:100%;border-collapse:collapse;margin:16px 0">' +
+    '<tr><td style="padding:8px;font-weight:bold;background:#f8f9fa;width:120px">注文No.</td><td style="padding:8px">' + orderNo + '</td></tr>' +
+    '<tr><td style="padding:8px;font-weight:bold;background:#f8f9fa">仕入先</td><td style="padding:8px">' + supplier + '</td></tr>' +
+    '<tr><td style="padding:8px;font-weight:bold;background:#f8f9fa">金額</td><td style="padding:8px">&yen;' + Number(total).toLocaleString() + '</td></tr></table>' +
+    '<a href="' + sheetUrl + '" style="display:block;text-align:center;padding:14px;background:#1a73e8;color:white;border-radius:8px;text-decoration:none;font-size:15px;font-weight:bold;margin:16px 0">発注書を確認する</a>' +
+    '</div></div>';
+
+  // 暫定: PURCHASER.email に送信 + 件名で誰宛か明記
+  MailApp.sendEmail({
+    to: PURCHASER.email,
+    subject: (isApproved ? '【承認通知】' : '【却下通知】') + '申請者: ' + orderer + ' / ' + supplier + ' / ' + orderNo,
+    body: (isApproved ? '承認されました' : '却下されました') + '\n注文No.: ' + orderNo + '\n仕入先: ' + supplier + '\n金額: ' + Number(total).toLocaleString() + '円',
+    htmlBody: hb
+  });
 }
 
 // ============ 発注担当者に通知（通常承認後） ============

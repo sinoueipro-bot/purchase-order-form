@@ -428,6 +428,13 @@ textarea { resize: vertical; min-height: 60px; }
       <span class="urgent-label" id="urgentLabel">PASS</span>
     </div>
   </div>
+  <div class="field-group" style="background:#fef7e0;border:1.5px solid #f9ab00;border-radius:8px;padding:10px 12px;margin-top:8px">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#b06000">
+      <input type="checkbox" id="skipPurchaserNotify" style="width:18px;height:18px;cursor:pointer">
+      <span>📌 事務員への発注依頼は不要（自社のみで完結）</span>
+    </label>
+    <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;padding-left:26px">チェックすると、承認後の事務員通知メールが送信されません</div>
+  </div>
 </div>
 <!-- 確認内容 -->
 <div class="section">
@@ -672,8 +679,8 @@ const APPROVERS = [
   { name: '亀谷常務', email: 'kametani@i-pro.co.jp' }
 ];
 const FORM_TYPES = [
-  { value: 'U', label: 'U：売上あり' },
-  { value: 'M', label: 'M：無償' }
+  { value: 'U', label: 'その他' },
+  { value: 'M', label: '無償' }
 ];
 
 // ============ 状態 ============
@@ -2147,8 +2154,8 @@ function addLineItem() {
     '<div><div class="field-label">型式</div><input type="text" id="model-' + num + '" placeholder="型式"></div>' +
     '<div class="row"><div><div class="field-label"><span class="required-badge">必須</span>数量</div>' +
     '<input type="number" id="qty-' + num + '" min="1" placeholder="0" oninput="calcLineAmount(' + num + ')"></div>' +
-    '<div><div class="field-label"><span class="required-badge">必須</span>単価</div>' +
-    '<input type="number" id="price-' + num + '" min="0" placeholder="0" oninput="calcLineAmount(' + num + ')"></div></div>' +
+    '<div><div class="field-label">単価<span style="font-size:10px;color:var(--text-secondary);margin-left:4px">（任意・空欄可）</span></div>' +
+    '<input type="number" id="price-' + num + '" min="0" placeholder="未定の場合は空欄" oninput="calcLineAmount(' + num + ')"></div></div>' +
     '<div class="amount-display" id="amount-' + num + '">&yen;0</div>' +
     '<div><div class="field-label">備考</div><input type="text" id="remark-' + num + '" placeholder="備考"></div>';
   c.appendChild(d);
@@ -2259,7 +2266,7 @@ function getValidationErrors() {
     if (!document.getElementById('maker-' + n)?.value) e.push('明細' + n + ':メーカー');
     if (!document.getElementById('product-' + n)?.value) e.push('明細' + n + ':商品名');
     if (!document.getElementById('qty-' + n)?.value) e.push('明細' + n + ':数量');
-    if (!document.getElementById('price-' + n)?.value) e.push('明細' + n + ':単価');
+    // 単価は任意（事務員が後で手書き記入するケースに対応）。バリデーション対象外
     if (!document.getElementById('type-' + n)?.value) e.push('明細' + n + ':形態');
   });
   if (!document.getElementById('orderer').value) e.push('注文者');
@@ -2308,6 +2315,7 @@ function collectFormData() {
     notes: document.getElementById('notes')?.value || '',  // 互換用（実質未使用）
     orderer: document.getElementById('orderer').value,
     urgent: document.getElementById('urgent').checked,
+    skipPurchaserNotify: document.getElementById('skipPurchaserNotify')?.checked || false,
     approverEmail: email,
     approverName: approver ? approver.name : '',
     sourceEstimateNo: window._transferredEstNo || ''
