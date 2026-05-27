@@ -119,7 +119,18 @@ function fixIndexSheet() {
 // 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md 参照
 function doPost(e) {
   try {
+    // (2026-05-27 v75) クリティカル調査用: 受信した生データを丸ごとログ出力
+    Logger.log('====== doPost 受信 ======');
+    Logger.log('postData.contents: ' + (e && e.postData ? e.postData.contents : '<null>'));
     var data = JSON.parse(e.postData.contents);
+    Logger.log('parsed data keys: ' + Object.keys(data).join(','));
+    Logger.log('data.lines (raw): ' + JSON.stringify(data.lines));
+    Logger.log('data.lines.length: ' + ((data.lines && data.lines.length) || 0));
+    if (data.lines) {
+      data.lines.forEach(function(ln, i) {
+        Logger.log('  line[' + i + ']: maker=[' + ln.maker + '] product=[' + ln.product + '] qty=[' + ln.qty + '] price=[' + ln.price + ']');
+      });
+    }
     var result;
     if (data.formType === 'updateOrder') {
       result = updateOrder(data);
@@ -128,8 +139,97 @@ function doPost(e) {
     }
     return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
   } catch (er) {
+    Logger.log('doPost エラー: ' + er.toString());
     return ContentService.createTextOutput(JSON.stringify({success:false,error:er.toString()})).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// ============ ★ デバッグ: 最新の発注書シートの結合構造と値を確認 ============
+// GASエディタで「inspectActualSheet」を選んで実行 → 実行ログで最新の発注書シートの
+// 行18-22の値・結合範囲が見える。明細書込みが効かない原因 (結合内側セル等) を特定。
+function inspectActualSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  // 発注一覧/見積一覧/テンプレ系を除外して、最新の発注書シートを探す
+  var excludeNames = ['発注一覧', '見積一覧', '見積書(テンプレート)', '発注書(テンプレート)', 'テンプレート'];
+  var target = null;
+  for (var i = sheets.length - 1; i >= 0; i--) {
+    var name = sheets[i].getName();
+    if (excludeNames.indexOf(name) === -1 && name.indexOf('テンプレ') === -1 && name.indexOf('見積_') !== 0) {
+      target = sheets[i];
+      break;
+    }
+  }
+  if (!target) { Logger.log('発注書シートが見つかりません'); return; }
+  Logger.log('====== 最新発注書シートの構造調査 ======');
+  Logger.log('シート名: [' + target.getName() + '] sheetId=' + target.getSheetId());
+
+  // 行18-22 の主要セルの結合範囲と現在の値を出力
+  var addrs = [
+    'A18','C18','H18','P18','Z18','AB18','AG18','AL18',
+    'A19','C19','H19','P19','Z19','AB19','AG19','AL19',
+    'A20','C20','H20','P20','Z20','AB20','AG20','AL20',
+    'A22','C22','H22'
+  ];
+  addrs.forEach(function(addr) {
+    var cell = target.getRange(addr);
+    var merged = cell.getMergedRanges();
+    var val = cell.getValue();
+    var mergedStr = (merged && merged.length > 0)
+      ? merged.map(function(r){ return r.getA1Notation(); }).join(',')
+      : 'なし';
+    Logger.log('  ' + addr + ' value=[' + val + '] merged=[' + mergedStr + ']');
+  });
+  // テンプレートシートも同じく出力
+  Logger.log('====== テンプレートシートの構造調査 ======');
+  var tmpl = findTemplateSheet(ss, PO_TEMPLATE_CANDIDATES);
+  if (!tmpl) { Logger.log('テンプレートが見つかりません'); return; }
+  Logger.log('テンプレ名: [' + tmpl.getName() + ']');
+  addrs.forEach(function(addr) {
+    var cell = tmpl.getRange(addr);
+    var merged = cell.getMergedRanges();
+    var val = cell.getValue();
+    var mergedStr = (merged && merged.length > 0)
+      ? merged.map(function(r){ return r.getA1Notation(); }).join(',')
+      : 'なし';
+    Logger.log('  ' + addr + ' value=[' + val + '] merged=[' + mergedStr + ']');
+  });
+  Logger.log('====== 完了 ======');
+}
+
+// ============ ★ デバッグ: 過去発注のN列(明細JSON)を読んで実態確認 ============
+// GASエディタで「debugLatestOrders」を選んで実行 → 実行ログで最新5件の送信データが見える
+function debugLatestOrders() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(INDEX_SHEET);
+  if (!s) { Logger.log('発注一覧シートが見つかりません'); return; }
+  var lastRow = s.getLastRow();
+  Logger.log('====== 発注一覧 最新5件のデバッグ ======');
+  Logger.log('総行数: ' + lastRow);
+  var startRow = Math.max(2, lastRow - 4);
+  for (var r = startRow; r <= lastRow; r++) {
+    var row = s.getRange(r, 1, 1, 23).getValues()[0];
+    Logger.log('--- 行 ' + r + ' ---');
+    Logger.log('  受付日時: ' + row[0]);
+    Logger.log('  注文No.: ' + row[1]);
+    Logger.log('  仕入先: ' + row[3]);
+    Logger.log('  事業所: ' + row[4]);
+    Logger.log('  現場名: ' + row[5]);
+    Logger.log('  合計金額: ' + row[6]);
+    Logger.log('  注文者: ' + row[7]);
+    Logger.log('  ID: ' + row[12]);
+    Logger.log('  N列(明細JSON): ' + row[13]);
+    try {
+      var lines = JSON.parse(row[13] || '[]');
+      Logger.log('  明細件数: ' + lines.length);
+      lines.forEach(function(ln, i) {
+        Logger.log('    [' + i + '] maker=[' + ln.maker + '] product=[' + ln.product + '] model=[' + ln.model + '] qty=[' + ln.qty + '] price=[' + ln.price + '] type=[' + ln.type + ']');
+      });
+    } catch (er) {
+      Logger.log('  JSON parse エラー: ' + er.toString());
+    }
+  }
+  Logger.log('====== 完了 ======');
 }
 
 // ============ JSON応答ヘルパー ============
@@ -350,29 +450,49 @@ function createFromTemplate(ss, tabName, data) {
   try { sh.getRange('AB15').setValue(''); } catch(e) {}
 
   var lines = data.lines || [];
+  Logger.log('createFromTemplate 対象シート: [' + sh.getName() + '] sheetId=' + sh.getSheetId());
   Logger.log('createFromTemplate: lines.length=' + lines.length + ', lines=' + JSON.stringify(lines));
-  // 明細は2行結合 (A18:B19, A20:B21, ...) なので idx*2 で2行ステップ
+  // ★★★ 2026-05-27 v77 重大修正 ★★★
+  // テンプレート実構造: ヘッダー=行17-18結合 (A17:B18 等)、明細1件目=行19-20結合 (A19:B20 等)
+  // 旧 r = 18 + idx*2 → 行18はヘッダー結合の内側 → setValue が無視されて全部空だった
+  // 正解: r = 19 + idx*2 → 各明細行の結合の「左上」セルに書き込む
+  function _writeAndVerify(addr, val, label) {
+    try {
+      sh.getRange(addr).setValue(val);
+    } catch (e) {
+      Logger.log('  ❌ ' + addr + ' (' + label + ') setValue 例外: ' + e.toString());
+    }
+  }
   for (var idx = 0; idx < 8; idx++) {
-    var r = 18 + idx * 2;
+    var r = 19 + idx * 2;  // ★ 18→19 に修正
     var ln = lines[idx];
-    // (2026-05-27) 条件緩和: maker/product/qty のいずれかがあれば書き込む
-    //   旧: if (ln && ln.maker) → メーカー空欄で全部スキップする問題があった
     var hasData = ln && (ln.maker || ln.product || (ln.qty && ln.qty > 0));
     if (hasData) {
-      try { sh.getRange('A'+r).setValue(idx+1); } catch(e) {}
-      try { sh.getRange('C'+r).setValue(ln.maker || ''); } catch(e) {}
-      try { sh.getRange('H'+r).setValue(ln.product || ''); } catch(e) {}
-      try { sh.getRange('P'+r).setValue(ln.model || ''); } catch(e) {}
-      try { sh.getRange('Z'+r).setValue(ln.qty || ''); } catch(e) {}
-      try { sh.getRange('AB'+r).setValue(ln.price || ''); } catch(e) {}
-      try { sh.getRange('AG'+r).setValue((ln.qty && ln.price) ? ln.qty*ln.price : ''); } catch(e) {}
-      try { sh.getRange('AL'+r).setValue(ln.remark || ''); } catch(e) {}
+      _writeAndVerify('A'+r, idx+1, 'No');
+      _writeAndVerify('C'+r, ln.maker || '', 'maker');
+      _writeAndVerify('H'+r, ln.product || '', 'product');
+      _writeAndVerify('P'+r, ln.model || '', 'model');
+      _writeAndVerify('Z'+r, ln.qty || '', 'qty');
+      _writeAndVerify('AB'+r, ln.price || '', 'price');
+      _writeAndVerify('AG'+r, (ln.qty && ln.price) ? ln.qty*ln.price : '', 'amount');
+      _writeAndVerify('AL'+r, ln.remark || '', 'remark');
       Logger.log('Wrote row ' + r + ': ' + JSON.stringify(ln));
     } else {
       ['A','C','H','P','Z','AB','AG','AL'].forEach(function(c){
         try { sh.getRange(c+r).setValue(''); } catch(e) {}
       });
     }
+  }
+  // 書き込み後の verify (flush で確実に反映してから読む)
+  SpreadsheetApp.flush();
+  Logger.log('====== 書き込み後 verify ======');
+  for (var idx = 0; idx < Math.min(lines.length, 8); idx++) {
+    var r = 19 + idx * 2;  // ★ 18→19 に修正
+    ['A','C','H','P','Z','AB','AG','AL'].forEach(function(c){
+      var addr = c + r;
+      var actual = sh.getRange(addr).getValue();
+      Logger.log('  ' + addr + ' actual=[' + actual + ']');
+    });
   }
   try { sh.getRange('AG49').setValue(data.total); } catch(e) {}
 
