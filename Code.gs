@@ -525,9 +525,9 @@ function createFromTemplate(ss, tabName, data) {
   try { sh.getRange('L51').setValue(''); } catch(e) {}
   try { sh.getRange('P51').setValue(''); } catch(e) {}
 
-  // ◎ 請求先 (54行) — 本社/福岡店の○マーク
+  // ◎ 請求先 (54行) — 本社/福岡店の○マーク (2026-05-27 v81: 飯塚ガスセンターは廃止)
   try { sh.getRange('F54').setValue(data.branch==='本社'?'○':''); } catch(e) {}
-  try { sh.getRange('J54').setValue(data.branch==='福岡店'||data.branch==='飯塚ガスセンター'?'○':''); } catch(e) {}
+  try { sh.getRange('J54').setValue(data.branch==='福岡店'?'○':''); } catch(e) {}
   // 旧位置クリア
   try { sh.getRange('F53').setValue(''); } catch(e) {}
   try { sh.getRange('J53').setValue(''); } catch(e) {}
