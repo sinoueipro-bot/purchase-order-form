@@ -164,12 +164,18 @@ function inspectActualSheet() {
   Logger.log('====== 最新発注書シートの構造調査 ======');
   Logger.log('シート名: [' + target.getName() + '] sheetId=' + target.getSheetId());
 
-  // 行18-22 の主要セルの結合範囲と現在の値を出力
+  // 行18-22 と 50-58 の主要セルの結合範囲と現在の値を出力
   var addrs = [
     'A18','C18','H18','P18','Z18','AB18','AG18','AL18',
     'A19','C19','H19','P19','Z19','AB19','AG19','AL19',
     'A20','C20','H20','P20','Z20','AB20','AG20','AL20',
-    'A22','C22','H22'
+    'A22','C22','H22',
+    // 下半分 (納入先/請求先/納入希望日/現場名)
+    'F50','F51','F52','F53','F54','F55','F56','F57',
+    'J53','J54','J55',
+    'R53','R54','R55',
+    'V53','V54','V55',
+    'L51','L53','P51'
   ];
   addrs.forEach(function(addr) {
     var cell = target.getRange(addr);
@@ -496,35 +502,54 @@ function createFromTemplate(ss, tabName, data) {
   }
   try { sh.getRange('AG49').setValue(data.total); } catch(e) {}
 
-  // 51行は「納入先」行。○ではなくユーザー入力の納品先文字列を書き込む（旧コードのバグ修正 2026-05-12）
-  // F51 に納入先の値、L51/P51 は空でクリア
-  try { sh.getRange('F51').setValue(data.deliveryPlace || ''); } catch(e) {}
+  // ★★★ 2026-05-27 v78 重大修正 ★★★
+  // 明細(r=18→19)と同じく、納入先/請求先/納入希望日/現場名 も全て行が1つ下にズレていた
+  // 旧コードは結合の右下セル(行51/53/55)に書いていて Google Sheets に黙って無視されていた
+  // 正解: 結合の左上セル = 行52/54/56 に書く
+  //   - F52: 納入先 (旧 F51)
+  //   - F54: 請求先○ 本社 (旧 F53)
+  //   - J54: 請求先○ 福岡店 (旧 J53)
+  //   - R54: 納入希望日 月 (旧 R53)
+  //   - V54: 納入希望日 日 (旧 V53)
+  //   - F56: 現場名 (旧 F55)
+  //
+  // ◎ 納入先 (52行)
+  try { sh.getRange('F52').setValue(data.deliveryPlace || ''); } catch(e) {}
+  // 旧位置クリア (テンプレに残った可能性のある古い値消去)
+  try { sh.getRange('F51').setValue(''); } catch(e) {}
   try { sh.getRange('L51').setValue(''); } catch(e) {}
   try { sh.getRange('P51').setValue(''); } catch(e) {}
-  // 53行は「請求先」行。本社/福岡店の○マーク（debug確認: G53=本社ラベル,K53=福岡店ラベル）
-  // ○マークはラベルの左隣の F53/J53
-  try { sh.getRange('F53').setValue(data.branch==='本社'?'○':''); } catch(e) {}
-  try { sh.getRange('J53').setValue(data.branch==='福岡店'||data.branch==='飯塚ガスセンター'?'○':''); } catch(e) {}
-  try { sh.getRange('L53').setValue(''); } catch(e) {}  // 旧コードがL53に書いていたのでクリア
+
+  // ◎ 請求先 (54行) — 本社/福岡店の○マーク
+  try { sh.getRange('F54').setValue(data.branch==='本社'?'○':''); } catch(e) {}
+  try { sh.getRange('J54').setValue(data.branch==='福岡店'||data.branch==='飯塚ガスセンター'?'○':''); } catch(e) {}
+  // 旧位置クリア
+  try { sh.getRange('F53').setValue(''); } catch(e) {}
+  try { sh.getRange('J53').setValue(''); } catch(e) {}
+  try { sh.getRange('L53').setValue(''); } catch(e) {}
 
   var today = new Date();
-  // 納入希望日（テンプレ実構造: R53=月、V53=日）
-  // 旧バージョンの S53/V53 への today 書き込みはユーザー指定の納期に置き換え
+  // ◎ 納入希望日 (54行) — 月=R54、日=V54
   if (data.deliveryDate) {
     var dParts = String(data.deliveryDate).split('-');
     if (dParts.length === 3) {
-      try { sh.getRange('R53').setValue(parseInt(dParts[1])); } catch(e) {}
-      try { sh.getRange('V53').setValue(parseInt(dParts[2])); } catch(e) {}
+      try { sh.getRange('R54').setValue(parseInt(dParts[1])); } catch(e) {}
+      try { sh.getRange('V54').setValue(parseInt(dParts[2])); } catch(e) {}
     }
   } else {
-    try { sh.getRange('R53').setValue(''); } catch(e) {}
-    try { sh.getRange('V53').setValue(''); } catch(e) {}
+    try { sh.getRange('R54').setValue(''); } catch(e) {}
+    try { sh.getRange('V54').setValue(''); } catch(e) {}
   }
-  // 納品先は上の F51 で書き込み済み（C51 は既存テンプレでは未使用）
-  // 現場名（件名）: テンプレ確認済み F55:AQ56 結合の主セル F55 に書き込む
-  try { sh.getRange('F55').setValue(data.siteName||''); } catch(e) {}
-  // 旧 D55 への書き込みは無視されていた（結合外）。念のためクリア
+  // 旧位置クリア (テンプレに固定値 4/15 が残っていた可能性)
+  try { sh.getRange('R53').setValue(''); } catch(e) {}
+  try { sh.getRange('V53').setValue(''); } catch(e) {}
+
+  // ◎ 現場名 (56行) — F56:AQ57 結合の左上 F56
+  try { sh.getRange('F56').setValue(data.siteName||''); } catch(e) {}
+  // 旧位置クリア (テンプレに固定値 KKK が残っていた可能性)
+  try { sh.getRange('F55').setValue(''); } catch(e) {}
   try { sh.getRange('D55').setValue(''); } catch(e) {}
+  try { sh.getRange('D56').setValue(''); } catch(e) {}
   // 特記事項(C58) は 2026-05-12 削除。発注全体の備考は廃止し商品毎の備考に置き換えたため空にする
   try { sh.getRange('C58').setValue(''); } catch(e) {}
   sh.getRange('X62').setValue(today.getMonth()+1);
