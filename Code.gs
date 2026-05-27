@@ -444,7 +444,10 @@ function createFromTemplate(ss, tabName, data) {
   sh.getRange('AL1').setValue(parseInt(d[1]));
   sh.getRange('AO1').setValue(parseInt(d[2]));
   sh.getRange('AH3').setValue(data.orderNo);
-  sh.getRange('A9').setValue(data.supplier);  // A9:H10結合セル
+  // ★ 2026-05-27 v79 修正: 仕入先は A10 に書く (A10:H11 結合の左上)
+  //   旧 A9 は結合外 (or 結合の上端) で「9行目」に書かれていた
+  try { sh.getRange('A10').setValue(data.supplier); } catch(e) {}
+  try { sh.getRange('A9').setValue(''); } catch(e) {}  // 旧位置クリア
   sh.getRange('AL12').setValue(data.branch);
   // 住所/TEL は結合主セル Z12/Z13/Z14 に直接書く（debugで確認済み）
   try { sh.getRange('Z12').setValue(bi.zip); } catch(e) {}
