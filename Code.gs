@@ -43,6 +43,9 @@ function findTemplateSheet(ss, candidates) {
 var APPROVER_PASS = { name: '井上将吾', email: 's.inoue.ipro@gmail.com' };
 var APPROVER_URGENT = { name: '井上将吾', email: 's.inoue.ipro@gmail.com' };
 var PURCHASER = { name: '井上将吾', email: 's.inoue.ipro@gmail.com' };
+// ★ 事務員メアド一覧 (2026-05-27 追加・通常承認後通知 + 緊急SOS時の同報先)
+//   ここに追加すると notifyPurchaser / sendUrgentEmail で全員に同報されます
+var JIMUIN_EMAILS = ['fukuoka@i-pro.co.jp', 's.inoue.ipro@gmail.com'];
 
 // ============ 初期化 ============
 function initSheet() {
@@ -347,20 +350,24 @@ function createFromTemplate(ss, tabName, data) {
   try { sh.getRange('AB15').setValue(''); } catch(e) {}
 
   var lines = data.lines || [];
-  Logger.log('createFromTemplate: lines.length=' + lines.length);
+  Logger.log('createFromTemplate: lines.length=' + lines.length + ', lines=' + JSON.stringify(lines));
   // 明細は2行結合 (A18:B19, A20:B21, ...) なので idx*2 で2行ステップ
   for (var idx = 0; idx < 8; idx++) {
     var r = 18 + idx * 2;
     var ln = lines[idx];
-    if (ln && ln.maker) {
+    // (2026-05-27) 条件緩和: maker/product/qty のいずれかがあれば書き込む
+    //   旧: if (ln && ln.maker) → メーカー空欄で全部スキップする問題があった
+    var hasData = ln && (ln.maker || ln.product || (ln.qty && ln.qty > 0));
+    if (hasData) {
       try { sh.getRange('A'+r).setValue(idx+1); } catch(e) {}
-      try { sh.getRange('C'+r).setValue(ln.maker); } catch(e) {}
-      try { sh.getRange('H'+r).setValue(ln.product); } catch(e) {}
-      try { sh.getRange('P'+r).setValue(ln.model||''); } catch(e) {}
-      try { sh.getRange('Z'+r).setValue(ln.qty); } catch(e) {}
-      try { sh.getRange('AB'+r).setValue(ln.price); } catch(e) {}
-      try { sh.getRange('AG'+r).setValue(ln.qty*ln.price); } catch(e) {}
-      try { sh.getRange('AL'+r).setValue(ln.remark||''); } catch(e) {}
+      try { sh.getRange('C'+r).setValue(ln.maker || ''); } catch(e) {}
+      try { sh.getRange('H'+r).setValue(ln.product || ''); } catch(e) {}
+      try { sh.getRange('P'+r).setValue(ln.model || ''); } catch(e) {}
+      try { sh.getRange('Z'+r).setValue(ln.qty || ''); } catch(e) {}
+      try { sh.getRange('AB'+r).setValue(ln.price || ''); } catch(e) {}
+      try { sh.getRange('AG'+r).setValue((ln.qty && ln.price) ? ln.qty*ln.price : ''); } catch(e) {}
+      try { sh.getRange('AL'+r).setValue(ln.remark || ''); } catch(e) {}
+      Logger.log('Wrote row ' + r + ': ' + JSON.stringify(ln));
     } else {
       ['A','C','H','P','Z','AB','AG','AL'].forEach(function(c){
         try { sh.getRange(c+r).setValue(''); } catch(e) {}
@@ -537,11 +544,11 @@ function sendUrgentEmail(data, os, uniqueId) {
   var plainBody = '【緊急】発注書\n注文No.: ' + data.orderNo + '\n仕入先: ' + data.supplier +
     '\n合計: ' + Number(data.total).toLocaleString() + '円\n\n緊急のため即発注扱い\nスプレッドシート: ' + ss.getUrl();
 
-  // 承認者と発注担当者の宛先を統合（重複排除）
+  // 承認者と事務員全員の宛先を統合（重複排除）
   var toList = [approverEmail];
-  if (PURCHASER.email && PURCHASER.email !== approverEmail) {
-    toList.push(PURCHASER.email);
-  }
+  (JIMUIN_EMAILS || []).forEach(function(em){
+    if (em && toList.indexOf(em) === -1) toList.push(em);
+  });
 
   MailApp.sendEmail({ to: toList.join(','), subject: subj, body: plainBody, htmlBody: hb });
 }
@@ -594,8 +601,9 @@ function notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl) {
     '<a href="'+sheetUrl+'" style="display:block;text-align:center;padding:14px;background:#1a73e8;color:white;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;margin:16px 0">発注書シートを開く</a>' +
     '</div></div>';
 
+  // 事務員全員に同報 (JIMUIN_EMAILS 2026-05-27 追加)
   MailApp.sendEmail({
-    to: PURCHASER.email,
+    to: (JIMUIN_EMAILS || [PURCHASER.email]).join(','),
     subject: '【発注依頼】' + supplier + ' / ' + orderNo,
     body: '承認済: ' + supplier + ' / ' + orderNo + '\n発注書: ' + sheetUrl,
     htmlBody: hb

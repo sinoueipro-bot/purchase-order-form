@@ -680,7 +680,7 @@ const APPROVERS = [
 ];
 const FORM_TYPES = [
   { value: 'U', label: 'その他' },
-  { value: 'M', label: '無償' }
+  { value: 'M', label: 'M' }
 ];
 
 // ============ 状態 ============
@@ -2147,7 +2147,7 @@ function addLineItem() {
     '<div class="row"><div><div class="field-label"><span class="required-badge">必須</span>メーカー</div>' +
     '<input type="text" id="maker-' + num + '" list="makerList" placeholder="メーカー" oninput="validate()"></div>' +
     '<div><div class="field-label"><span class="required-badge">必須</span>形態</div>' +
-    '<select id="type-' + num + '" onchange="validate()"><option value="">選択</option>' +
+    '<select id="type-' + num + '" onchange="validate()"><option value="" disabled selected>選択</option>' +
     FORM_TYPES.map(t => '<option value="' + t.value + '">' + t.label + '</option>').join('') + '</select></div></div>' +
     '<div><div class="field-label"><span class="required-badge">必須</span>商品名</div>' +
     '<input type="text" id="product-' + num + '" list="productList" placeholder="商品名" oninput="validate()"></div>' +
@@ -2334,7 +2334,7 @@ function showPreview() {
   data.lines.forEach((l, i) => {
     rows += '<tr><td>' + (i+1) + '</td><td>' + l.maker + '</td><td>' + l.product + '</td><td>' +
       (l.model||'-') + '</td><td>' + l.qty + '</td><td>&yen;' +
-      l.price.toLocaleString() + '</td><td>&yen;' + l.amount.toLocaleString() + '</td><td>' + l.type + '</td></tr>';
+      l.price.toLocaleString() + '</td><td>&yen;' + l.amount.toLocaleString() + '</td><td>' + ((FORM_TYPES.find(t => t.value === l.type) || {}).label || l.type) + '</td></tr>';
   });
   document.getElementById('previewTitle').textContent = '⚠️ 発注書送信の最終確認';
   document.getElementById('previewWarn').innerHTML = '📧 承認者へメールが送信されます<br>送信先: <strong>' + data.approverEmail + '</strong>';
