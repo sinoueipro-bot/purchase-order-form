@@ -457,6 +457,8 @@ function createFromTemplate(ss, tabName, data) {
   try { sh.getRange('AB13').setValue(''); } catch(e) {}
   try { sh.getRange('AB14').setValue(''); } catch(e) {}
   try { sh.getRange('AB15').setValue(''); } catch(e) {}
+  // ★ 2026-05-27 v80: Z15 にもテンプレの古い TEL/FAX が残っていたのでクリア (15行目に二重表示される問題対応)
+  try { sh.getRange('Z15').setValue(''); } catch(e) {}
 
   var lines = data.lines || [];
   Logger.log('createFromTemplate 対象シート: [' + sh.getName() + '] sheetId=' + sh.getSheetId());
