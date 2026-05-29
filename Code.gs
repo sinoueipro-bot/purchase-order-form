@@ -821,6 +821,13 @@ function addToIndex(ss, data, os, uniqueId) {
   // ★ 高額単価(◎)・無償(M) フラグはヘッダー名で列を探して書く (列削除・移動に強い)
   _writeFlagByHeader(s, lr, '高額単価(10万超)', flags.highPrice, '#d93025');
   _writeFlagByHeader(s, lr, '無償(M)', flags.free, '#1a73e8');
+  // ★ 2026-05-29: 発注者を記録 (ヘッダー名「発注者」の列。無ければ末尾に自動作成)
+  var colOP = _findColumnByHeader(s, '発注者');
+  if (colOP <= 0) {
+    colOP = s.getLastColumn() + 1;
+    s.getRange(1, colOP).setValue('発注者').setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
+  }
+  if (data.orderPersonName) s.getRange(lr, colOP).setValue(data.orderPersonName);
   // ★ 2026-05-29: 在庫管理シートにも商品1行ずつ展開して追記
   try { addToStockSheet(ss, data, url); } catch(e) { Logger.log('在庫管理追記エラー: ' + e.toString()); }
 }
@@ -1262,7 +1269,10 @@ function sendApprovalEmail(data, os, uniqueId) {
     '<div style="text-align:center;margin-top:12px"><a href="'+sheetUrl+'" style="color:#1a73e8;font-weight:bold">スプレッドシートで詳細確認</a></div>' +
     '</div></div>';
 
-  MailApp.sendEmail({ to: approverEmail, subject: subj, body: '承認: '+approveUrl+'\n却下: '+rejectUrl, htmlBody: hb });
+  // 承認者 + 発注者(指定時)に送信。重複排除 (2026-05-29)
+  var toListA = [approverEmail];
+  if (data.orderPersonEmail && toListA.indexOf(data.orderPersonEmail) === -1) toListA.push(data.orderPersonEmail);
+  MailApp.sendEmail({ to: toListA.join(','), subject: subj, body: '承認: '+approveUrl+'\n却下: '+rejectUrl, htmlBody: hb });
 }
 
 // ============ ★ 緊急メール: 承認者+発注担当者に同時送信 ============
@@ -1291,8 +1301,9 @@ function sendUrgentEmail(data, os, uniqueId) {
   var plainBody = '【緊急】発注書\n注文No.: ' + data.orderNo + '\n仕入先: ' + data.supplier +
     '\n合計: ' + Number(data.total).toLocaleString() + '円\n\n緊急のため即発注扱い\nスプレッドシート: ' + ss.getUrl();
 
-  // 承認者と事務員全員の宛先を統合（重複排除）
+  // 承認者 + 発注者(指定時) + 事務員全員の宛先を統合（重複排除）
   var toList = [approverEmail];
+  if (data.orderPersonEmail && toList.indexOf(data.orderPersonEmail) === -1) toList.push(data.orderPersonEmail);
   (JIMUIN_EMAILS || []).forEach(function(em){
     if (em && toList.indexOf(em) === -1) toList.push(em);
   });
