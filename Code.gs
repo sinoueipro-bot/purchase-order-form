@@ -971,6 +971,36 @@ function checkSystemIntegrity() {
   Logger.log(issues===0 ? '✅ 不具合の懸念なし。安全に使えます' : '⚠️ 上記の警告を確認してください(多くはヘッダー復旧で解決)');
 }
 
+// ★ 発注一覧・在庫管理の「空行」を削除してデータを上に詰める (2026-05-29)
+// 行移動/値クリアで残った空行により appendRow が画面外の下に追加される問題を解消。
+// GASエディタで「cleanupEmptyRows」を実行。書式(ステータス色等)は行ごと削除なので保持される。
+function cleanupEmptyRows() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var deleted = 0;
+  // --- 発注一覧: 注文No(B列) も ID(M列) もない行を削除 ---
+  var s = ss.getSheetByName(INDEX_SHEET);
+  if (s && s.getLastRow() > 1) {
+    var data = s.getDataRange().getValues();
+    for (var i = data.length - 1; i >= 1; i--) {       // 下から削除(インデックスずれ防止)
+      if (!data[i][1] && !data[i][12]) { s.deleteRow(i + 1); deleted++; }
+    }
+    // データ最終行より下の余分な空行も削除 (予備5行残す)
+    var maxR = s.getMaxRows(), lastR = s.getLastRow();
+    if (maxR > lastR + 5) s.deleteRows(lastR + 1, maxR - lastR - 5);
+  }
+  // --- 在庫管理: 注文No(B列) も 商品名(H列) もない行を削除 ---
+  var st = ss.getSheetByName(STOCK_SHEET);
+  if (st && st.getLastRow() > 1) {
+    var sdata = st.getDataRange().getValues();
+    for (var j = sdata.length - 1; j >= 1; j--) {
+      if (!sdata[j][1] && !sdata[j][7]) { st.deleteRow(j + 1); deleted++; }
+    }
+    var maxR2 = st.getMaxRows(), lastR2 = st.getLastRow();
+    if (maxR2 > lastR2 + 5) st.deleteRows(lastR2 + 1, maxR2 - lastR2 - 5);
+  }
+  Logger.log('✅ 空行を ' + deleted + ' 行削除しました。データが上に詰まり、今後の発注は正しい位置(データの次)に追加されます');
+}
+
 // ============ ★ スプシ直接編集の自動同期 (2026-05-29 v100) ============
 // 発注書シートをスプシで直接修正したら、発注一覧・在庫管理を自動更新する。
 // ★ setupEditTrigger() を GASエディタで1回だけ実行してトリガーを有効化する必要がある。
