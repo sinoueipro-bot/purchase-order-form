@@ -351,8 +351,8 @@ textarea { resize: vertical; min-height: 60px; }
         <input type="date" id="issueDate" required>
       </div>
       <div>
-        <div class="field-label"><span class="required-badge">必須</span>注文No.</div>
-        <input type="text" id="orderNo" placeholder="自動採番" required>
+        <div class="field-label">注文No.<span style="font-size:10px;color:var(--text-secondary);margin-left:4px">（任意・自動採番）</span></div>
+        <input type="text" id="orderNo" placeholder="自動採番（空欄可）">
       </div>
     </div>
   </div>
@@ -828,7 +828,6 @@ function poWizardNext() {
   if (currentPoWizardStep === 1) {
     const errs = [];
     if (!document.getElementById('issueDate').value) errs.push('発行日');
-    if (!document.getElementById('orderNo').value) errs.push('注文No.');
     if (!getSupplierValue()) errs.push('仕入先');
     if (!document.getElementById('branch').value) errs.push('事業所');
     if (errs.length > 0) {
@@ -2278,7 +2277,6 @@ function validate() {
 function getValidationErrors() {
   const e = [];
   if (!document.getElementById('issueDate').value) e.push('発行日');
-  if (!document.getElementById('orderNo').value) e.push('注文No.');
   if (!getSupplierValue()) e.push('仕入先');
   if (!document.getElementById('branch').value) e.push('事業所');
   const lines = document.querySelectorAll('#lineItems .line-item');
