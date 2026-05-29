@@ -811,16 +811,20 @@ function initStockSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var s = ss.getSheetByName(STOCK_SHEET);
   if (!s) s = ss.insertSheet(STOCK_SHEET);
-  var headers = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','分類','シートURL'];
+  // 2026-05-29: 分類(O)の左に「無償(M)」列(N)を追加 → 16列構成
+  var headers = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','分類','シートURL'];
   s.getRange(1,1,1,headers.length).setValues([headers]);
   s.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#0f9d58').setFontColor('#fff');
   s.setFrozenRows(1);
   s.setColumnWidth(7, 130);   // メーカー
   s.setColumnWidth(8, 160);   // 商品名
   s.setColumnWidth(13, 120);  // 備考
-  s.setColumnWidth(14, 130);  // 分類
-  s.setColumnWidth(15, 220);  // シートURL
-  s.getRange(1, 14).setBackground('#fbbc04').setFontColor('#000'); // 分類列ヘッダーは目立つ黄色
+  s.setColumnWidth(14, 80);   // 無償(M)
+  s.setColumnWidth(15, 130);  // 分類
+  s.setColumnWidth(16, 220);  // シートURL
+  s.getRange(1, 14).setBackground('#1a73e8').setFontColor('#fff'); // 無償(M)列ヘッダーは青
+  s.getRange(1, 15).setBackground('#fbbc04').setFontColor('#000'); // 分類列ヘッダーは黄
+  s.getRange(2, 14, 1000, 1).clearDataValidations();  // 無償列(N)はプルダウンなし(旧分類列の残骸も除去)
   applyStockCategoryValidation(s);
   Logger.log('在庫管理シート初期化完了');
 }
@@ -831,7 +835,7 @@ function applyStockCategoryValidation(s) {
     .requireValueInList(STOCK_CATEGORIES, true)
     .setAllowInvalid(false)
     .build();
-  s.getRange(2, 14, 1000, 1).setDataValidation(rule);
+  s.getRange(2, 15, 1000, 1).setDataValidation(rule);  // 分類列 O(15列目)
 }
 
 // 発注1件の商品を在庫管理シートに追記 (addToIndex から呼ばれる)
@@ -846,14 +850,21 @@ function addToStockSheet(ss, data, sheetUrl) {
       rows.push([
         now, data.orderNo, data.supplier, data.branch, data.siteName||'', data.orderer,
         ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'',
-        (ln.qty && ln.price) ? ln.qty*ln.price : '', ln.remark||'', '', sheetUrl||''
+        (ln.qty && ln.price) ? ln.qty*ln.price : '', ln.remark||'',
+        (ln.type === 'M') ? 'M' : '',  // N: 無償(M)
+        '',                            // O: 分類(プルダウン)
+        sheetUrl||''                   // P: シートURL
       ]);
     }
   });
   if (rows.length > 0) {
     var startRow = s.getLastRow() + 1;
-    s.getRange(startRow, 1, rows.length, 15).setValues(rows);
+    s.getRange(startRow, 1, rows.length, 16).setValues(rows);
     s.getRange(startRow, 11, rows.length, 2).setNumberFormat('#,##0'); // 単価・金額
+    // 無償(M)の行は N列を青太字で目立たせる
+    for (var ri = 0; ri < rows.length; ri++) {
+      if (rows[ri][13] === 'M') s.getRange(startRow + ri, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
+    }
     applyStockCategoryValidation(s);
   }
 }
@@ -864,10 +875,11 @@ function rebuildStockSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var idx = ss.getSheetByName(INDEX_SHEET);
   if (!idx) { Logger.log('発注一覧シートがありません'); return; }
+  // ヘッダー・列幅・プルダウンを最新化 (既存シートでもヘッダーを16列に上書き)
+  initStockSheet();
   var s = ss.getSheetByName(STOCK_SHEET);
-  if (!s) { initStockSheet(); s = ss.getSheetByName(STOCK_SHEET); }
   // 既存データ(ヘッダー除く)をクリア
-  if (s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow()-1, 15).clearContent();
+  if (s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow()-1, 16).clearContent();
   var data = idx.getDataRange().getValues();
   var rows = [];
   for (var i = 1; i < data.length; i++) {
@@ -879,14 +891,21 @@ function rebuildStockSheet() {
         rows.push([
           row[0], row[1], row[3], row[4], row[5]||'', row[7],   // 受付日時/注文No/仕入先/事業所/現場名/注文者
           ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'',
-          (ln.qty && ln.price) ? ln.qty*ln.price : '', ln.remark||'', '', row[11]||''  // 商品情報/分類(空)/シートURL
+          (ln.qty && ln.price) ? ln.qty*ln.price : '', ln.remark||'',
+          (ln.type === 'M') ? 'M' : '',  // N: 無償(M)
+          '',                            // O: 分類(空)
+          row[11]||''                    // P: シートURL
         ]);
       }
     });
   }
   if (rows.length > 0) {
-    s.getRange(2, 1, rows.length, 15).setValues(rows);
+    s.getRange(2, 1, rows.length, 16).setValues(rows);
     s.getRange(2, 11, rows.length, 2).setNumberFormat('#,##0');
+    // 無償(M)の行は N列を青太字で目立たせる
+    for (var ri = 0; ri < rows.length; ri++) {
+      if (rows[ri][13] === 'M') s.getRange(ri+2, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
+    }
     applyStockCategoryValidation(s);
   }
   Logger.log('在庫管理シート再構築完了: ' + rows.length + ' 商品行');
