@@ -454,16 +454,17 @@ function createFromTemplate(ss, tabName, data) {
   try { sh.getRange('A10').setValue(data.supplier); } catch(e) {}
   try { sh.getRange('A9').setValue(''); } catch(e) {}  // 旧位置クリア
   sh.getRange('AL12').setValue(data.branch);
-  // 住所/TEL は結合主セル Z12/Z13/Z14 に直接書く（debugで確認済み）
-  try { sh.getRange('Z12').setValue(bi.zip); } catch(e) {}
-  try { sh.getRange('Z13').setValue(bi.addr); } catch(e) {}
-  try { sh.getRange('Z14').setValue(bi.tel + ' ' + bi.fax); } catch(e) {}
-  // テンプレに残っている古い TEL/FAX (飯塚ガスセンター) を消す
+  // ★ 2026-05-27 v85: 住所ブロックは枠内の行13-15 (Z13=〒, Z14=住所, Z15=TEL/FAX)
+  //   旧 Z12/Z13/Z14 は1行上にズレており、〒が枠外(行12)に出ていた → テンプレと同じ枠内に収める
+  try { sh.getRange('Z13').setValue(bi.zip); } catch(e) {}                  // 〒
+  try { sh.getRange('Z14').setValue(bi.addr); } catch(e) {}                 // 住所
+  try { sh.getRange('Z15').setValue(bi.tel + ' ' + bi.fax); } catch(e) {}   // TEL/FAX
+  // 枠外(行12)に出ていた古い〒をクリア
+  try { sh.getRange('Z12').setValue(''); } catch(e) {}
+  // テンプレに残る古い値クリア (AB列)
   try { sh.getRange('AB13').setValue(''); } catch(e) {}
   try { sh.getRange('AB14').setValue(''); } catch(e) {}
   try { sh.getRange('AB15').setValue(''); } catch(e) {}
-  // ★ 2026-05-27 v80: Z15 にもテンプレの古い TEL/FAX が残っていたのでクリア (15行目に二重表示される問題対応)
-  try { sh.getRange('Z15').setValue(''); } catch(e) {}
 
   var lines = data.lines || [];
   Logger.log('createFromTemplate 対象シート: [' + sh.getName() + '] sheetId=' + sh.getSheetId());
