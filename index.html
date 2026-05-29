@@ -429,6 +429,10 @@ textarea { resize: vertical; min-height: 60px; }
     <select id="approver" required onchange="validate()"><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
+    <div class="field-label">発注者</div>
+    <select id="orderPerson" onchange="validate()"><option value="">選択してください</option></select>
+  </div>
+  <div class="field-group">
     <div class="field-label">緊急（即発注扱い）</div>
     <div class="toggle-wrapper">
       <label class="toggle"><input type="checkbox" id="urgent"><span class="toggle-slider"></span></label>
@@ -901,6 +905,7 @@ function renderPoConfirm() {
   html += '<div style="margin-top:10px;font-size:13px">' +
     '<div><strong>注文者:</strong> ' + (data.orderer || '-') + '</div>' +
     '<div><strong>承認者:</strong> ' + approverName + '</div>' +
+    '<div><strong>発注者:</strong> ' + (data.orderPersonName || '-') + '</div>' +
     '<div><strong>状態:</strong> ' + (data.urgent ? '<span style="color:var(--danger);font-weight:700">🔴 緊急（即発注）</span>' : 'PASS（通常承認）') + '</div>' +
     (data.notes ? '<div style="margin-top:6px;padding:8px;background:#f0f0f0;border-radius:4px"><strong>特記:</strong> ' + data.notes + '</div>' : '') +
     '</div>';
@@ -932,6 +937,9 @@ function initAllDropdowns() {
   fillSelect('orderer', STAFF);
   const app = document.getElementById('approver');
   APPROVERS.forEach(a => app.add(new Option(a.name + '（' + a.email + '）', a.email)));
+  // 発注者(選択肢は承認者と同じ APPROVERS) 2026-05-29
+  const op = document.getElementById('orderPerson');
+  if (op) APPROVERS.forEach(a => op.add(new Option(a.name + '（' + a.email + '）', a.email)));
   // 見積書
   fillSelect('estBranch', BRANCHES);
   fillSelect('estStaff', STAFF);
@@ -2323,6 +2331,9 @@ function collectFormData() {
   const total = lines.reduce((s, l) => s + l.amount, 0);
   const email = document.getElementById('approver').value;
   const approver = APPROVERS.find(a => a.email === email);
+  // 発注者 (2026-05-29・選択肢は承認者と同じ APPROVERS)
+  const opEmail = document.getElementById('orderPerson')?.value || '';
+  const orderPerson = APPROVERS.find(a => a.email === opEmail);
   return {
     issueDate: document.getElementById('issueDate').value,
     orderNo: document.getElementById('orderNo').value,
@@ -2338,6 +2349,8 @@ function collectFormData() {
     skipPurchaserNotify: document.getElementById('skipPurchaserNotify')?.checked || false,
     approverEmail: email,
     approverName: approver ? approver.name : '',
+    orderPersonEmail: opEmail,
+    orderPersonName: orderPerson ? orderPerson.name : '',
     sourceEstimateNo: window._transferredEstNo || ''
   };
 }

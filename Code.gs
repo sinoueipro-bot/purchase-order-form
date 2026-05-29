@@ -767,7 +767,8 @@ function getBranchInfo(b) {
 // 目的: 経理が請求書を1枚ずつ開かなくても、一覧で無償・高額発注を判別できる
 function _calcOrderFlags(lines) {
   lines = lines || [];
-  var hasHigh = lines.some(function(ln){ return Number(ln.price) > 100000; });
+  // ★ 2026-05-29: 10万「超」(>100000)だと10万ちょうどが除外されるため「10万以上」(>=100000)に変更
+  var hasHigh = lines.some(function(ln){ return Number(ln.price) >= 100000; });
   var hasFree = lines.some(function(ln){ return String(ln.type) === 'M'; });
   return {
     highPrice: hasHigh ? '◎' : '',
