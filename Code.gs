@@ -1813,12 +1813,13 @@ function getSheetPdfBase64(gid) {
 
   try {
     var ssId = ss.getId();
+    // ★ v93: measureOrderLayout実測で発注書の実体は A1:AQ59 (59行・W/H=0.802の縦長)
+    //   旧 A1:AQ66 は存在しない行(60-66)を含み、それが下余白の主因だった
     var url = 'https://docs.google.com/spreadsheets/d/' + ssId +
               '/export?format=pdf&gid=' + gid +
-              '&range=A1:AQ66' +  // 発注書の範囲に限定 (行67以降の空白を除外)
-              // ★ v90: fitw(幅合わせ)だと横長レイアウトで縦に余白が出るため scale=4(ページ全体に合わせる)に変更
+              '&range=A1:AQ59' +
               '&portrait=true&size=A4&scale=4&gridlines=false&printtitle=false&sheetnames=false&pagenum=false&fzr=false' +
-              '&top_margin=0.4&bottom_margin=0.4&left_margin=0.4&right_margin=0.4';
+              '&top_margin=0.3&bottom_margin=0.3&left_margin=0.3&right_margin=0.3';
     var response = UrlFetchApp.fetch(url, {
       headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() },
       muteHttpExceptions: true
