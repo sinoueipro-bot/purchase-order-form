@@ -775,6 +775,26 @@ function _calcOrderFlags(lines) {
   };
 }
 
+// ★ 2026-05-29: ヘッダー名で列番号を探す (列削除・移動に強い・固定列番号の代替)
+function _findColumnByHeader(s, headerName) {
+  var lastCol = s.getLastColumn();
+  if (lastCol < 1) return -1;
+  var headers = s.getRange(1, 1, 1, lastCol).getValues()[0];
+  for (var c = 0; c < headers.length; c++) {
+    if (String(headers[c]).trim() === headerName) return c + 1;  // 1始まり
+  }
+  return -1;
+}
+
+// ヘッダー名で列を探してフラグ値(◎/M)を書き込む (色付き)。列削除・移動に強い
+function _writeFlagByHeader(s, row, headerName, value, color) {
+  var col = _findColumnByHeader(s, headerName);
+  if (col <= 0) return;  // ヘッダーが見つからなければ何もしない(壊さない)
+  var cell = s.getRange(row, col);
+  cell.setValue(value || '');
+  if (value) cell.setFontColor(color).setFontWeight('bold').setHorizontalAlignment('center');
+}
+
 function addToIndex(ss, data, os, uniqueId) {
   var s = ss.getSheetByName(INDEX_SHEET);
   if (!s) { initSheet(); s = ss.getSheetByName(INDEX_SHEET); }
@@ -784,24 +804,22 @@ function addToIndex(ss, data, os, uniqueId) {
   var linesJson = JSON.stringify(data.lines || []);
   var flags = _calcOrderFlags(data.lines);  // U=高額単価 / V=無償 フラグ
   // 16列(A-P) + Q=発注完了日 + R=事務員通知不要 + S=入荷チェック + T=保安費 + U=高額単価◎ + V=無償M + W=顧客設備
+  // ★ 2026-05-29: appendRow は基本情報 A-R(18列)のみ。高額単価・無償はヘッダー名で別途書く
+  //   (列を削除・移動しても固定列番号とズレないようにするため)
   s.appendRow([
     now, data.orderNo, data.issueDate, data.supplier, data.branch, data.siteName||'',
     data.total, data.orderer, data.urgent?'緊急':'PASS', data.approverName, '申請中',
     url, uniqueId, linesJson, data.notes || '', now,
     '',  // Q: 発注完了日
-    data.skipPurchaserNotify ? 'YES' : '',  // R: 事務員通知不要フラグ
-    '', '',  // S: 入荷チェック / T: 保安費
-    flags.highPrice,  // U: 高額単価(10万超) ◎
-    flags.free,       // V: 無償(M)
-    ''   // W: 顧客設備
+    data.skipPurchaserNotify ? 'YES' : ''  // R: 事務員通知不要フラグ
   ]);
   var lr = s.getLastRow();
   s.getRange(lr, 7).setNumberFormat('#,##0');
   applyStatusColor(s, lr, '申請中');
   if (data.urgent) s.getRange(lr, 9).setFontColor('#d93025').setFontWeight('bold');
-  // U(◎)・V(M) を目立たせる (U=21列目, V=22列目)
-  if (flags.highPrice) s.getRange(lr, 21).setFontColor('#d93025').setFontWeight('bold').setHorizontalAlignment('center');
-  if (flags.free) s.getRange(lr, 22).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
+  // ★ 高額単価(◎)・無償(M) フラグはヘッダー名で列を探して書く (列削除・移動に強い)
+  _writeFlagByHeader(s, lr, '高額単価(10万超)', flags.highPrice, '#d93025');
+  _writeFlagByHeader(s, lr, '無償(M)', flags.free, '#1a73e8');
   // ★ 2026-05-29: 在庫管理シートにも商品1行ずつ展開して追記
   try { addToStockSheet(ss, data, url); } catch(e) { Logger.log('在庫管理追記エラー: ' + e.toString()); }
 }
@@ -1088,12 +1106,12 @@ function syncFromOrderSheet(sheet) {
       });
     }
   }
-  // 発注一覧を更新 (N列=明細JSON / G列=合計 / U,V=フラグ)
+  // 発注一覧を更新 (N列=明細JSON / G列=合計 / 高額単価・無償=ヘッダー名で)
   idx.getRange(idxRow, 14).setValue(JSON.stringify(lines));
   idx.getRange(idxRow, 7).setValue(total).setNumberFormat('#,##0');
   var flags = _calcOrderFlags(lines);
-  idx.getRange(idxRow, 21).setValue(flags.highPrice);
-  idx.getRange(idxRow, 22).setValue(flags.free);
+  _writeFlagByHeader(idx, idxRow, '高額単価(10万超)', flags.highPrice, '#d93025');
+  _writeFlagByHeader(idx, idxRow, '無償(M)', flags.free, '#1a73e8');
   // 在庫管理を更新 (分類は保持)
   _resyncStockForOrder(ss, orderNo, idxData[idxRow-1], lines);
 }
@@ -1151,34 +1169,27 @@ function backfillOrderFlags() {
   var s = ss.getSheetByName(INDEX_SHEET);
   if (!s) { Logger.log('発注一覧シートなし'); return; }
   var lastRow = s.getLastRow();
-  // ★ v84: ヘッダー U=21列目(高額単価) / V=22列目(無償) / W=23列目(顧客設備)
-  s.getRange(1, 21).setValue('高額単価(10万超)').setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
-  s.getRange(1, 22).setValue('無償(M)').setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
-  s.getRange(1, 23).setValue('顧客設備').setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
-  s.setColumnWidth(21, 130);
-  s.setColumnWidth(22, 90);
-  // v83 で一時的に付けた X(24)/Y(25) のヘッダー・データを撤去
-  if (s.getLastColumn() >= 24) {
-    s.getRange(1, 24, 1, 2).clearContent().setBackground(null);
-    if (lastRow >= 2) s.getRange(2, 24, lastRow - 1, 2).clearContent();
+  // ★ 2026-05-29: ヘッダー名で列を探す(列削除・移動に対応)。固定列番号は使わない
+  var colHigh = _findColumnByHeader(s, '高額単価(10万超)');
+  var colFree = _findColumnByHeader(s, '無償(M)');
+  if (colHigh <= 0 || colFree <= 0) {
+    Logger.log('⚠️ ヘッダー「高額単価(10万超)」または「無償(M)」が発注一覧に見つかりません。ヘッダー行を確認(削除した場合は手動で復活)してください');
+    return;
   }
+  Logger.log('高額単価列=' + columnToLetter(colHigh) + ' / 無償列=' + columnToLetter(colFree));
   if (lastRow < 2) { Logger.log('データ行なし'); return; }
-  // N列(14)=明細JSON を読んでフラグ計算 → U/V列に書き込み (旧 消耗品費/器具仕入れ を上書きクリア)
+  // N列(14)=明細JSON を読んでフラグ計算 → ヘッダー名の列に書き込み
   var jsonCol = s.getRange(2, 14, lastRow - 1, 1).getValues();
-  var out = [];
+  var cnt = 0;
   for (var i = 0; i < jsonCol.length; i++) {
     var lines = [];
     try { lines = JSON.parse(jsonCol[i][0] || '[]'); } catch(e) {}
     var flags = _calcOrderFlags(lines);
-    out.push([flags.highPrice, flags.free]);
+    _writeFlagByHeader(s, i+2, '高額単価(10万超)', flags.highPrice, '#d93025');
+    _writeFlagByHeader(s, i+2, '無償(M)', flags.free, '#1a73e8');
+    cnt++;
   }
-  s.getRange(2, 21, out.length, 2).setValues(out);
-  // 色付け (U=21, V=22)
-  for (var r = 0; r < out.length; r++) {
-    if (out[r][0]) s.getRange(r+2, 21).setFontColor('#d93025').setFontWeight('bold').setHorizontalAlignment('center');
-    if (out[r][1]) s.getRange(r+2, 22).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
-  }
-  Logger.log('backfillOrderFlags 完了: ' + out.length + '件に反映 (U列=高額単価 / V列=無償)');
+  Logger.log('backfillOrderFlags 完了 (ヘッダー名ベース): ' + cnt + '件に反映');
 }
 
 // ============ ステータス色分け ============
@@ -2505,12 +2516,10 @@ function updateOrder(data) {
   s.getRange(r, 14).setValue(JSON.stringify(lines));
   s.getRange(r, 15).setValue(data.notes || '');
   s.getRange(r, 16).setValue(now);
-  // ★ v84: 明細変更に伴い 高額単価(U)・無償(V) フラグを再計算 (U=21列目, V=22列目)
+  // ★ 2026-05-29: 明細変更に伴い 高額単価・無償フラグを再計算。ヘッダー名で列を探して書く
   var flags = _calcOrderFlags(lines);
-  s.getRange(r, 21).setValue(flags.highPrice);
-  s.getRange(r, 22).setValue(flags.free);
-  if (flags.highPrice) s.getRange(r, 21).setFontColor('#d93025').setFontWeight('bold').setHorizontalAlignment('center');
-  if (flags.free) s.getRange(r, 22).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
+  _writeFlagByHeader(s, r, '高額単価(10万超)', flags.highPrice, '#d93025');
+  _writeFlagByHeader(s, r, '無償(M)', flags.free, '#1a73e8');
 
   return {
     success: true,
