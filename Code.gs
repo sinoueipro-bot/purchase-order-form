@@ -1813,11 +1813,12 @@ function getSheetPdfBase64(gid) {
 
   try {
     var ssId = ss.getId();
-    // ★ v93: measureOrderLayout実測で発注書の実体は A1:AQ59 (59行・W/H=0.802の縦長)
-    //   旧 A1:AQ66 は存在しない行(60-66)を含み、それが下余白の主因だった
+    // ★ v94: range=A1:AQ64 に修正。getLastRow=59 はテンプレの「値」ベースで、
+    //   特記事項・承認欄・注文者の「罫線枠」(注文者=AJ61:AM64結合)は行64まである。
+    //   59で切ると注文者欄が切れるため、枠の底=行64まで含める。
     var url = 'https://docs.google.com/spreadsheets/d/' + ssId +
               '/export?format=pdf&gid=' + gid +
-              '&range=A1:AQ59' +
+              '&range=A1:AQ64' +
               '&portrait=true&size=A4&scale=4&gridlines=false&printtitle=false&sheetnames=false&pagenum=false&fzr=false' +
               '&top_margin=0.3&bottom_margin=0.3&left_margin=0.3&right_margin=0.3';
     var response = UrlFetchApp.fetch(url, {
