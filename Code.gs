@@ -180,6 +180,43 @@ function measureColumnWidths() {
   Logger.log('====== 完了 ======');
 }
 
+// ★ 行高を拡大して縦横比をA4に合わせる (余白を消す・読みやすさ優先版)
+// 列幅は変えない→文字の横幅維持。行高だけ増やして縦横比をA4(0.691)に一致させる。
+// これでfitw(幅合わせ)印刷時に縦余白がゼロになり、行間も広がって読みやすくなる。
+// GASエディタで「expandRowsToA4」を実行。
+function expandRowsToA4() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var t = findTemplateSheet(ss, PO_TEMPLATE_CANDIDATES);
+  if (!t) { Logger.log('テンプレートが見つかりません'); return; }
+  var maxCol = Math.min(43, t.getMaxColumns());
+  var maxRow = Math.min(64, t.getMaxRows());
+  var totalW = 0, totalH = 0;
+  for (var c = 1; c <= maxCol; c++) totalW += t.getColumnWidth(c);
+  for (var r = 1; r <= maxRow; r++) totalH += t.getRowHeight(r);
+  // A4縦の印刷可能領域 736px(幅) : 1065px(高さ) = 縦横比0.691
+  // 幅はそのまま、目標の高さ = 幅 ÷ 0.691 = 幅 × 1065/736
+  var targetH = totalW * 1065 / 736;
+  var ratio = targetH / totalH;
+  Logger.log('====== 行高拡大(A4比合わせ) ======');
+  Logger.log('現在: 幅' + totalW + 'px / 高さ' + totalH + 'px (縦横比 ' + (totalW/totalH).toFixed(3) + ')');
+  Logger.log('A4比0.691に合わせる目標高さ: ' + Math.round(targetH) + 'px → 行高を ' + ratio.toFixed(3) + '倍');
+  if (ratio > 1.02) {
+    for (var r2 = 1; r2 <= maxRow; r2++) {
+      var h = t.getRowHeight(r2);
+      t.setRowHeight(r2, Math.round(h * ratio));
+    }
+    SpreadsheetApp.flush();
+    var newH = 0;
+    for (var r3 = 1; r3 <= maxRow; r3++) newH += t.getRowHeight(r3);
+    Logger.log('✅ 行高を ' + ratio.toFixed(3) + '倍に拡大。新しい高さ合計: ' + Math.round(newH) + 'px');
+    Logger.log('→ 縦横比が ' + (totalW/newH).toFixed(3) + ' (A4比0.691) に。fitw印刷で縦余白がほぼ消える');
+    Logger.log('→ 列幅は変更なし=文字の横幅維持。行間が広がり読みやすくなった');
+  } else {
+    Logger.log('既にA4比に近い。拡大不要');
+  }
+  Logger.log('====== 完了 ======');
+}
+
 // ★ 列幅をA4幅に収まるよう一律縮小 (列幅超過が縦余白の原因のとき)
 // ⚠️ 実行前に measureColumnWidths で確認。文字が切れる可能性があるので実行後に要確認
 function shrinkColumnsToA4() {
