@@ -145,6 +145,64 @@ function doPost(e) {
   }
 }
 
+// ★ 各列の幅を測定し、A4幅を超えているか診断する
+// GASエディタで「measureColumnWidths」を実行 → どの列が広いか特定
+function measureColumnWidths() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var t = findTemplateSheet(ss, PO_TEMPLATE_CANDIDATES);
+  if (!t) { Logger.log('テンプレートが見つかりません'); return; }
+  var total = 0;
+  var widths = [];
+  var maxCol = Math.min(43, t.getMaxColumns());
+  for (var c = 1; c <= maxCol; c++) {
+    var w = t.getColumnWidth(c);
+    widths.push(columnToLetter(c) + '=' + w + 'px');
+    total += w;
+  }
+  Logger.log('====== 列幅診断 ======');
+  Logger.log('各列幅: ' + widths.join(' / '));
+  Logger.log('列幅合計: ' + total + 'px');
+  // A4縦の印刷可能幅 (余白0.3inch両側=0.6inch): (21.0cm - 1.52cm) / 2.54 * 96dpi
+  var a4PrintW = Math.round((21.0 - 1.52) / 2.54 * 96);
+  Logger.log('A4縦の印刷可能幅(余白0.3inch): 約' + a4PrintW + 'px');
+  Logger.log('超過倍率: ' + (total / a4PrintW).toFixed(2) + '倍');
+  if (total > a4PrintW) {
+    Logger.log('→ ★列幅がA4超過。スプシが ' + (a4PrintW/total).toFixed(2) + '倍に自動縮小 → 縦余白の原因');
+    Logger.log('→ shrinkColumnsToA4() で列幅を ' + (a4PrintW/total).toFixed(2) + '倍に縮めればA4内に収まる');
+  } else {
+    Logger.log('→ A4内に収まっている');
+  }
+  // 行高合計も参考表示
+  var totalH = 0, maxRow = Math.min(64, t.getMaxRows());
+  for (var r = 1; r <= maxRow; r++) totalH += t.getRowHeight(r);
+  var a4PrintH = Math.round((29.7 - 1.52) / 2.54 * 96);
+  Logger.log('行高合計(1-' + maxRow + '行): ' + totalH + 'px / A4縦の印刷可能高さ: 約' + a4PrintH + 'px');
+  Logger.log('====== 完了 ======');
+}
+
+// ★ 列幅をA4幅に収まるよう一律縮小 (列幅超過が縦余白の原因のとき)
+// ⚠️ 実行前に measureColumnWidths で確認。文字が切れる可能性があるので実行後に要確認
+function shrinkColumnsToA4() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var t = findTemplateSheet(ss, PO_TEMPLATE_CANDIDATES);
+  if (!t) { Logger.log('テンプレートが見つかりません'); return; }
+  var total = 0, maxCol = Math.min(43, t.getMaxColumns());
+  for (var c = 1; c <= maxCol; c++) total += t.getColumnWidth(c);
+  var a4PrintW = Math.round((21.0 - 1.52) / 2.54 * 96);
+  if (total <= a4PrintW) { Logger.log('既にA4内。縮小不要'); return; }
+  var ratio = a4PrintW / total;
+  Logger.log('列幅を ' + ratio.toFixed(3) + '倍に縮小します (合計 ' + total + 'px → ' + a4PrintW + 'px)');
+  for (var c = 1; c <= maxCol; c++) {
+    var w = t.getColumnWidth(c);
+    t.setColumnWidth(c, Math.max(8, Math.round(w * ratio)));
+  }
+  SpreadsheetApp.flush();
+  var newTotal = 0;
+  for (var c2 = 1; c2 <= maxCol; c2++) newTotal += t.getColumnWidth(c2);
+  Logger.log('✅ 縮小完了。新しい列幅合計: ' + newTotal + 'px');
+  Logger.log('→ テンプレを100%表示してA4に収まるか確認。文字が切れていたら個別調整 or フォント縮小');
+}
+
 // ★ テンプレートを発注書範囲(64行×43列AQ)ぴったりにトリミング
 // スプシ印刷で「現在のシート」を選ぶだけで発注書だけが印刷されるようにする。
 // copyTo で作る発注書シートも64行を引き継ぐ。GASエディタで1回だけ実行。
@@ -1850,13 +1908,13 @@ function getSheetPdfBase64(gid) {
 
   try {
     var ssId = ss.getId();
-    // ★ v94: range=A1:AQ64 に修正。getLastRow=59 はテンプレの「値」ベースで、
-    //   特記事項・承認欄・注文者の「罫線枠」(注文者=AJ61:AM64結合)は行64まである。
-    //   59で切ると注文者欄が切れるため、枠の底=行64まで含める。
+    // ★ v96: scale=4 は Sheets export で無効だったため fitw=true(幅合わせ)に戻す。
+    //   根本対策は列幅をA4幅に収めること(shrinkColumnsToA4)。列幅が収まれば fitw で等倍表示になる。
+    //   range=A1:AQ64 (注文者枠=AJ61:AM64結合の底=行64まで含める)
     var url = 'https://docs.google.com/spreadsheets/d/' + ssId +
               '/export?format=pdf&gid=' + gid +
               '&range=A1:AQ64' +
-              '&portrait=true&size=A4&scale=4&gridlines=false&printtitle=false&sheetnames=false&pagenum=false&fzr=false' +
+              '&portrait=true&size=A4&fitw=true&gridlines=false&printtitle=false&sheetnames=false&pagenum=false&fzr=false' +
               '&top_margin=0.3&bottom_margin=0.3&left_margin=0.3&right_margin=0.3';
     var response = UrlFetchApp.fetch(url, {
       headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() },
