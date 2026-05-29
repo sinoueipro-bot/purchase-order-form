@@ -214,6 +214,8 @@ textarea { resize: vertical; min-height: 60px; }
 .link-edit { background: #fef7e0; color: #b06000; border: 1.5px solid var(--warning); }
 .link-edit:hover { background: var(--warning); color: white; }
 .btn-new { padding: 14px 32px; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; background: var(--primary); color: white; }
+.btn-back-edit { padding: 13px 26px; border: 2px solid var(--primary); border-radius: var(--radius); font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; background: white; color: var(--primary); margin-right: 12px; transition: all .15s; }
+.btn-back-edit:hover { background: var(--primary); color: white; }
 .error-summary { display: none; background: #fce8e6; color: var(--danger); padding: 10px 16px; margin: 0 12px; border-radius: var(--radius); font-size: 13px; font-weight: 500; }
 .error-summary.show { display: block; }
 .spinner { display: inline-block; width: 18px; height: 18px; border: 3px solid rgba(255,255,255,0.3); border-top: 3px solid white; border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -531,6 +533,8 @@ textarea { resize: vertical; min-height: 60px; }
 
 <!-- 送信ボタン -->
 <div class="send-area" id="sendArea">
+  <!-- 2026-05-27 v86: 承認者ページから単価・明細(Step2)へ戻る導線。送信直前の修正用 -->
+  <button type="button" class="btn-back-edit" onclick="poWizardPrev()">← 単価・明細を修正する</button>
   <button type="button" class="btn-submit" id="btnSubmit" onclick="handleSend()" disabled style="display:none">
     📦 送信（スプシ記録 + メール通知）
   </button>
@@ -1718,6 +1722,13 @@ function _startUndoTick() {
       _undoTimer = null;
       if (panel) panel.style.display = 'none';
       _undoOrderId = null;
+      // ★ 2026-05-27 v86 (D): 取消期限(60秒)経過後、成功画面表示中なら自動で新規フォームに戻す
+      //   → 共有利用で前の人の内容が残らない。手動なら「新しい発注書を作成」ボタンで即リセット可
+      var ssEl = document.getElementById('successScreen');
+      if (ssEl && ssEl.classList.contains('show')) {
+        resetForm();
+        showToast('🆕 新しい発注フォームに戻りました', 'info');
+      }
     }
   };
   tick();
