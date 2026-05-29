@@ -778,6 +778,7 @@ function _calcOrderFlags(lines) {
 function addToIndex(ss, data, os, uniqueId) {
   var s = ss.getSheetByName(INDEX_SHEET);
   if (!s) { initSheet(); s = ss.getSheetByName(INDEX_SHEET); }
+  _compactSheetByKey(s, 2);  // ★ 2026-05-29: 追記前に空行を自動削除して上詰め(新規発注が常にデータ直後に追加される)
   var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
   var url = os ? (ss.getUrl() + '#gid=' + os.getSheetId()) : '';
   var linesJson = JSON.stringify(data.lines || []);
@@ -842,6 +843,7 @@ function applyStockCategoryValidation(s) {
 function addToStockSheet(ss, data, sheetUrl) {
   var s = ss.getSheetByName(STOCK_SHEET);
   if (!s) { initStockSheet(); s = ss.getSheetByName(STOCK_SHEET); }
+  _compactSheetByKey(s, 2);  // ★ 2026-05-29: 追記前に空行を自動削除して上詰め
   var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
   var lines = data.lines || [];
   var rows = [];
@@ -999,6 +1001,18 @@ function cleanupEmptyRows() {
     if (maxR2 > lastR2 + 5) st.deleteRows(lastR2 + 1, maxR2 - lastR2 - 5);
   }
   Logger.log('✅ 空行を ' + deleted + ' 行削除しました。データが上に詰まり、今後の発注は正しい位置(データの次)に追加されます');
+}
+
+// ★ keyCol列が空の行を削除して詰める (新規追記の直前に呼ぶ・自動詰め)
+// これにより空行が残っていても appendRow が常にデータの直後(上詰め)に追加される
+function _compactSheetByKey(s, keyCol) {
+  var last = s.getLastRow();
+  if (last <= 1) return;
+  var values = s.getRange(1, keyCol, last, 1).getValues();
+  for (var i = last - 1; i >= 1; i--) {  // 下から削除(インデックスずれ防止)
+    var v = values[i][0];
+    if (v === '' || v === null) s.deleteRow(i + 1);
+  }
 }
 
 // ============ ★ スプシ直接編集の自動同期 (2026-05-29 v100) ============
