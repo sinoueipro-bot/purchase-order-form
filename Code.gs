@@ -145,25 +145,45 @@ function doPost(e) {
   }
 }
 
+// 列番号(1始まり) → アルファベット (1→A, 27→AA, 43→AQ)
+function columnToLetter(col) {
+  var letter = '';
+  while (col > 0) {
+    var mod = (col - 1) % 26;
+    letter = String.fromCharCode(65 + mod) + letter;
+    col = Math.floor((col - 1) / 26);
+  }
+  return letter;
+}
+
 // ============ ★ デバッグ: 発注書レイアウトの実サイズ・アスペクト比を測定 ============
 // GASエディタで「measureOrderLayout」を実行 → 縦向き/横向きどちらが最適か判定
 function measureOrderLayout() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var t = findTemplateSheet(ss, PO_TEMPLATE_CANDIDATES);
   if (!t) { Logger.log('テンプレートが見つかりません'); return; }
+  // シートの実サイズを超えないようにクランプ (66行未満のテンプレ対応)
+  var maxRows = t.getMaxRows();
+  var maxCols = t.getMaxColumns();
+  var endRow = Math.min(66, maxRows);
+  var endCol = Math.min(43, maxCols);
   var totalWidth = 0, totalHeight = 0;
-  for (var c = 1; c <= 43; c++) totalWidth += t.getColumnWidth(c);   // A〜AQ
-  for (var r = 1; r <= 66; r++) totalHeight += t.getRowHeight(r);    // 1〜66
+  for (var c = 1; c <= endCol; c++) totalWidth += t.getColumnWidth(c);
+  for (var r = 1; r <= endRow; r++) totalHeight += t.getRowHeight(r);
   var ratio = totalWidth / totalHeight;
-  Logger.log('====== 発注書 A1:AQ66 実サイズ測定 ======');
-  Logger.log('  幅(43列 A〜AQ): ' + totalWidth + ' px');
-  Logger.log('  高さ(66行): ' + totalHeight + ' px');
+  Logger.log('====== 発注書レイアウト実サイズ測定 ======');
+  Logger.log('  テンプレ名: [' + t.getName() + ']');
+  Logger.log('  シート最大: ' + maxRows + '行 × ' + maxCols + '列');
+  Logger.log('  測定範囲: ' + endCol + '列 × ' + endRow + '行');
+  Logger.log('  幅: ' + totalWidth + ' px / 高さ: ' + totalHeight + ' px');
   Logger.log('  アスペクト比 W/H = ' + ratio.toFixed(3));
-  Logger.log('  --- 参考 ---');
-  Logger.log('  A4縦 W/H = 0.707 (210/297)');
-  Logger.log('  A4横 W/H = 1.414 (297/210)');
-  Logger.log(ratio < 1.0 ? '  → 縦長レイアウト: 【縦向き portrait】が最適' : '  → 横長レイアウト: 【横向き landscape】が最適');
-  Logger.log('  最終行(getLastRow): ' + t.getLastRow() + ' / 最終列(getLastColumn): ' + t.getLastColumn());
+  Logger.log('  A4縦 W/H = 0.707 / A4横 W/H = 1.414');
+  var verdict = ratio < 0.85 ? '縦長 → 縦向き(portrait)が最適'
+              : (ratio > 1.2 ? '横長 → 横向き(landscape)が最適'
+              : 'ほぼ正方形 → どちらの向きでも余白が出る(レイアウト調整推奨)');
+  Logger.log('  判定: ' + verdict);
+  Logger.log('  発注書の実際の最終行(getLastRow): ' + t.getLastRow() + ' / 最終列(getLastColumn): ' + t.getLastColumn());
+  Logger.log('  → range は A1:' + columnToLetter(t.getLastColumn()) + t.getLastRow() + ' が最適');
   Logger.log('====== 完了 ======');
 }
 
