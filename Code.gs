@@ -145,6 +145,28 @@ function doPost(e) {
   }
 }
 
+// ============ ★ デバッグ: 発注書レイアウトの実サイズ・アスペクト比を測定 ============
+// GASエディタで「measureOrderLayout」を実行 → 縦向き/横向きどちらが最適か判定
+function measureOrderLayout() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var t = findTemplateSheet(ss, PO_TEMPLATE_CANDIDATES);
+  if (!t) { Logger.log('テンプレートが見つかりません'); return; }
+  var totalWidth = 0, totalHeight = 0;
+  for (var c = 1; c <= 43; c++) totalWidth += t.getColumnWidth(c);   // A〜AQ
+  for (var r = 1; r <= 66; r++) totalHeight += t.getRowHeight(r);    // 1〜66
+  var ratio = totalWidth / totalHeight;
+  Logger.log('====== 発注書 A1:AQ66 実サイズ測定 ======');
+  Logger.log('  幅(43列 A〜AQ): ' + totalWidth + ' px');
+  Logger.log('  高さ(66行): ' + totalHeight + ' px');
+  Logger.log('  アスペクト比 W/H = ' + ratio.toFixed(3));
+  Logger.log('  --- 参考 ---');
+  Logger.log('  A4縦 W/H = 0.707 (210/297)');
+  Logger.log('  A4横 W/H = 1.414 (297/210)');
+  Logger.log(ratio < 1.0 ? '  → 縦長レイアウト: 【縦向き portrait】が最適' : '  → 横長レイアウト: 【横向き landscape】が最適');
+  Logger.log('  最終行(getLastRow): ' + t.getLastRow() + ' / 最終列(getLastColumn): ' + t.getLastColumn());
+  Logger.log('====== 完了 ======');
+}
+
 // ============ ★ デバッグ: 最新の発注書シートの結合構造と値を確認 ============
 // GASエディタで「inspectActualSheet」を選んで実行 → 実行ログで最新の発注書シートの
 // 行18-22の値・結合範囲が見える。明細書込みが効かない原因 (結合内側セル等) を特定。
