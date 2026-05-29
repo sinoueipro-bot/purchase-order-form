@@ -175,7 +175,7 @@ textarea { resize: vertical; min-height: 60px; }
 
 .send-area { position: fixed; bottom: 60px; left: 0; right: 0; background: white; padding: 12px 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 98; display: flex; gap: 10px; align-items: center; }
 .send-area .btn-submit { flex: 1; margin: 0; }
-.send-area .btn-back-edit { flex-shrink: 0; margin-right: 0; }
+.send-area .btn-back-edit { flex: 1; margin-right: 0; }
 /* 2026-05-27 v88: Step3で固定フッター(sendArea+下部ナビ)に合計金額が隠れないよう余白確保 */
 .wizard-step-view[data-po-step="3"] { padding-bottom: 150px; }
 .btn-submit { width: 100%; padding: 14px; border: none; border-radius: var(--radius); font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px; background: var(--primary); color: white; transition: all 0.2s; }
@@ -2412,6 +2412,8 @@ async function executeSend() {
       window._poQueueActive = false;
       document.getElementById('formArea').style.display = 'none';
       document.getElementById('btnSubmit').style.display = 'none';
+      // ★ v89: 送信エリア(「← 単価・明細を修正する」含む)を成功画面では隠す
+      document.getElementById('sendArea').style.display = 'none';
       // 発注書ウィザードナビを隠す
       const pnav = document.getElementById('poWizardNav');
       if (pnav) pnav.style.display = 'none';
