@@ -145,6 +145,41 @@ function doPost(e) {
   }
 }
 
+// ★ テンプレートを発注書範囲(64行×43列AQ)ぴったりにトリミング
+// スプシ印刷で「現在のシート」を選ぶだけで発注書だけが印刷されるようにする。
+// copyTo で作る発注書シートも64行を引き継ぐ。GASエディタで1回だけ実行。
+function trimTemplateRows() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var t = findTemplateSheet(ss, PO_TEMPLATE_CANDIDATES);
+  if (!t) { Logger.log('テンプレートが見つかりません'); return; }
+  Logger.log('トリミング前: ' + t.getMaxRows() + '行 × ' + t.getMaxColumns() + '列');
+  // 行65以降を削除 (発注書は行64まで)。安全のため値の有無を確認
+  var maxRows = t.getMaxRows();
+  if (maxRows > 64) {
+    var below = t.getRange(65, 1, maxRows - 64, t.getMaxColumns()).getValues();
+    var hasValue = below.some(function(row){ return row.some(function(c){ return c !== '' && c !== null; }); });
+    if (hasValue) {
+      Logger.log('⚠️ 行65以降に値があります。削除を中止。手動で確認してください');
+    } else {
+      t.deleteRows(65, maxRows - 64);
+      Logger.log('✅ 行65以降を削除');
+    }
+  } else {
+    Logger.log('行は既に64以下');
+  }
+  // 列44(AR)以降を削除 (発注書は AQ=43列まで)
+  var maxCols = t.getMaxColumns();
+  if (maxCols > 43) {
+    t.deleteColumns(44, maxCols - 43);
+    Logger.log('✅ 列44(AR)以降を削除');
+  } else {
+    Logger.log('列は既に43以下');
+  }
+  Logger.log('トリミング後: ' + t.getMaxRows() + '行 × ' + t.getMaxColumns() + '列');
+  Logger.log('→ 次: テンプレシートで Ctrl+P → 向き=縦向き / スケール=ページに合わせる / 余白=狭い を設定');
+  Logger.log('   (copyToで作られる発注書シートが設定を引き継ぎ、スプシ印刷も一発になる)');
+}
+
 // 列番号(1始まり) → アルファベット (1→A, 27→AA, 43→AQ)
 function columnToLetter(col) {
   var letter = '';
@@ -610,8 +645,10 @@ function createFromTemplate(ss, tabName, data) {
   // ★ 2026-05-27 v82: 注文者は AJ61 (結合左上)。旧 AJ60 は結合外で表示されず空欄だった
   try { sh.getRange('AJ61').setValue(data.orderer); } catch(e) {}
   try { sh.getRange('AJ60').setValue(''); } catch(e) {}  // 旧位置クリア
-  // ★ 2026-05-27 v82: 通常発注時は「PASS」を表示しない (緊急時のみ「緊急」)
-  sh.getRange('AF66').setValue(data.urgent?'緊急':'');
+  // ★ 2026-05-27 v95: AF66(行66)への書き込みは廃止。
+  //   行66は発注書の枠外でPDF範囲(A1:AQ64)にも含まれず実質非表示だった。
+  //   かつ行66書き込みはトリミング(64行化)後にシートを自動拡張してしまうため削除。
+  //   緊急の識別は発注一覧I列「緊急」+ 承認メール件名【緊急】で行う。
 
   return sh;
 }
