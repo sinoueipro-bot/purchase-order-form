@@ -59,7 +59,7 @@ function initSheet() {
   //   R=事務員通知不要 (2026-05-21 追加・申請時の選択)
   //   S=入荷チェック (2026-05-21 追加・事務員手動入力)
   //   T=保安費, U=消耗品費, V=器具仕入れ, W=顧客設備 (2026-05-21 追加・事務員手動入力)
-  var headers = ['受付日時','注文No.','発行日','仕入先','事業所','現場名','合計金額','注文者','緊急','承認者','ステータス','シートリンク','ID','明細JSON','特記事項','更新日時','発注完了日','事務員通知不要','入荷チェック','保安費','消耗品費','器具仕入れ','顧客設備'];
+  var headers = ['受付日時','注文No.','発行日','仕入先','事業所','現場名','合計金額','注文者','緊急','承認者','ステータス','シートリンク','ID','明細JSON','特記事項','更新日時','発注完了日','事務員通知不要','入荷チェック','保安費','消耗品費','器具仕入れ','顧客設備','高額単価(10万超)','無償(M)'];
   s.getRange(1,1,1,headers.length).setValues([headers]);
   s.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
   s.setFrozenRows(1);
@@ -582,25 +582,76 @@ function getBranchInfo(b) {
 }
 
 // ============ 一覧シート ============
+// ★ 2026-05-27 v83: 明細から経理向けフラグを計算
+//   X列(高額単価): いずれかの商品の単価が10万円超なら「◎」
+//   Y列(無償):     いずれかの商品の形態が M(無償) なら「M」
+// 目的: 経理が請求書を1枚ずつ開かなくても、一覧で無償・高額発注を判別できる
+function _calcOrderFlags(lines) {
+  lines = lines || [];
+  var hasHigh = lines.some(function(ln){ return Number(ln.price) > 100000; });
+  var hasFree = lines.some(function(ln){ return String(ln.type) === 'M'; });
+  return {
+    highPrice: hasHigh ? '◎' : '',
+    free: hasFree ? 'M' : ''
+  };
+}
+
 function addToIndex(ss, data, os, uniqueId) {
   var s = ss.getSheetByName(INDEX_SHEET);
   if (!s) { initSheet(); s = ss.getSheetByName(INDEX_SHEET); }
   var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
   var url = os ? (ss.getUrl() + '#gid=' + os.getSheetId()) : '';
   var linesJson = JSON.stringify(data.lines || []);
-  // 16列(A-P) + Q=発注完了日(空, markOrderCompleted で書き込む) + R=事務員通知不要 + S-W=事務員手動入力(空)
+  var flags = _calcOrderFlags(data.lines);  // X/Y フラグ
+  // 16列(A-P) + Q=発注完了日 + R=事務員通知不要 + S-W=事務員手動入力 + X=高額単価 + Y=無償
   s.appendRow([
     now, data.orderNo, data.issueDate, data.supplier, data.branch, data.siteName||'',
     data.total, data.orderer, data.urgent?'緊急':'PASS', data.approverName, '申請中',
     url, uniqueId, linesJson, data.notes || '', now,
     '',  // Q: 発注完了日
     data.skipPurchaserNotify ? 'YES' : '',  // R: 事務員通知不要フラグ
-    '', '', '', '', ''  // S-W: 入荷チェック / 保安費 / 消耗品費 / 器具仕入れ / 顧客設備
+    '', '', '', '', '',  // S-W: 入荷チェック / 保安費 / 消耗品費 / 器具仕入れ / 顧客設備
+    flags.highPrice,  // X: 高額単価(10万超) ◎
+    flags.free        // Y: 無償(M)
   ]);
   var lr = s.getLastRow();
   s.getRange(lr, 7).setNumberFormat('#,##0');
   applyStatusColor(s, lr, '申請中');
   if (data.urgent) s.getRange(lr, 9).setFontColor('#d93025').setFontWeight('bold');
+  // X(◎)・Y(M) を赤太字で目立たせる
+  if (flags.highPrice) s.getRange(lr, 24).setFontColor('#d93025').setFontWeight('bold').setHorizontalAlignment('center');
+  if (flags.free) s.getRange(lr, 25).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
+}
+
+// ★ 2026-05-27 v83: 既存の全発注に X(高額単価◎)・Y(無償M) フラグを遡及計算
+//   GASエディタで「backfillOrderFlags」を一度実行すれば既存データ全件に反映される
+function backfillOrderFlags() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(INDEX_SHEET);
+  if (!s) { Logger.log('発注一覧シートなし'); return; }
+  var lastRow = s.getLastRow();
+  // ヘッダー (X24, Y25)
+  s.getRange(1, 24).setValue('高額単価(10万超)').setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
+  s.getRange(1, 25).setValue('無償(M)').setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
+  s.setColumnWidth(24, 130);
+  s.setColumnWidth(25, 90);
+  if (lastRow < 2) { Logger.log('データ行なし'); return; }
+  // N列(14)=明細JSON を読んでフラグ計算
+  var jsonCol = s.getRange(2, 14, lastRow - 1, 1).getValues();
+  var out = [];
+  for (var i = 0; i < jsonCol.length; i++) {
+    var lines = [];
+    try { lines = JSON.parse(jsonCol[i][0] || '[]'); } catch(e) {}
+    var flags = _calcOrderFlags(lines);
+    out.push([flags.highPrice, flags.free]);
+  }
+  s.getRange(2, 24, out.length, 2).setValues(out);
+  // 色付け
+  for (var r = 0; r < out.length; r++) {
+    if (out[r][0]) s.getRange(r+2, 24).setFontColor('#d93025').setFontWeight('bold').setHorizontalAlignment('center');
+    if (out[r][1]) s.getRange(r+2, 25).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
+  }
+  Logger.log('backfillOrderFlags 完了: ' + out.length + '件に反映');
 }
 
 // ============ ステータス色分け ============
@@ -1922,6 +1973,12 @@ function updateOrder(data) {
   s.getRange(r, 14).setValue(JSON.stringify(lines));
   s.getRange(r, 15).setValue(data.notes || '');
   s.getRange(r, 16).setValue(now);
+  // ★ v83: 明細変更に伴い 高額単価(X)・無償(Y) フラグを再計算
+  var flags = _calcOrderFlags(lines);
+  s.getRange(r, 24).setValue(flags.highPrice);
+  s.getRange(r, 25).setValue(flags.free);
+  if (flags.highPrice) s.getRange(r, 24).setFontColor('#d93025').setFontWeight('bold').setHorizontalAlignment('center');
+  if (flags.free) s.getRange(r, 25).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
 
   return {
     success: true,
