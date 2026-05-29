@@ -150,7 +150,8 @@ textarea { resize: vertical; min-height: 60px; }
 .line-item .field-label { margin-bottom: 3px; font-size: 11px; }
 .line-item input, .line-item select { padding: 8px 10px; font-size: 14px; }
 .amount-display { text-align: right; font-weight: 700; color: var(--primary); font-size: 16px; padding: 8px 0 0; }
-.btn-remove-line { background: none; border: none; color: var(--danger); font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+.btn-remove-line { background: #fce8e6; border: 2px solid var(--danger); color: var(--danger); font-size: 26px; line-height: 1; font-weight: bold; cursor: pointer; padding: 6px 16px; border-radius: 8px; transition: all .15s; }
+.btn-remove-line:hover { background: var(--danger); color: #fff; transform: scale(1.05); }
 .btn-add-line { display: flex; align-items: center; justify-content: center; gap: 6px; width: calc(100% - 32px); margin: 8px 16px 16px; padding: 10px; border: 2px dashed var(--border); border-radius: var(--radius); background: none; color: var(--primary); font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
 .btn-add-line:hover { border-color: var(--primary); background: #e8f0fe; }
 .total-bar { background: var(--primary); color: white; margin: 0 12px; padding: 14px 16px; border-radius: var(--radius); display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 16px; box-shadow: 0 2px 6px rgba(26,115,232,0.3); }
@@ -676,7 +677,8 @@ const STAFF = [
 const APPROVERS = [
   { name: '原田部長', email: 'harada@i-pro.co.jp' },
   { name: '岩崎店長', email: 'iwasaki@i-pro.co.jp' },
-  { name: '亀谷常務', email: 'kametani@i-pro.co.jp' }
+  { name: '亀谷常務', email: 'kametani@i-pro.co.jp' },
+  { name: '井上将吾', email: 's.inoue.ipro@gmail.com' }
 ];
 const FORM_TYPES = [
   { value: 'U', label: 'その他' },

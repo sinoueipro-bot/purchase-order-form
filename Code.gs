@@ -382,9 +382,13 @@ function processOrder(data) {
   var tabName = data.issueDate.replace(/-/g,'') + '_' + data.orderer;
   if (data.siteName) tabName += '_' + data.siteName;
 
-  var approver = data.urgent ? APPROVER_URGENT : APPROVER_PASS;
-  data.approverName = approver.name;
-  data.approverEmail = approver.email;
+  // ★ 2026-05-27 v82 修正: 画面で選んだ承認者(data.approverEmail)を最優先で使う
+  //   旧コードは無条件に固定値(井上)で上書きしていたため、誰を選んでも井上に飛んでいた
+  if (!data.approverEmail) {
+    var approver = data.urgent ? APPROVER_URGENT : APPROVER_PASS;
+    data.approverName = approver.name;
+    data.approverEmail = approver.email;
+  }
 
   var uniqueId = Utilities.getUuid();
   var os = null;
@@ -559,8 +563,11 @@ function createFromTemplate(ss, tabName, data) {
   try { sh.getRange('C58').setValue(''); } catch(e) {}
   sh.getRange('X62').setValue(today.getMonth()+1);
   sh.getRange('AA62').setValue(today.getDate());
-  sh.getRange('AJ60').setValue(data.orderer);
-  sh.getRange('AF66').setValue(data.urgent?'緊急':'PASS');
+  // ★ 2026-05-27 v82: 注文者は AJ61 (結合左上)。旧 AJ60 は結合外で表示されず空欄だった
+  try { sh.getRange('AJ61').setValue(data.orderer); } catch(e) {}
+  try { sh.getRange('AJ60').setValue(''); } catch(e) {}  // 旧位置クリア
+  // ★ 2026-05-27 v82: 通常発注時は「PASS」を表示しない (緊急時のみ「緊急」)
+  sh.getRange('AF66').setValue(data.urgent?'緊急':'');
 
   return sh;
 }
