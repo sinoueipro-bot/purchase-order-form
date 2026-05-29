@@ -533,8 +533,8 @@ textarea { resize: vertical; min-height: 60px; }
 
 <!-- 送信ボタン -->
 <div class="send-area" id="sendArea">
-  <!-- 2026-05-27 v86: 承認者ページから単価・明細(Step2)へ戻る導線。送信直前の修正用 -->
-  <button type="button" class="btn-back-edit" onclick="poWizardPrev()">← 単価・明細を修正する</button>
+  <!-- 2026-05-27 v86: 承認者ページから単価・明細(Step2)へ戻る導線。送信直前の修正用。Step3でのみ表示 -->
+  <button type="button" class="btn-back-edit" id="btnBackEdit" onclick="poWizardPrev()" style="display:none">← 単価・明細を修正する</button>
   <button type="button" class="btn-submit" id="btnSubmit" onclick="handleSend()" disabled style="display:none">
     📦 送信（スプシ記録 + メール通知）
   </button>
@@ -736,6 +736,9 @@ function switchTab(tab) {
 
   // 送信ボタン表示制御（発注書のみ）
   document.getElementById('btnSubmit').style.display = (tab === 'order' && currentPoWizardStep === MAX_PO_WIZARD_STEP) ? '' : 'none';
+  // 「← 単価・明細を修正する」ボタンも送信ボタンと完全連動（Step3のみ）
+  var _bbe = document.getElementById('btnBackEdit');
+  if (_bbe) _bbe.style.display = (tab === 'order' && currentPoWizardStep === MAX_PO_WIZARD_STEP) ? '' : 'none';
   // Step 3のみ送信エリア表示
   const showSend = (tab === 'order' && currentPoWizardStep === MAX_PO_WIZARD_STEP);
   const sendArea = document.getElementById('sendArea');
@@ -805,6 +808,8 @@ function goToPoWizardStep(step) {
 
   // Step 3なら送信ボタン表示・確認内容描画
   document.getElementById('btnSubmit').style.display = (step === MAX_PO_WIZARD_STEP) ? '' : 'none';
+  var _bbeStep = document.getElementById('btnBackEdit');
+  if (_bbeStep) _bbeStep.style.display = (step === MAX_PO_WIZARD_STEP) ? '' : 'none';
   document.getElementById('sendArea').style.display = (step === MAX_PO_WIZARD_STEP) ? '' : 'none';
   if (step === MAX_PO_WIZARD_STEP) renderPoConfirm();
 
