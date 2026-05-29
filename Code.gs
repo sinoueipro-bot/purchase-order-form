@@ -1773,9 +1773,10 @@ function getSheetPdfBase64(gid) {
     var ssId = ss.getId();
     var url = 'https://docs.google.com/spreadsheets/d/' + ssId +
               '/export?format=pdf&gid=' + gid +
-              '&range=A1:AQ66' +  // ★ v89: 発注書の範囲に限定し、下の空白(行67以降)が余白になる問題を解消
-              '&portrait=true&size=A4&fitw=true&gridlines=false&printtitle=false&sheetnames=false&pagenum=false&fzr=false' +
-              '&top_margin=0.5&bottom_margin=0.5&left_margin=0.5&right_margin=0.5';
+              '&range=A1:AQ66' +  // 発注書の範囲に限定 (行67以降の空白を除外)
+              // ★ v90: fitw(幅合わせ)だと横長レイアウトで縦に余白が出るため scale=4(ページ全体に合わせる)に変更
+              '&portrait=true&size=A4&scale=4&gridlines=false&printtitle=false&sheetnames=false&pagenum=false&fzr=false' +
+              '&top_margin=0.4&bottom_margin=0.4&left_margin=0.4&right_margin=0.4';
     var response = UrlFetchApp.fetch(url, {
       headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() },
       muteHttpExceptions: true
