@@ -12,6 +12,9 @@
  */
 var INDEX_SHEET = '発注一覧';
 var EST_INDEX_SHEET = '見積一覧';
+// ★ 2026-05-29 在庫管理タブ: 発注を「商品1行ずつ」に展開し、在庫管理担当が分類をプルダウンで選ぶ
+var STOCK_SHEET = '在庫管理';
+var STOCK_CATEGORIES = ['保安費', '器具仕入れ', '消耗品費', '顧客設備'];
 
 // ★ 運用切替フラグ（true = 新フロー / 個別シート作らない、false = 旧フロー）
 // 問題があればこれをfalseに戻すだけで旧動作に戻る
@@ -798,6 +801,95 @@ function addToIndex(ss, data, os, uniqueId) {
   // U(◎)・V(M) を目立たせる (U=21列目, V=22列目)
   if (flags.highPrice) s.getRange(lr, 21).setFontColor('#d93025').setFontWeight('bold').setHorizontalAlignment('center');
   if (flags.free) s.getRange(lr, 22).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
+  // ★ 2026-05-29: 在庫管理シートにも商品1行ずつ展開して追記
+  try { addToStockSheet(ss, data, url); } catch(e) { Logger.log('在庫管理追記エラー: ' + e.toString()); }
+}
+
+// ============ ★ 在庫管理シート (2026-05-29) ============
+// 発注を「商品1行ずつ」に展開。在庫管理担当が N列(分類)をプルダウンで選び経理へ渡す。
+function initStockSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(STOCK_SHEET);
+  if (!s) s = ss.insertSheet(STOCK_SHEET);
+  var headers = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','分類','シートURL'];
+  s.getRange(1,1,1,headers.length).setValues([headers]);
+  s.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#0f9d58').setFontColor('#fff');
+  s.setFrozenRows(1);
+  s.setColumnWidth(7, 130);   // メーカー
+  s.setColumnWidth(8, 160);   // 商品名
+  s.setColumnWidth(13, 120);  // 備考
+  s.setColumnWidth(14, 130);  // 分類
+  s.setColumnWidth(15, 220);  // シートURL
+  s.getRange(1, 14).setBackground('#fbbc04').setFontColor('#000'); // 分類列ヘッダーは目立つ黄色
+  applyStockCategoryValidation(s);
+  Logger.log('在庫管理シート初期化完了');
+}
+
+// 分類列(N=14)に4択プルダウンを適用 (2行目〜1000行)
+function applyStockCategoryValidation(s) {
+  var rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(STOCK_CATEGORIES, true)
+    .setAllowInvalid(false)
+    .build();
+  s.getRange(2, 14, 1000, 1).setDataValidation(rule);
+}
+
+// 発注1件の商品を在庫管理シートに追記 (addToIndex から呼ばれる)
+function addToStockSheet(ss, data, sheetUrl) {
+  var s = ss.getSheetByName(STOCK_SHEET);
+  if (!s) { initStockSheet(); s = ss.getSheetByName(STOCK_SHEET); }
+  var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
+  var lines = data.lines || [];
+  var rows = [];
+  lines.forEach(function(ln) {
+    if (ln && (ln.maker || ln.product || (ln.qty && ln.qty > 0))) {
+      rows.push([
+        now, data.orderNo, data.supplier, data.branch, data.siteName||'', data.orderer,
+        ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'',
+        (ln.qty && ln.price) ? ln.qty*ln.price : '', ln.remark||'', '', sheetUrl||''
+      ]);
+    }
+  });
+  if (rows.length > 0) {
+    var startRow = s.getLastRow() + 1;
+    s.getRange(startRow, 1, rows.length, 15).setValues(rows);
+    s.getRange(startRow, 11, rows.length, 2).setNumberFormat('#,##0'); // 単価・金額
+    applyStockCategoryValidation(s);
+  }
+}
+
+// ★ 既存の全発注を在庫管理シートに一括展開 (初回 or 再構築用・GASエディタで実行)
+// ⚠️ 既存の分類(N列)入力は消える。初回構築時のみ実行すること
+function rebuildStockSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var idx = ss.getSheetByName(INDEX_SHEET);
+  if (!idx) { Logger.log('発注一覧シートがありません'); return; }
+  var s = ss.getSheetByName(STOCK_SHEET);
+  if (!s) { initStockSheet(); s = ss.getSheetByName(STOCK_SHEET); }
+  // 既存データ(ヘッダー除く)をクリア
+  if (s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow()-1, 15).clearContent();
+  var data = idx.getDataRange().getValues();
+  var rows = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var lines = [];
+    try { lines = JSON.parse(row[13] || '[]'); } catch(e) {}
+    lines.forEach(function(ln) {
+      if (ln && (ln.maker || ln.product || (ln.qty && ln.qty > 0))) {
+        rows.push([
+          row[0], row[1], row[3], row[4], row[5]||'', row[7],   // 受付日時/注文No/仕入先/事業所/現場名/注文者
+          ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'',
+          (ln.qty && ln.price) ? ln.qty*ln.price : '', ln.remark||'', '', row[11]||''  // 商品情報/分類(空)/シートURL
+        ]);
+      }
+    });
+  }
+  if (rows.length > 0) {
+    s.getRange(2, 1, rows.length, 15).setValues(rows);
+    s.getRange(2, 11, rows.length, 2).setNumberFormat('#,##0');
+    applyStockCategoryValidation(s);
+  }
+  Logger.log('在庫管理シート再構築完了: ' + rows.length + ' 商品行');
 }
 
 // ★ 2026-05-27 v83: 既存の全発注に X(高額単価◎)・Y(無償M) フラグを遡及計算
