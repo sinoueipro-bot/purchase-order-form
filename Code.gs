@@ -911,6 +911,66 @@ function rebuildStockSheet() {
   Logger.log('在庫管理シート再構築完了: ' + rows.length + ' 商品行');
 }
 
+// ============ ★ システム整合性チェック (2026-05-29) ============
+// 発注一覧・在庫管理を手動で行削除/移動した後、システムに不具合がないか確認する。
+// GASエディタで「checkSystemIntegrity」を実行 → ログで判定。
+function checkSystemIntegrity() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  Logger.log('====== システム整合性チェック ======');
+  var issues = 0;
+
+  // --- 発注一覧 ---
+  var idx = ss.getSheetByName(INDEX_SHEET);
+  if (!idx) {
+    Logger.log('❌ 発注一覧シートが見つかりません (致命的・シート名が変わった可能性)'); issues++;
+  } else {
+    var expIdx = ['受付日時','注文No.','発行日','仕入先','事業所','現場名','合計金額','注文者','緊急','承認者','ステータス','シートリンク','ID'];
+    var idxH = idx.getRange(1,1,1,Math.max(idx.getLastColumn(),13)).getValues()[0];
+    var hOk = true;
+    for (var h = 0; h < 13; h++) {  // 最重要13列(A-M)を厳密チェック
+      if (String(idxH[h]||'') !== expIdx[h]) {
+        Logger.log('⚠️ 発注一覧 列'+(h+1)+' ヘッダー不一致: 期待["'+expIdx[h]+'"] 実際["'+(idxH[h]||'')+'"]'); hOk=false; issues++;
+      }
+    }
+    if (hOk) Logger.log('✅ 発注一覧ヘッダー(A〜M:注文No/ID等)正常');
+    var d = idx.getDataRange().getValues();
+    var ids = {}, idMissing=0, idDup=0, stBlank=0, dataRows=0;
+    for (var i=1; i<d.length; i++) {
+      if (!d[i][1] && !d[i][12]) continue;  // 完全空行スキップ
+      dataRows++;
+      if (!d[i][12]) idMissing++; else if (ids[d[i][12]]) idDup++; else ids[d[i][12]]=true;
+      if (!d[i][10]) stBlank++;
+    }
+    Logger.log('発注一覧 有効データ行: '+dataRows+' / ID欠損: '+idMissing+' / ID重複: '+idDup+' / ステータス空: '+stBlank);
+    if (idMissing>0) { Logger.log('⚠️ ID欠損行あり→承認/編集/同期で照合できない(その行のみ)。手動で行を消した残骸の可能性'); issues++; }
+    if (idDup>0) { Logger.log('⚠️ ID重複あり→誤った行を更新する恐れ。コピペで複製した可能性'); issues++; }
+  }
+
+  // --- 在庫管理 ---
+  var stock = ss.getSheetByName(STOCK_SHEET);
+  if (!stock) {
+    Logger.log('在庫管理シートなし(未作成 or 削除済み)。必要なら rebuildStockSheet で再生成可');
+  } else {
+    var expStock = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','分類','シートURL'];
+    var stH = stock.getRange(1,1,1,Math.max(stock.getLastColumn(),16)).getValues()[0];
+    var sOk = true;
+    for (var h2=0; h2<16; h2++) {
+      if (String(stH[h2]||'') !== expStock[h2]) {
+        Logger.log('⚠️ 在庫管理 列'+(h2+1)+' ヘッダー不一致: 期待["'+expStock[h2]+'"] 実際["'+(stH[h2]||'')+'"]'); sOk=false; issues++;
+      }
+    }
+    if (sOk) Logger.log('✅ 在庫管理ヘッダー正常');
+    Logger.log('在庫管理 データ行: '+(stock.getLastRow()-1));
+  }
+
+  // --- 結論 ---
+  Logger.log('--- 行削除・移動の影響評価 ---');
+  Logger.log('・新規発注/承認/編集/同期は 注文No・ID で照合 → 行順・行削除の影響なし');
+  Logger.log('・削除した発注は記録が消えるだけ(システムは正常動作)');
+  Logger.log('====== 検出された問題: '+issues+'件 ======');
+  Logger.log(issues===0 ? '✅ 不具合の懸念なし。安全に使えます' : '⚠️ 上記の警告を確認してください(多くはヘッダー復旧で解決)');
+}
+
 // ============ ★ スプシ直接編集の自動同期 (2026-05-29 v100) ============
 // 発注書シートをスプシで直接修正したら、発注一覧・在庫管理を自動更新する。
 // ★ setupEditTrigger() を GASエディタで1回だけ実行してトリガーを有効化する必要がある。
