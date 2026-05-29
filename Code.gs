@@ -911,6 +911,135 @@ function rebuildStockSheet() {
   Logger.log('在庫管理シート再構築完了: ' + rows.length + ' 商品行');
 }
 
+// ============ ★ スプシ直接編集の自動同期 (2026-05-29 v100) ============
+// 発注書シートをスプシで直接修正したら、発注一覧・在庫管理を自動更新する。
+// ★ setupEditTrigger() を GASエディタで1回だけ実行してトリガーを有効化する必要がある。
+function setupEditTrigger() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // 既存の同名トリガーを削除 (重複防止)
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'onEditInstallable') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('onEditInstallable').forSpreadsheet(ss).onEdit().create();
+  Logger.log('✅ 編集トリガー(onEditInstallable)を設定しました。今後は発注書シートを直接編集すると発注一覧・在庫管理が自動更新されます');
+}
+
+// インストーラブル onEdit トリガー本体
+function onEditInstallable(e) {
+  try {
+    if (!e || !e.range) return;
+    var sheet = e.range.getSheet();
+    if (!_isOrderSheet(sheet.getName())) return;  // 発注書シート以外は無視
+    var row = e.range.getRow();
+    if (row < 18 || row > 49) return;             // 明細・集計部の編集のみ対象
+    syncFromOrderSheet(sheet);
+  } catch (err) {
+    Logger.log('onEditInstallable エラー: ' + err.toString());
+  }
+}
+
+// シート名が「発注書シート」(YYYYMMDD_ で始まる) か判定
+function _isOrderSheet(name) {
+  var exclude = ['発注一覧','在庫管理','見積一覧','見積書(テンプレート)','発注書(テンプレート)','テンプレート'];
+  if (exclude.indexOf(name) !== -1) return false;
+  if (name.indexOf('テンプレ') !== -1) return false;
+  if (name.indexOf('見積_') === 0) return false;
+  return /^\d{8}_/.test(name);
+}
+
+// 発注書シートの明細を読んで、発注一覧・在庫管理を更新
+function syncFromOrderSheet(sheet) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var orderNo = sheet.getRange('AH3').getValue();
+  if (!orderNo) return;
+  var idx = ss.getSheetByName(INDEX_SHEET);
+  if (!idx) return;
+  var idxData = idx.getDataRange().getValues();
+  var idxRow = -1;
+  for (var i = 1; i < idxData.length; i++) {
+    if (String(idxData[i][1]) === String(orderNo)) { idxRow = i + 1; break; }
+  }
+  if (idxRow === -1) return;
+  // 元の明細JSON から type (形態U/M) を順番で保持 (発注書シートにtype列がないため)
+  var oldLines = [];
+  try { oldLines = JSON.parse(idxData[idxRow-1][13] || '[]'); } catch(e) {}
+  // 発注書シートの明細を読む (行19,21,... = 19+idx*2)
+  var lines = [];
+  var total = 0;
+  for (var k = 0; k < 8; k++) {
+    var r = 19 + k * 2;
+    var maker = sheet.getRange('C'+r).getValue();
+    var product = sheet.getRange('H'+r).getValue();
+    var qty = Number(sheet.getRange('Z'+r).getValue()) || 0;
+    var price = Number(sheet.getRange('AB'+r).getValue()) || 0;
+    if (maker || product || qty > 0) {
+      var amount = qty * price;
+      total += amount;
+      lines.push({
+        maker: maker || '', product: product || '',
+        model: sheet.getRange('P'+r).getValue() || '',
+        qty: qty, price: price, amount: amount,
+        remark: sheet.getRange('AL'+r).getValue() || '',
+        type: (oldLines[k] && oldLines[k].type) ? oldLines[k].type : 'U'
+      });
+    }
+  }
+  // 発注一覧を更新 (N列=明細JSON / G列=合計 / U,V=フラグ)
+  idx.getRange(idxRow, 14).setValue(JSON.stringify(lines));
+  idx.getRange(idxRow, 7).setValue(total).setNumberFormat('#,##0');
+  var flags = _calcOrderFlags(lines);
+  idx.getRange(idxRow, 21).setValue(flags.highPrice);
+  idx.getRange(idxRow, 22).setValue(flags.free);
+  // 在庫管理を更新 (分類は保持)
+  _resyncStockForOrder(ss, orderNo, idxData[idxRow-1], lines);
+}
+
+// 在庫管理シートの該当発注行を更新 (分類O列は保持)
+function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
+  var s = ss.getSheetByName(STOCK_SHEET);
+  if (!s) return;
+  var data = s.getDataRange().getValues();
+  var stockRows = [];
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][1]) === String(orderNo)) stockRows.push(i + 1);  // B列=注文No
+  }
+  if (stockRows.length === lines.length) {
+    // 商品数が同じ → 各行を値更新 (分類O列・行順を保持)
+    for (var j = 0; j < lines.length; j++) {
+      var ln = lines[j], rr = stockRows[j];
+      s.getRange(rr, 7, 1, 7).setValues([[ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'', ln.amount||'', ln.remark||'']]);
+      s.getRange(rr, 14).setValue((ln.type==='M')?'M':'');  // N 無償
+      s.getRange(rr, 11, 1, 2).setNumberFormat('#,##0');
+      // O分類(15)は触らない=保持
+    }
+  } else {
+    // 商品数が変わった → 削除して再追加 (分類は商品名で引き継ぎ)
+    var categoryMap = {};
+    for (var c = 0; c < data.length; c++) {
+      if (String(data[c][1]) === String(orderNo)) categoryMap[data[c][7]] = data[c][14];
+    }
+    for (var d = stockRows.length - 1; d >= 0; d--) s.deleteRow(stockRows[d]);
+    var now = idxRowData[0], supplier = idxRowData[3], branch = idxRowData[4], siteName = idxRowData[5], orderer = idxRowData[7], url = idxRowData[11];
+    var rows = [];
+    lines.forEach(function(ln) {
+      rows.push([
+        now, orderNo, supplier, branch, siteName||'', orderer,
+        ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'',
+        ln.amount||'', ln.remark||'', (ln.type==='M')?'M':'', categoryMap[ln.product]||'', url||''
+      ]);
+    });
+    if (rows.length > 0) {
+      var startRow = s.getLastRow() + 1;
+      s.getRange(startRow, 1, rows.length, 16).setValues(rows);
+      s.getRange(startRow, 11, rows.length, 2).setNumberFormat('#,##0');
+      for (var ri = 0; ri < rows.length; ri++) {
+        if (rows[ri][13] === 'M') s.getRange(startRow + ri, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
+      }
+      applyStockCategoryValidation(s);
+    }
+  }
+}
+
 // ★ 2026-05-27 v83: 既存の全発注に X(高額単価◎)・Y(無償M) フラグを遡及計算
 //   GASエディタで「backfillOrderFlags」を一度実行すれば既存データ全件に反映される
 function backfillOrderFlags() {
