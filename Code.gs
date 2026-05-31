@@ -844,8 +844,8 @@ function initStockSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var s = ss.getSheetByName(STOCK_SHEET);
   if (!s) s = ss.insertSheet(STOCK_SHEET);
-  // 2026-05-29: 分類(O)の左に「無償(M)」列(N)を追加 → 16列構成
-  var headers = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','分類','シートURL'];
+  // ★ 2026-05-31: 17列構成 (分類Oの右に「入庫済み」P列追加・シートURLはQ列に移動)
+  var headers = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','分類','入庫済み','シートURL'];
   s.getRange(1,1,1,headers.length).setValues([headers]);
   s.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#0f9d58').setFontColor('#fff');
   s.setFrozenRows(1);
@@ -854,21 +854,29 @@ function initStockSheet() {
   s.setColumnWidth(13, 120);  // 備考
   s.setColumnWidth(14, 80);   // 無償(M)
   s.setColumnWidth(15, 130);  // 分類
-  s.setColumnWidth(16, 220);  // シートURL
-  s.getRange(1, 14).setBackground('#1a73e8').setFontColor('#fff'); // 無償(M)列ヘッダーは青
-  s.getRange(1, 15).setBackground('#fbbc04').setFontColor('#000'); // 分類列ヘッダーは黄
-  s.getRange(2, 14, 1000, 1).clearDataValidations();  // 無償列(N)はプルダウンなし(旧分類列の残骸も除去)
+  s.setColumnWidth(16, 90);   // 入庫済み (チェックボックス)
+  s.setColumnWidth(17, 220);  // シートURL
+  s.getRange(1, 14).setBackground('#1a73e8').setFontColor('#fff'); // 無償(M)ヘッダー青
+  s.getRange(1, 15).setBackground('#fbbc04').setFontColor('#000'); // 分類ヘッダー黄
+  s.getRange(2, 14, 1000, 1).clearDataValidations();  // 無償列はプルダウンなし
   applyStockCategoryValidation(s);
-  Logger.log('在庫管理シート初期化完了');
+  applyStockCheckboxValidation(s);
+  Logger.log('在庫管理シート初期化完了 (17列)');
 }
 
-// 分類列(N=14)に4択プルダウンを適用 (2行目〜1000行)
+// 分類列(O=15)に4択プルダウンを適用
 function applyStockCategoryValidation(s) {
   var rule = SpreadsheetApp.newDataValidation()
     .requireValueInList(STOCK_CATEGORIES, true)
     .setAllowInvalid(false)
     .build();
-  s.getRange(2, 15, 1000, 1).setDataValidation(rule);  // 分類列 O(15列目)
+  s.getRange(2, 15, 1000, 1).setDataValidation(rule);  // 分類列 O(15)
+}
+
+// ★ 2026-05-31: 入庫済み列(P=16)にチェックボックスを適用
+function applyStockCheckboxValidation(s) {
+  var rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
+  s.getRange(2, 16, 1000, 1).setDataValidation(rule);  // 入庫済み列 P(16)
 }
 
 // 発注1件の商品を在庫管理シートに追記 (addToIndex から呼ばれる)
@@ -887,19 +895,21 @@ function addToStockSheet(ss, data, sheetUrl) {
         (ln.qty && ln.price) ? ln.qty*ln.price : '', ln.remark||'',
         (ln.type === 'M') ? 'M' : '',  // N: 無償(M)
         '',                            // O: 分類(プルダウン)
-        sheetUrl||''                   // P: シートURL
+        false,                         // P: 入庫済み (チェックボックス初期OFF)
+        sheetUrl||''                   // Q: シートURL
       ]);
     }
   });
   if (rows.length > 0) {
     var startRow = s.getLastRow() + 1;
-    s.getRange(startRow, 1, rows.length, 16).setValues(rows);
+    s.getRange(startRow, 1, rows.length, 17).setValues(rows);
     s.getRange(startRow, 11, rows.length, 2).setNumberFormat('#,##0'); // 単価・金額
     // 無償(M)の行は N列を青太字で目立たせる
     for (var ri = 0; ri < rows.length; ri++) {
       if (rows[ri][13] === 'M') s.getRange(startRow + ri, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
     }
     applyStockCategoryValidation(s);
+    applyStockCheckboxValidation(s);
   }
 }
 
@@ -912,8 +922,8 @@ function rebuildStockSheet() {
   // ヘッダー・列幅・プルダウンを最新化 (既存シートでもヘッダーを16列に上書き)
   initStockSheet();
   var s = ss.getSheetByName(STOCK_SHEET);
-  // 既存データ(ヘッダー除く)をクリア
-  if (s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow()-1, 16).clearContent();
+  // 既存データ(ヘッダー除く)をクリア (17列)
+  if (s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow()-1, 17).clearContent();
   var data = idx.getDataRange().getValues();
   var rows = [];
   for (var i = 1; i < data.length; i++) {
@@ -928,19 +938,21 @@ function rebuildStockSheet() {
           (ln.qty && ln.price) ? ln.qty*ln.price : '', ln.remark||'',
           (ln.type === 'M') ? 'M' : '',  // N: 無償(M)
           '',                            // O: 分類(空)
-          row[11]||''                    // P: シートURL
+          false,                         // P: 入庫済み (チェックボックス初期OFF)
+          row[11]||''                    // Q: シートURL
         ]);
       }
     });
   }
   if (rows.length > 0) {
-    s.getRange(2, 1, rows.length, 16).setValues(rows);
+    s.getRange(2, 1, rows.length, 17).setValues(rows);
     s.getRange(2, 11, rows.length, 2).setNumberFormat('#,##0');
     // 無償(M)の行は N列を青太字で目立たせる
     for (var ri = 0; ri < rows.length; ri++) {
       if (rows[ri][13] === 'M') s.getRange(ri+2, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
     }
     applyStockCategoryValidation(s);
+    applyStockCheckboxValidation(s);
   }
   Logger.log('在庫管理シート再構築完了: ' + rows.length + ' 商品行');
 }
@@ -1149,10 +1161,14 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
       // O分類(15)は触らない=保持
     }
   } else {
-    // 商品数が変わった → 削除して再追加 (分類は商品名で引き継ぎ)
+    // 商品数が変わった → 削除して再追加 (分類・入庫済みは商品名で引き継ぎ)
     var categoryMap = {};
+    var checkedMap = {};
     for (var c = 0; c < data.length; c++) {
-      if (String(data[c][1]) === String(orderNo)) categoryMap[data[c][7]] = data[c][14];
+      if (String(data[c][1]) === String(orderNo)) {
+        categoryMap[data[c][7]] = data[c][14];   // O列(15)=分類
+        checkedMap[data[c][7]] = data[c][15];    // P列(16)=入庫済みチェック
+      }
     }
     for (var d = stockRows.length - 1; d >= 0; d--) s.deleteRow(stockRows[d]);
     var now = idxRowData[0], supplier = idxRowData[3], branch = idxRowData[4], siteName = idxRowData[5], orderer = idxRowData[7], url = idxRowData[11];
@@ -1161,17 +1177,20 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
       rows.push([
         now, orderNo, supplier, branch, siteName||'', orderer,
         ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'',
-        ln.amount||'', ln.remark||'', (ln.type==='M')?'M':'', categoryMap[ln.product]||'', url||''
+        ln.amount||'', ln.remark||'', (ln.type==='M')?'M':'', categoryMap[ln.product]||'',
+        checkedMap[ln.product] === true ? true : false,  // P: 入庫済み (商品名で引き継ぎ)
+        url||''                                          // Q: シートURL
       ]);
     });
     if (rows.length > 0) {
       var startRow = s.getLastRow() + 1;
-      s.getRange(startRow, 1, rows.length, 16).setValues(rows);
+      s.getRange(startRow, 1, rows.length, 17).setValues(rows);
       s.getRange(startRow, 11, rows.length, 2).setNumberFormat('#,##0');
       for (var ri = 0; ri < rows.length; ri++) {
         if (rows[ri][13] === 'M') s.getRange(startRow + ri, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
       }
       applyStockCategoryValidation(s);
+      applyStockCheckboxValidation(s);
     }
   }
 }
