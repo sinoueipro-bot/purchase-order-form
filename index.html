@@ -429,8 +429,8 @@ textarea { resize: vertical; min-height: 60px; }
     <select id="approver" required onchange="validate()"><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
-    <div class="field-label">発注者</div>
-    <select id="orderPerson" onchange="validate()"><option value="">選択してください</option></select>
+    <div class="field-label"><span class="required-badge">必須</span>発注者</div>
+    <select id="orderPerson" required onchange="validate()"><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
     <div class="field-label">緊急（即発注扱い）</div>
@@ -861,13 +861,13 @@ function focusFirstPoError() {
   const errs = getValidationErrors();
   if (errs.length === 0) return;
   const first = errs[0];
-  const idMap = { '発行日':'issueDate','注文No.':'orderNo','仕入先':'supplier','事業所':'branch','注文者':'orderer','承認者':'approver' };
+  const idMap = { '発行日':'issueDate','注文No.':'orderNo','仕入先':'supplier','事業所':'branch','注文者':'orderer','承認者':'approver','発注者':'orderPerson' };
   if (idMap[first]) {
     const el = document.getElementById(idMap[first]);
     if (el) { el.scrollIntoView({behavior:'smooth', block:'center'}); el.focus(); }
     // 適切なステップに移動
     if (['発行日','注文No.','仕入先','事業所'].indexOf(first) !== -1) goToPoWizardStep(1);
-    else if (['注文者','承認者'].indexOf(first) !== -1) goToPoWizardStep(3);
+    else if (['注文者','承認者','発注者'].indexOf(first) !== -1) goToPoWizardStep(3);
   } else if (first.indexOf('明細') === 0) {
     goToPoWizardStep(2);
   }
@@ -2299,6 +2299,7 @@ function getValidationErrors() {
   });
   if (!document.getElementById('orderer').value) e.push('注文者');
   if (!document.getElementById('approver').value) e.push('承認者');
+  if (!document.getElementById('orderPerson').value) e.push('発注者');
   return e;
 }
 function setupValidation() {
