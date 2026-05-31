@@ -1384,9 +1384,13 @@ function writeApproverToOrderSheet(ss, sheetUrl, approverName) {
     for (var i = 0; i < sheets.length; i++) {
       if (sheets[i].getSheetId() === gid) {
         var orderSheet = sheets[i];
-        orderSheet.getRange('AF60').setValue(approverName);
+        // ★ 2026-05-31: AF60→AF61 (結合左上)。注文者AJ61と同じ +1行ズレを修正
+        //   旧 AF60 は結合の外で表示されなかった (注文者AJ60→AJ61と同じパターン)
+        try { orderSheet.getRange('AF61').setValue(approverName); } catch(e) {}
+        try { orderSheet.getRange('AF60').setValue(''); } catch(e) {}  // 旧位置クリア
         var now = new Date();
-        orderSheet.getRange('AE62').setValue((now.getMonth()+1) + '/' + now.getDate());
+        try { orderSheet.getRange('AE63').setValue((now.getMonth()+1) + '/' + now.getDate()); } catch(e) {}
+        try { orderSheet.getRange('AE62').setValue(''); } catch(e) {}  // 旧位置クリア (日付も同じパターン)
         break;
       }
     }
