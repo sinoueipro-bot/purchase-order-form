@@ -48,7 +48,13 @@ var APPROVER_URGENT = { name: '井上将吾', email: 's.inoue.ipro@gmail.com' };
 var PURCHASER = { name: '井上将吾', email: 's.inoue.ipro@gmail.com' };
 // ★ 事務員メアド一覧 (2026-05-27 追加・通常承認後通知 + 緊急SOS時の同報先)
 //   ここに追加すると notifyPurchaser / sendUrgentEmail で全員に同報されます
-var JIMUIN_EMAILS = ['fukuoka@i-pro.co.jp', 's.inoue.ipro@gmail.com'];
+// 2026-05-31: 一旦、承認者4名を事務員メアドとして登録 (本来の事務員メアド確定後に差し替え予定)
+var JIMUIN_EMAILS = [
+  'kametani@i-pro.co.jp',    // 亀谷常務
+  'harada@i-pro.co.jp',      // 原田部長
+  'iwasaki@i-pro.co.jp',     // 岩崎店長
+  's.inoue.ipro@gmail.com'   // 井上将吾
+];
 
 // ============ 初期化 ============
 function initSheet() {
