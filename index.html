@@ -692,9 +692,11 @@ const ROUNDING_OPTIONS = [
 ];
 const PAYMENT_TERMS = ['ご相談の上','現金','振込','口座振替','リース'];
 // 発注依頼者(注文者)リスト 2026-06-03 13名に総入れ替え。メアドは Code.gs STAFF_EMAILS で本人通知に使用
+// 2026-06-04 管理職3名(原田部長/亀谷常務/井上将吾)を注文者にも追加。岩崎店長は既存の岩﨑と同一人物のため追加せず。本人通知メアドは Code.gs STAFF_EMAILS 参照
 const STAFF = [
   '眞鍋','松永','中嶋','川上','入江','川口','辻塚',
-  '三浦','三井','渡邊','久我','岩﨑','𦚰村'
+  '三浦','三井','渡邊','久我','岩﨑','𦚰村',
+  '原田部長','亀谷常務','井上将吾'
 ];
 const APPROVERS = [
   { name: '原田部長', email: 'harada@i-pro.co.jp' },
@@ -2301,12 +2303,14 @@ function updatePoErrorBanner() {
 function validate() {
   const ok = getValidationErrors().length === 0;
   document.getElementById('btnSubmit').disabled = !ok;
+  // 営業自己発注ボタンは承認をスキップするため、承認者未選択でも有効化する (2026-06-04)
+  const okSelf = getValidationErrors({ skipApprover: true }).length === 0;
   var _bsoV = document.getElementById('btnSelfOrder');
-  if (_bsoV) _bsoV.disabled = !ok;
+  if (_bsoV) _bsoV.disabled = !okSelf;
   updatePoErrorBanner();
   return ok;
 }
-function getValidationErrors() {
+function getValidationErrors(opts) {
   const e = [];
   if (!document.getElementById('issueDate').value) e.push('発行日');
   if (!getSupplierValue()) e.push('仕入先');
@@ -2322,7 +2326,8 @@ function getValidationErrors() {
     if (!document.getElementById('type-' + n)?.value) e.push('明細' + n + ':形態');
   });
   if (!document.getElementById('orderer').value) e.push('注文者');
-  if (!document.getElementById('approver').value) e.push('承認者');
+  // 営業自己発注 (skipApprover) は承認をスキップするため承認者を必須にしない (2026-06-04)
+  if (!(opts && opts.skipApprover) && !document.getElementById('approver').value) e.push('承認者');
   if (!document.getElementById('orderPerson').value) e.push('発注者');
   return e;
 }
@@ -2391,7 +2396,7 @@ function handleSend() {
 }
 // 2026-06-03: 営業が自分で発注（承認スキップ・即発注・メール送信なし・K列="営業自己発注"）
 function handleSelfOrder() {
-  if (getValidationErrors().length > 0) return;
+  if (getValidationErrors({ skipApprover: true }).length > 0) return;
   if (!confirm('営業ご自身で発注します。\n承認をスキップして即発注扱いになり、承認者へのメールは送信されません。\nよろしいですか？')) return;
   window._selfOrderMode = true;
   pendingSendType = 'order';

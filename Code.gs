@@ -70,7 +70,11 @@ var STAFF_EMAILS = {
   '渡邊': 'ipro_ip05@icloud.com',
   '久我': 'kuga@i-pro.co.jp',
   '岩﨑': 'ipro_ip07@icloud.com',
-  '𦚰村': 'ipro_ip08@icloud.com'
+  '𦚰村': 'ipro_ip08@icloud.com',
+  // 2026-06-04 管理職3名(原田部長/亀谷常務/井上将吾)を注文者にも追加。岩崎店長は既存の岩﨑と同一人物のため注文者には追加せず。本人へ承認/却下通知を直送するためのメアド
+  '原田部長': 'harada@i-pro.co.jp',
+  '亀谷常務': 'kametani@i-pro.co.jp',
+  '井上将吾': 's.inoue.ipro@gmail.com'
 };
 
 // ============ 初期化 ============
