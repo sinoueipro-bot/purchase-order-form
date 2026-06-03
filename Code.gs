@@ -598,7 +598,11 @@ function processOrder(data) {
     sheetUrl = ss.getUrl() + '#gid=' + os.getSheetId();
   }
 
-  if (data.urgent) {
+  if (data.selfOrder) {
+    // ★ 2026-06-03: 営業が自分で発注。承認スキップ＝即発注扱い・メール送信なし
+    var sheetS = ss.getSheetByName(INDEX_SHEET);
+    applyStatusColor(sheetS, sheetS.getLastRow(), '営業自己発注');
+  } else if (data.urgent) {
     var sheet = ss.getSheetByName(INDEX_SHEET);
     var lr = sheet.getLastRow();
     applyStatusColor(sheet, lr, '緊急承認済');
@@ -742,8 +746,9 @@ function createFromTemplate(ss, tabName, data) {
   try { sh.getRange('F55').setValue(''); } catch(e) {}
   try { sh.getRange('D55').setValue(''); } catch(e) {}
   try { sh.getRange('D56').setValue(''); } catch(e) {}
-  // 特記事項(C58) は 2026-05-12 削除。発注全体の備考は廃止し商品毎の備考に置き換えたため空にする
-  try { sh.getRange('C58').setValue(''); } catch(e) {}
+  // 特記事項(C58): 2026-06-03 申請フォームの特記事項(specialNotes)を発注書に記載。
+  //   data.notes には二重発注検知用の転記マーカーが混入するため、印刷用はクリーンな specialNotes を使う。
+  try { sh.getRange('C58').setValue(data.specialNotes || ''); } catch(e) {}
   sh.getRange('X62').setValue(today.getMonth()+1);
   sh.getRange('AA62').setValue(today.getDate());
   // ★ 2026-05-27 v82: 注文者は AJ61 (結合左上)。旧 AJ60 は結合外で表示されず空欄だった
@@ -1236,6 +1241,8 @@ function applyStatusColor(sheet, row, status) {
       cell.setFontColor('#137333').setBackground('#e6f4ea'); break;
     case '緊急承認済':
       cell.setFontColor('#ffffff').setBackground('#d93025'); break;
+    case '営業自己発注':
+      cell.setFontColor('#6a1b9a').setBackground('#f3e5f5'); break;
     case '発注済':
       cell.setFontColor('#1a73e8').setBackground('#e8f0fe'); break;
     case '経理確認済':
@@ -1248,10 +1255,16 @@ function applyStatusColor(sheet, row, status) {
 }
 
 // ============ 明細HTMLテーブル（メール共通部品） ============
+// 形態コード → 表示名 (M=無償, U=その他)
+function typeLabel(t) {
+  if (t === 'M') return '無償';
+  if (t === 'U') return 'その他';
+  return t || '-';
+}
 function buildDetailRows(lines) {
   var dr = '';
   (lines||[]).forEach(function(l,i){
-    dr += '<tr><td style="border:1px solid #ddd;padding:6px;text-align:center">'+(i+1)+'</td><td style="border:1px solid #ddd;padding:6px">'+l.maker+'</td><td style="border:1px solid #ddd;padding:6px">'+l.product+'</td><td style="border:1px solid #ddd;padding:6px;text-align:right">'+l.qty+'</td><td style="border:1px solid #ddd;padding:6px;text-align:right">&yen;'+Number(l.price).toLocaleString()+'</td><td style="border:1px solid #ddd;padding:6px;text-align:right">&yen;'+Number(l.amount).toLocaleString()+'</td></tr>';
+    dr += '<tr><td style="border:1px solid #ddd;padding:6px;text-align:center">'+(i+1)+'</td><td style="border:1px solid #ddd;padding:6px">'+l.maker+'</td><td style="border:1px solid #ddd;padding:6px">'+l.product+'</td><td style="border:1px solid #ddd;padding:6px;text-align:right">'+l.qty+'</td><td style="border:1px solid #ddd;padding:6px;text-align:right">&yen;'+Number(l.price).toLocaleString()+'</td><td style="border:1px solid #ddd;padding:6px;text-align:right">&yen;'+Number(l.amount).toLocaleString()+'</td><td style="border:1px solid #ddd;padding:6px;text-align:center">'+typeLabel(l.type)+'</td></tr>';
   });
   return dr;
 }
@@ -1262,11 +1275,12 @@ function buildSummaryTable(data) {
     '<tr><td style="padding:8px;font-weight:bold;background:#f8f9fa">注文No.</td><td style="padding:8px">'+data.orderNo+'</td></tr>' +
     '<tr><td style="padding:8px;font-weight:bold;background:#f8f9fa">仕入先</td><td style="padding:8px">'+data.supplier+'</td></tr>' +
     '<tr><td style="padding:8px;font-weight:bold;background:#f8f9fa">事業所</td><td style="padding:8px">'+data.branch+'</td></tr>' +
+    '<tr><td style="padding:8px;font-weight:bold;background:#f8f9fa">現場名</td><td style="padding:8px">'+(data.siteName||'-')+'</td></tr>' +
     '<tr><td style="padding:8px;font-weight:bold;background:#f8f9fa">注文者</td><td style="padding:8px">'+data.orderer+'</td></tr></table>';
 }
 
 function buildDetailTable(lines) {
-  return '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px"><thead><tr style="background:#d9e2f3"><th style="border:1px solid #ddd;padding:6px">No</th><th style="border:1px solid #ddd;padding:6px">メーカー</th><th style="border:1px solid #ddd;padding:6px">商品名</th><th style="border:1px solid #ddd;padding:6px">数量</th><th style="border:1px solid #ddd;padding:6px">単価</th><th style="border:1px solid #ddd;padding:6px">金額</th></tr></thead><tbody>'+buildDetailRows(lines)+'</tbody></table>';
+  return '<table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:13px"><thead><tr style="background:#d9e2f3"><th style="border:1px solid #ddd;padding:6px">No</th><th style="border:1px solid #ddd;padding:6px">メーカー</th><th style="border:1px solid #ddd;padding:6px">商品名</th><th style="border:1px solid #ddd;padding:6px">数量</th><th style="border:1px solid #ddd;padding:6px">単価</th><th style="border:1px solid #ddd;padding:6px">金額</th><th style="border:1px solid #ddd;padding:6px">形態</th></tr></thead><tbody>'+buildDetailRows(lines)+'</tbody></table>';
 }
 
 // ============ 通常メール: 承認者へ（承認/却下リンク付き） ============
@@ -2238,8 +2252,8 @@ function markOrderCompleted(id) {
   for (var i = 1; i < data.length; i++) {
     if (data[i][12] === id) {
       var currentStatus = data[i][10];
-      if (currentStatus !== '承認済' && currentStatus !== '緊急承認済') {
-        return { success: false, error: '承認済の発注のみ完了にできます (現在: ' + currentStatus + ')' };
+      if (currentStatus !== '承認済' && currentStatus !== '緊急承認済' && currentStatus !== '営業自己発注') {
+        return { success: false, error: '承認済または営業自己発注の発注のみ完了にできます (現在: ' + currentStatus + ')' };
       }
       applyStatusColor(s, i + 1, '発注済');
       // 発注完了日を Q列(17) に記録
