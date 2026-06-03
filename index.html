@@ -689,9 +689,10 @@ const ROUNDING_OPTIONS = [
   { value: '800', label: '800 (末尾800)', desc: '¥800' }
 ];
 const PAYMENT_TERMS = ['ご相談の上','現金','振込','口座振替','リース'];
+// 発注依頼者(注文者)リスト 2026-06-03 13名に総入れ替え。メアドは Code.gs STAFF_EMAILS で本人通知に使用
 const STAFF = [
-  '亀谷','原田','川口','三浦','渡邊','入江','松永','辻塚',
-  '三井','中嶋','岩﨑','久我','脇村','真鍋','井上将吾'
+  '眞鍋','松永','中嶋','川上','入江','川口','辻塚',
+  '三浦','三井','渡邊','久我','岩﨑','𦚰村'
 ];
 const APPROVERS = [
   { name: '原田部長', email: 'harada@i-pro.co.jp' },
@@ -699,6 +700,11 @@ const APPROVERS = [
   { name: '亀谷常務', email: 'kametani@i-pro.co.jp' },
   { name: '井上将吾', email: 's.inoue.ipro@gmail.com' }
 ];
+// 発注者ドロップダウンの選択肢 = 承認者4名 + 事務員 眞鍋/辻塚 (2026-06-03)
+const ORDER_PERSONS = APPROVERS.concat([
+  { name: '眞鍋', email: 'manabe@i-pro.co.jp' },
+  { name: '辻塚', email: 'tsujitsuka@i-pro.co.jp' }
+]);
 const FORM_TYPES = [
   { value: 'U', label: 'その他' },
   { value: 'M', label: 'M' }
@@ -948,9 +954,9 @@ function initAllDropdowns() {
   fillSelect('orderer', STAFF);
   const app = document.getElementById('approver');
   APPROVERS.forEach(a => app.add(new Option(a.name + '（' + a.email + '）', a.email)));
-  // 発注者(選択肢は承認者と同じ APPROVERS) 2026-05-29
+  // 発注者(承認者4名 + 事務員 眞鍋/辻塚) 2026-06-03
   const op = document.getElementById('orderPerson');
-  if (op) APPROVERS.forEach(a => op.add(new Option(a.name + '（' + a.email + '）', a.email)));
+  if (op) ORDER_PERSONS.forEach(a => op.add(new Option(a.name + '（' + a.email + '）', a.email)));
   // 見積書
   fillSelect('estBranch', BRANCHES);
   fillSelect('estStaff', STAFF);
@@ -2348,9 +2354,9 @@ function collectFormData() {
   const total = lines.reduce((s, l) => s + l.amount, 0);
   const email = document.getElementById('approver').value;
   const approver = APPROVERS.find(a => a.email === email);
-  // 発注者 (2026-05-29・選択肢は承認者と同じ APPROVERS)
+  // 発注者 (2026-06-03・承認者4名 + 事務員 眞鍋/辻塚)
   const opEmail = document.getElementById('orderPerson')?.value || '';
-  const orderPerson = APPROVERS.find(a => a.email === opEmail);
+  const orderPerson = ORDER_PERSONS.find(a => a.email === opEmail);
   return {
     issueDate: document.getElementById('issueDate').value,
     orderNo: document.getElementById('orderNo').value,

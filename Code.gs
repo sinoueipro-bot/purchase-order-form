@@ -48,13 +48,30 @@ var APPROVER_URGENT = { name: '井上将吾', email: 's.inoue.ipro@gmail.com' };
 var PURCHASER = { name: '井上将吾', email: 's.inoue.ipro@gmail.com' };
 // ★ 事務員メアド一覧 (2026-05-27 追加・通常承認後通知 + 緊急SOS時の同報先)
 //   ここに追加すると notifyPurchaser / sendUrgentEmail で全員に同報されます
-// 2026-05-31: 一旦、承認者4名を事務員メアドとして登録 (本来の事務員メアド確定後に差し替え予定)
+// 2026-06-03: 本来の事務員2名に差し替え (旧: 承認者4名の仮メアド v108)
 var JIMUIN_EMAILS = [
-  'kametani@i-pro.co.jp',    // 亀谷常務
-  'harada@i-pro.co.jp',      // 原田部長
-  'iwasaki@i-pro.co.jp',     // 岩崎店長
-  's.inoue.ipro@gmail.com'   // 井上将吾
+  'manabe@i-pro.co.jp',      // 眞鍋 (事務員)
+  'tsujitsuka@i-pro.co.jp'   // 辻塚 (事務員)
 ];
+
+// ★ 注文者(発注依頼者) 名前→メアド対応表 (2026-06-03)
+//   承認/却下メールを申請者本人へ直接届けるためのルーティング表 (notifyOrderer で使用)。
+//   ★ index.html の STAFF (発注依頼者ドロップダウン) と必ず同じ顔ぶれで維持すること。
+var STAFF_EMAILS = {
+  '眞鍋': 'manabe@i-pro.co.jp',
+  '松永': 'ipro_ip02@icloud.com',
+  '中嶋': 'nakashima@i-pro.co.jp',
+  '川上': 'kawakami@i-pro.co.jp',
+  '入江': 'ipro_ip06@icloud.com',
+  '川口': 'ipro_ip04@icloud.com',
+  '辻塚': 'tsujitsuka@i-pro.co.jp',
+  '三浦': 'ipro_ip03@icloud.com',
+  '三井': 'mitsui@i-pro.co.jp',
+  '渡邊': 'ipro_ip05@icloud.com',
+  '久我': 'kuga@i-pro.co.jp',
+  '岩﨑': 'ipro_ip07@icloud.com',
+  '𦚰村': 'ipro_ip08@icloud.com'
+};
 
 // ============ 初期化 ============
 function initSheet() {
@@ -1373,9 +1390,10 @@ function notifyOrderer(id, orderNo, supplier, orderer, total, sheetUrl, status) 
     '<a href="' + sheetUrl + '" style="display:block;text-align:center;padding:14px;background:#1a73e8;color:white;border-radius:8px;text-decoration:none;font-size:15px;font-weight:bold;margin:16px 0">発注書を確認する</a>' +
     '</div></div>';
 
-  // 暫定: PURCHASER.email に送信 + 件名で誰宛か明記
+  // 2026-06-03: 申請者本人のメアドへ直接送信 (STAFF_EMAILS で名前→メアド解決)。未登録なら従来通り PURCHASER へフォールバック
+  var ordererTo = (STAFF_EMAILS && STAFF_EMAILS[orderer]) ? STAFF_EMAILS[orderer] : PURCHASER.email;
   MailApp.sendEmail({
-    to: PURCHASER.email,
+    to: ordererTo,
     subject: (isApproved ? '【承認通知】' : '【却下通知】') + '申請者: ' + orderer + ' / ' + supplier + ' / ' + orderNo,
     body: (isApproved ? '承認されました' : '却下されました') + '\n注文No.: ' + orderNo + '\n仕入先: ' + supplier + '\n金額: ' + Number(total).toLocaleString() + '円',
     htmlBody: hb
