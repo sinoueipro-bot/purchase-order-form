@@ -863,8 +863,14 @@ function addToIndex(ss, data, os, uniqueId) {
     s.getRange(1, colOP).setValue('発注者').setFontWeight('bold').setBackground('#4285f4').setFontColor('#fff');
   }
   if (data.orderPersonName) s.getRange(lr, colOP).setValue(data.orderPersonName);
-  // ★ 2026-05-29: 在庫管理シートにも商品1行ずつ展開して追記
-  try { addToStockSheet(ss, data, url); } catch(e) { Logger.log('在庫管理追記エラー: ' + e.toString()); }
+  // ★ 2026-06-04: 在庫管理への表示タイミング(井上さん指示)
+  //   - 即発注(緊急承認済/営業自己発注): もう発注済なので申請時(ここ)で在庫管理に出す
+  //   - 通常発注: 申請中/承認済では出さず「発注完了(markOrderCompleted)」時に出す
+  //     (申請中で在庫管理に出ると事務員が「発注済だが未着」と誤認するため)
+  //   発注一覧タブは従来どおり申請段階から表示。
+  if (data.selfOrder || data.urgent) {
+    try { addToStockSheet(ss, data, url); } catch(e) { Logger.log('在庫管理追記エラー(即発注): ' + e.toString()); }
+  }
 }
 
 // ============ ★ 在庫管理シート (2026-05-29) ============
@@ -915,6 +921,11 @@ function applyStockCheckboxValidation(s) {
 function addToStockSheet(ss, data, sheetUrl) {
   var s = ss.getSheetByName(STOCK_SHEET);
   if (!s) { initStockSheet(); s = ss.getSheetByName(STOCK_SHEET); }
+  // ★ 2026-06-04: 同一注文No が既に在庫管理にあれば二重追加しない(移行期・発注完了の再クリック対策)
+  var _ex = s.getDataRange().getValues();
+  for (var _ei = 1; _ei < _ex.length; _ei++) {
+    if (String(_ex[_ei][1]) === String(data.orderNo)) { Logger.log('在庫管理: 注文No ' + data.orderNo + ' は既存のためスキップ'); return; }
+  }
   _compactSheetByKey(s, 2);  // ★ 2026-05-29: 追記前に空行を自動削除して上詰め
   var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
   // ★ 2026-06-04: ステータス(O列) = 緊急承認/営業自己発注のときだけ記載・通常発注は空欄
@@ -1051,6 +1062,44 @@ function migrateStockAddStatusColumn() {
   applyStockCategoryValidation(s);
   applyStockCheckboxValidation(s);
   Logger.log('✅ ステータス列(O=15)を挿入し、既存 ' + Math.max(last-1,0) + ' 行に遡及記入しました');
+}
+
+// ★ 2026-06-04: 在庫管理を新ルールに合わせて整理 (井上さん指示)
+//   新ルール = 在庫管理に出すのは「発注済の商品」だけ:
+//     - 即発注(緊急承認済/営業自己発注): 申請時から表示 → 残す
+//     - 通常発注: 発注完了(発注済)後のみ表示 → 申請中/承認済の行は削除
+//   status が {申請中, 承認済, 却下, 取消} の在庫管理行を削除。{緊急承認済, 営業自己発注, 発注済, 経理確認済} は残す。
+//   発注一覧に無い注文No(孤児)は触らない。冪等(新ルール下では再実行しても削除対象は増えない)。
+function cleanupStockUnordered() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(STOCK_SHEET);
+  var idx = ss.getSheetByName(INDEX_SHEET);
+  if (!s) { Logger.log('在庫管理シートなし'); return { removed: 0, error: '在庫管理なし' }; }
+  if (!idx) { Logger.log('発注一覧シートなし'); return { removed: 0, error: '発注一覧なし' }; }
+  // 注文No → ステータス(K列=idx10) のマップ
+  var statusByNo = {};
+  var idata = idx.getDataRange().getValues();
+  for (var i = 1; i < idata.length; i++) {
+    var no = String(idata[i][1] || ''); if (!no) continue;
+    statusByNo[no] = String(idata[i][10] || '');
+  }
+  var REMOVE = { '申請中': 1, '承認済': 1, '却下': 1, '取消': 1 };
+  var data = s.getDataRange().getValues();
+  var toDelete = [], removedByStatus = {}, orphan = 0, kept = 0;
+  for (var r = 1; r < data.length; r++) {
+    var rno = String(data[r][1] || '');
+    if (!rno) continue;                                       // 空行スキップ
+    if (!statusByNo.hasOwnProperty(rno)) { orphan++; continue; } // 発注一覧に無い→保持
+    var st = statusByNo[rno];
+    if (REMOVE[st]) { toDelete.push(r + 1); removedByStatus[st] = (removedByStatus[st] || 0) + 1; }
+    else { kept++; }
+  }
+  for (var d = toDelete.length - 1; d >= 0; d--) s.deleteRow(toDelete[d]);  // 下から削除
+  var summary = '✅ 在庫管理クリーンアップ: 削除' + toDelete.length + '行 (' +
+    Object.keys(removedByStatus).map(function(k){ return k + ':' + removedByStatus[k]; }).join(' / ') +
+    ') / 残し' + kept + '行 / 孤児' + orphan + '行は保持';
+  Logger.log(summary);
+  return { removed: toDelete.length, removedByStatus: removedByStatus, kept: kept, orphan: orphan, summary: summary };
 }
 
 // ============ ★ システム整合性チェック (2026-05-29) ============
@@ -1247,6 +1296,8 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][1]) === String(orderNo)) stockRows.push(i + 1);  // B列=注文No
   }
+  // ★ 2026-06-04: 在庫管理は発注完了後のみ存在。未登録(=まだ発注完了していない)なら編集同期で新規追加しない
+  if (stockRows.length === 0) return;
   if (stockRows.length === lines.length) {
     // 商品数が同じ → 各行を値更新 (分類O列・行順を保持)
     for (var j = 0; j < lines.length; j++) {
@@ -1353,9 +1404,9 @@ function applyStatusColor(sheet, row, status) {
 }
 
 // ============ 明細HTMLテーブル（メール共通部品） ============
-// 形態コード → 表示名 (M=無償, U=その他)
+// 形態コード → 表示名 (M=M, U=その他) ★2026-06-04: Mは「無償」表記をやめ「M」に変更(井上さん指示・承認メールの形態列)
 function typeLabel(t) {
-  if (t === 'M') return '無償';
+  if (t === 'M') return 'M';
   if (t === 'U') return 'その他';
   return t || '-';
 }
@@ -2360,6 +2411,20 @@ function markOrderCompleted(id) {
         var completedAt = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
         s.getRange(i + 1, 17).setValue(completedAt);
       } catch(e) { Logger.log('発注完了日書込エラー: ' + e.toString()); }
+      // ★ 2026-06-04: 発注完了したこのタイミングで在庫管理へ商品を展開(申請中では出さない)。
+      //   発注一覧の行から data を復元して addToStockSheet に渡す。ステータスは完了前の状態から導出。
+      try {
+        var reconLines = [];
+        try { reconLines = JSON.parse(data[i][13] || '[]'); } catch(e2) {}
+        var reconData = {
+          orderNo: data[i][1], supplier: data[i][3], branch: data[i][4],
+          siteName: data[i][5], orderer: data[i][7],
+          urgent: (String(data[i][8]) === '緊急'),
+          selfOrder: (currentStatus === '営業自己発注'),
+          lines: reconLines
+        };
+        addToStockSheet(ss, reconData, data[i][11] || '');
+      } catch(e) { Logger.log('在庫管理 発注完了追記エラー: ' + e.toString()); }
       // シートを非表示化
       try {
         var sheet = findSheetByUrl(ss, data[i][11]);
