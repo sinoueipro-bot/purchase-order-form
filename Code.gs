@@ -868,13 +868,13 @@ function addToIndex(ss, data, os, uniqueId) {
 }
 
 // ============ ★ 在庫管理シート (2026-05-29) ============
-// 発注を「商品1行ずつ」に展開。在庫管理担当が N列(分類)をプルダウンで選び経理へ渡す。
+// 発注を「商品1行ずつ」に展開。在庫管理担当が 分類列(P) をプルダウンで選び経理へ渡す。
 function initStockSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var s = ss.getSheetByName(STOCK_SHEET);
   if (!s) s = ss.insertSheet(STOCK_SHEET);
-  // ★ 2026-05-31: 17列構成 (分類Oの右に「入庫済み」P列追加・シートURLはQ列に移動)
-  var headers = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','分類','入庫済み','シートURL'];
+  // ★ 2026-06-04: 18列構成 (無償Nの右に「ステータス」O列追加・分類P/入庫済みQ/シートURLR に移動)
+  var headers = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','ステータス','分類','入庫済み','シートURL'];
   s.getRange(1,1,1,headers.length).setValues([headers]);
   s.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#0f9d58').setFontColor('#fff');
   s.setFrozenRows(1);
@@ -882,30 +882,33 @@ function initStockSheet() {
   s.setColumnWidth(8, 160);   // 商品名
   s.setColumnWidth(13, 120);  // 備考
   s.setColumnWidth(14, 80);   // 無償(M)
-  s.setColumnWidth(15, 130);  // 分類
-  s.setColumnWidth(16, 90);   // 入庫済み (チェックボックス)
-  s.setColumnWidth(17, 220);  // シートURL
+  s.setColumnWidth(15, 110);  // ステータス (緊急承認済/営業自己発注)
+  s.setColumnWidth(16, 130);  // 分類
+  s.setColumnWidth(17, 90);   // 入庫済み (チェックボックス)
+  s.setColumnWidth(18, 220);  // シートURL
   s.getRange(1, 14).setBackground('#1a73e8').setFontColor('#fff'); // 無償(M)ヘッダー青
-  s.getRange(1, 15).setBackground('#fbbc04').setFontColor('#000'); // 分類ヘッダー黄
+  s.getRange(1, 15).setBackground('#9334e6').setFontColor('#fff'); // ステータスヘッダー紫
+  s.getRange(1, 16).setBackground('#fbbc04').setFontColor('#000'); // 分類ヘッダー黄
   s.getRange(2, 14, 1000, 1).clearDataValidations();  // 無償列はプルダウンなし
+  s.getRange(2, 15, 1000, 1).clearDataValidations();  // ステータス列はプルダウンなし
   applyStockCategoryValidation(s);
   applyStockCheckboxValidation(s);
-  Logger.log('在庫管理シート初期化完了 (17列)');
+  Logger.log('在庫管理シート初期化完了 (18列)');
 }
 
-// 分類列(O=15)に4択プルダウンを適用
+// 分類列(P=16)に4択プルダウンを適用
 function applyStockCategoryValidation(s) {
   var rule = SpreadsheetApp.newDataValidation()
     .requireValueInList(STOCK_CATEGORIES, true)
     .setAllowInvalid(false)
     .build();
-  s.getRange(2, 15, 1000, 1).setDataValidation(rule);  // 分類列 O(15)
+  s.getRange(2, 16, 1000, 1).setDataValidation(rule);  // 分類列 P(16)
 }
 
-// ★ 2026-05-31: 入庫済み列(P=16)にチェックボックスを適用
+// ★ 2026-05-31: 入庫済み列(Q=17)にチェックボックスを適用
 function applyStockCheckboxValidation(s) {
   var rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-  s.getRange(2, 16, 1000, 1).setDataValidation(rule);  // 入庫済み列 P(16)
+  s.getRange(2, 17, 1000, 1).setDataValidation(rule);  // 入庫済み列 Q(17)
 }
 
 // 発注1件の商品を在庫管理シートに追記 (addToIndex から呼ばれる)
@@ -914,6 +917,8 @@ function addToStockSheet(ss, data, sheetUrl) {
   if (!s) { initStockSheet(); s = ss.getSheetByName(STOCK_SHEET); }
   _compactSheetByKey(s, 2);  // ★ 2026-05-29: 追記前に空行を自動削除して上詰め
   var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
+  // ★ 2026-06-04: ステータス(O列) = 緊急承認/営業自己発注のときだけ記載・通常発注は空欄
+  var stockStatus = data.selfOrder ? '営業自己発注' : (data.urgent ? '緊急承認済' : '');
   var lines = data.lines || [];
   var rows = [];
   lines.forEach(function(ln) {
@@ -923,19 +928,22 @@ function addToStockSheet(ss, data, sheetUrl) {
         ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'',
         (ln.qty && ln.price) ? ln.qty*ln.price : '', ln.remark||'',
         (ln.type === 'M') ? 'M' : '',  // N: 無償(M)
-        '',                            // O: 分類(プルダウン)
-        false,                         // P: 入庫済み (チェックボックス初期OFF)
-        sheetUrl||''                   // Q: シートURL
+        stockStatus,                   // O: ステータス
+        '',                            // P: 分類(プルダウン)
+        false,                         // Q: 入庫済み (チェックボックス初期OFF)
+        sheetUrl||''                   // R: シートURL
       ]);
     }
   });
   if (rows.length > 0) {
     var startRow = s.getLastRow() + 1;
-    s.getRange(startRow, 1, rows.length, 17).setValues(rows);
+    s.getRange(startRow, 1, rows.length, 18).setValues(rows);
     s.getRange(startRow, 11, rows.length, 2).setNumberFormat('#,##0'); // 単価・金額
-    // 無償(M)の行は N列を青太字で目立たせる
+    // 無償(M)は N列を青太字 / ステータスは緊急=赤・自己発注=紫で目立たせる
     for (var ri = 0; ri < rows.length; ri++) {
       if (rows[ri][13] === 'M') s.getRange(startRow + ri, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
+      if (rows[ri][14] === '緊急承認済') s.getRange(startRow + ri, 15).setFontColor('#d93025').setFontWeight('bold');
+      else if (rows[ri][14] === '営業自己発注') s.getRange(startRow + ri, 15).setFontColor('#6a1b9a').setFontWeight('bold');
     }
     applyStockCategoryValidation(s);
     applyStockCheckboxValidation(s);
@@ -943,7 +951,8 @@ function addToStockSheet(ss, data, sheetUrl) {
 }
 
 // ★ 既存の全発注を在庫管理シートに一括展開 (初回 or 再構築用・GASエディタで実行)
-// ⚠️ 既存の分類(N列)入力は消える。初回構築時のみ実行すること
+// ⚠️ 既存の 分類・入庫済み 入力は消える。初回構築時のみ実行すること
+//   (ステータス列を「足すだけ」なら rebuild ではなく migrateStockAddStatusColumn を使う=入力保持)
 function rebuildStockSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var idx = ss.getSheetByName(INDEX_SHEET);
@@ -951,12 +960,15 @@ function rebuildStockSheet() {
   // ヘッダー・列幅・プルダウンを最新化 (既存シートでもヘッダーを16列に上書き)
   initStockSheet();
   var s = ss.getSheetByName(STOCK_SHEET);
-  // 既存データ(ヘッダー除く)をクリア (17列)
-  if (s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow()-1, 17).clearContent();
+  // 既存データ(ヘッダー除く)をクリア (18列)
+  if (s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow()-1, 18).clearContent();
   var data = idx.getDataRange().getValues();
   var rows = [];
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
+    // ★ 2026-06-04: ステータス = K列(11)が緊急承認済/営業自己発注、または I列(9)='緊急'(作成時フラグ)なら記載
+    var st10 = String(row[10]||'');
+    var rowStatus = (st10 === '緊急承認済' || st10 === '営業自己発注') ? st10 : (String(row[8]||'') === '緊急' ? '緊急承認済' : '');
     var lines = [];
     try { lines = JSON.parse(row[13] || '[]'); } catch(e) {}
     lines.forEach(function(ln) {
@@ -966,24 +978,79 @@ function rebuildStockSheet() {
           ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'',
           (ln.qty && ln.price) ? ln.qty*ln.price : '', ln.remark||'',
           (ln.type === 'M') ? 'M' : '',  // N: 無償(M)
-          '',                            // O: 分類(空)
-          false,                         // P: 入庫済み (チェックボックス初期OFF)
-          row[11]||''                    // Q: シートURL
+          rowStatus,                     // O: ステータス
+          '',                            // P: 分類(空)
+          false,                         // Q: 入庫済み (チェックボックス初期OFF)
+          row[11]||''                    // R: シートURL
         ]);
       }
     });
   }
   if (rows.length > 0) {
-    s.getRange(2, 1, rows.length, 17).setValues(rows);
+    s.getRange(2, 1, rows.length, 18).setValues(rows);
     s.getRange(2, 11, rows.length, 2).setNumberFormat('#,##0');
-    // 無償(M)の行は N列を青太字で目立たせる
+    // 無償(M)は N列青太字 / ステータスは緊急=赤・自己発注=紫
     for (var ri = 0; ri < rows.length; ri++) {
       if (rows[ri][13] === 'M') s.getRange(ri+2, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
+      if (rows[ri][14] === '緊急承認済') s.getRange(ri+2, 15).setFontColor('#d93025').setFontWeight('bold');
+      else if (rows[ri][14] === '営業自己発注') s.getRange(ri+2, 15).setFontColor('#6a1b9a').setFontWeight('bold');
     }
     applyStockCategoryValidation(s);
     applyStockCheckboxValidation(s);
   }
   Logger.log('在庫管理シート再構築完了: ' + rows.length + ' 商品行');
+}
+
+// ★ 2026-06-04: 既存の在庫管理シートに「ステータス」列(O=15)を非破壊で挿入するマイグレーション
+//   無償(N=14)の右に1列挿入 → 分類/入庫済み/シートURL は自動的に右へシフト(入力データ・チェック保持)。
+//   既存行は発注一覧の作成時情報(K=緊急承認済/営業自己発注 or I=緊急)から遡及記入。
+//   冪等: 既に O列(15)が「ステータス」なら何もしない。GASエディタで一度だけ実行する。
+function migrateStockAddStatusColumn() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(STOCK_SHEET);
+  if (!s) { Logger.log('在庫管理シートなし。initStockSheet/rebuildStockSheet で作成してください'); return; }
+  var h15 = String(s.getRange(1, 15).getValue() || '');
+  if (h15 === 'ステータス') { Logger.log('✅ 既にステータス列あり (移行不要)'); return; }
+  if (h15 !== '分類') {
+    Logger.log('⚠️ O列(15)が想定(「分類」)と違います: 実際["'+h15+'"]。レイアウト破損を避けるため中止。手動確認してください');
+    return;
+  }
+  // 無償(N=14)の右に空列を挿入 → 分類→16 / 入庫済み→17 / シートURL→18 にシフト(データ・書式・入力規則ごと移動)
+  s.insertColumnAfter(14);
+  // 新O列(15)のヘッダー・書式・幅
+  s.getRange(1, 15).setValue('ステータス').setFontWeight('bold').setBackground('#9334e6').setFontColor('#fff');
+  s.setColumnWidth(15, 110);
+  s.getRange(2, 15, Math.max(s.getMaxRows()-1,1), 1).clearDataValidations(); // ステータス列はプルダウンなし
+  // 発注一覧から 注文No → ステータス のマップを作成
+  var idx = ss.getSheetByName(INDEX_SHEET);
+  var statusByOrderNo = {};
+  if (idx && idx.getLastRow() > 1) {
+    var idata = idx.getDataRange().getValues();
+    for (var i = 1; i < idata.length; i++) {
+      var no = String(idata[i][1] || ''); if (!no) continue;
+      var k = String(idata[i][10] || ''), iflag = String(idata[i][8] || '');
+      statusByOrderNo[no] = (k === '緊急承認済' || k === '営業自己発注') ? k : (iflag === '緊急' ? '緊急承認済' : '');
+    }
+  }
+  // 既存行に遡及記入 (B列=注文No で照合)
+  var last = s.getLastRow();
+  if (last > 1) {
+    var noCol = s.getRange(2, 2, last - 1, 1).getValues();   // B列 注文No
+    var out = [];
+    for (var r = 0; r < noCol.length; r++) {
+      var no2 = String(noCol[r][0] || '');
+      out.push([ statusByOrderNo.hasOwnProperty(no2) ? statusByOrderNo[no2] : '' ]);
+    }
+    s.getRange(2, 15, out.length, 1).setValues(out);
+    for (var rr = 0; rr < out.length; rr++) {
+      if (out[rr][0] === '緊急承認済') s.getRange(rr+2, 15).setFontColor('#d93025').setFontWeight('bold');
+      else if (out[rr][0] === '営業自己発注') s.getRange(rr+2, 15).setFontColor('#6a1b9a').setFontWeight('bold');
+    }
+  }
+  // 入力規則を新しい列位置で再適用 (念のため): 分類→16 / 入庫済み→17
+  applyStockCategoryValidation(s);
+  applyStockCheckboxValidation(s);
+  Logger.log('✅ ステータス列(O=15)を挿入し、既存 ' + Math.max(last-1,0) + ' 行に遡及記入しました');
 }
 
 // ============ ★ システム整合性チェック (2026-05-29) ============
@@ -1026,10 +1093,10 @@ function checkSystemIntegrity() {
   if (!stock) {
     Logger.log('在庫管理シートなし(未作成 or 削除済み)。必要なら rebuildStockSheet で再生成可');
   } else {
-    var expStock = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','分類','シートURL'];
-    var stH = stock.getRange(1,1,1,Math.max(stock.getLastColumn(),16)).getValues()[0];
+    var expStock = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','ステータス','分類','入庫済み','シートURL'];
+    var stH = stock.getRange(1,1,1,Math.max(stock.getLastColumn(),18)).getValues()[0];
     var sOk = true;
-    for (var h2=0; h2<16; h2++) {
+    for (var h2=0; h2<18; h2++) {
       if (String(stH[h2]||'') !== expStock[h2]) {
         Logger.log('⚠️ 在庫管理 列'+(h2+1)+' ヘッダー不一致: 期待["'+expStock[h2]+'"] 実際["'+(stH[h2]||'')+'"]'); sOk=false; issues++;
       }
@@ -1187,7 +1254,7 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
       s.getRange(rr, 7, 1, 7).setValues([[ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'', ln.amount||'', ln.remark||'']]);
       s.getRange(rr, 14).setValue((ln.type==='M')?'M':'');  // N 無償
       s.getRange(rr, 11, 1, 2).setNumberFormat('#,##0');
-      // O分類(15)は触らない=保持
+      // O ステータス(15)/P 分類(16)/Q 入庫済み(17) は触らない=保持
     }
   } else {
     // 商品数が変わった → 削除して再追加 (分類・入庫済みは商品名で引き継ぎ)
@@ -1195,10 +1262,13 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
     var checkedMap = {};
     for (var c = 0; c < data.length; c++) {
       if (String(data[c][1]) === String(orderNo)) {
-        categoryMap[data[c][7]] = data[c][14];   // O列(15)=分類
-        checkedMap[data[c][7]] = data[c][15];    // P列(16)=入庫済みチェック
+        categoryMap[data[c][7]] = data[c][15];   // P列(16)=分類
+        checkedMap[data[c][7]] = data[c][16];    // Q列(17)=入庫済みチェック
       }
     }
+    // ★ 2026-06-04: ステータスは発注一覧の作成時情報から再導出 (K=緊急承認済/営業自己発注 or I=緊急)
+    var st10b = String(idxRowData[10]||'');
+    var statusVal = (st10b === '緊急承認済' || st10b === '営業自己発注') ? st10b : (String(idxRowData[8]||'') === '緊急' ? '緊急承認済' : '');
     for (var d = stockRows.length - 1; d >= 0; d--) s.deleteRow(stockRows[d]);
     var now = idxRowData[0], supplier = idxRowData[3], branch = idxRowData[4], siteName = idxRowData[5], orderer = idxRowData[7], url = idxRowData[11];
     var rows = [];
@@ -1206,17 +1276,21 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
       rows.push([
         now, orderNo, supplier, branch, siteName||'', orderer,
         ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'',
-        ln.amount||'', ln.remark||'', (ln.type==='M')?'M':'', categoryMap[ln.product]||'',
-        checkedMap[ln.product] === true ? true : false,  // P: 入庫済み (商品名で引き継ぎ)
-        url||''                                          // Q: シートURL
+        ln.amount||'', ln.remark||'', (ln.type==='M')?'M':'',  // L金額/M備考/N無償
+        statusVal,                                       // O: ステータス
+        categoryMap[ln.product]||'',                     // P: 分類
+        checkedMap[ln.product] === true ? true : false,  // Q: 入庫済み (商品名で引き継ぎ)
+        url||''                                          // R: シートURL
       ]);
     });
     if (rows.length > 0) {
       var startRow = s.getLastRow() + 1;
-      s.getRange(startRow, 1, rows.length, 17).setValues(rows);
+      s.getRange(startRow, 1, rows.length, 18).setValues(rows);
       s.getRange(startRow, 11, rows.length, 2).setNumberFormat('#,##0');
       for (var ri = 0; ri < rows.length; ri++) {
         if (rows[ri][13] === 'M') s.getRange(startRow + ri, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
+        if (rows[ri][14] === '緊急承認済') s.getRange(startRow + ri, 15).setFontColor('#d93025').setFontWeight('bold');
+        else if (rows[ri][14] === '営業自己発注') s.getRange(startRow + ri, 15).setFontColor('#6a1b9a').setFontWeight('bold');
       }
       applyStockCategoryValidation(s);
       applyStockCheckboxValidation(s);
