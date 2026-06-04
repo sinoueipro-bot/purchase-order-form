@@ -622,7 +622,7 @@ function processOrder(data) {
   if (data.selfOrder) {
     // ★ 2026-06-03: 営業が自分で発注。承認スキップ＝即発注扱い・メール送信なし
     var sheetS = ss.getSheetByName(INDEX_SHEET);
-    applyStatusColor(sheetS, sheetS.getLastRow(), '営業自己発注');
+    applyStatusColor(sheetS, sheetS.getLastRow(), '自己発注');
   } else if (data.urgent) {
     var sheet = ss.getSheetByName(INDEX_SHEET);
     var lr = sheet.getLastRow();
@@ -864,7 +864,7 @@ function addToIndex(ss, data, os, uniqueId) {
   }
   if (data.orderPersonName) s.getRange(lr, colOP).setValue(data.orderPersonName);
   // ★ 2026-06-04: 在庫管理への表示タイミング(井上さん指示)
-  //   - 即発注(緊急承認済/営業自己発注): もう発注済なので申請時(ここ)で在庫管理に出す
+  //   - 即発注(緊急承認済/自己発注): もう発注済なので申請時(ここ)で在庫管理に出す
   //   - 通常発注: 申請中/承認済では出さず「発注完了(markOrderCompleted)」時に出す
   //     (申請中で在庫管理に出ると事務員が「発注済だが未着」と誤認するため)
   //   発注一覧タブは従来どおり申請段階から表示。
@@ -888,7 +888,7 @@ function initStockSheet() {
   s.setColumnWidth(8, 160);   // 商品名
   s.setColumnWidth(13, 120);  // 備考
   s.setColumnWidth(14, 80);   // 無償(M)
-  s.setColumnWidth(15, 110);  // ステータス (緊急承認済/営業自己発注)
+  s.setColumnWidth(15, 110);  // ステータス (緊急承認済/自己発注)
   s.setColumnWidth(16, 130);  // 分類
   s.setColumnWidth(17, 90);   // 入庫済み (チェックボックス)
   s.setColumnWidth(18, 220);  // シートURL
@@ -928,8 +928,8 @@ function addToStockSheet(ss, data, sheetUrl) {
   }
   _compactSheetByKey(s, 2);  // ★ 2026-05-29: 追記前に空行を自動削除して上詰め
   var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
-  // ★ 2026-06-04: ステータス(O列) = 緊急承認/営業自己発注のときだけ記載・通常発注は空欄
-  var stockStatus = data.selfOrder ? '営業自己発注' : (data.urgent ? '緊急承認済' : '');
+  // ★ 2026-06-04: ステータス(O列) = 緊急承認/自己発注のときだけ記載・通常発注は空欄
+  var stockStatus = data.selfOrder ? '自己発注' : (data.urgent ? '緊急承認済' : '');
   var lines = data.lines || [];
   var rows = [];
   lines.forEach(function(ln) {
@@ -954,7 +954,7 @@ function addToStockSheet(ss, data, sheetUrl) {
     for (var ri = 0; ri < rows.length; ri++) {
       if (rows[ri][13] === 'M') s.getRange(startRow + ri, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
       if (rows[ri][14] === '緊急承認済') s.getRange(startRow + ri, 15).setFontColor('#d93025').setFontWeight('bold');
-      else if (rows[ri][14] === '営業自己発注') s.getRange(startRow + ri, 15).setFontColor('#6a1b9a').setFontWeight('bold');
+      else if (rows[ri][14] === '自己発注' || rows[ri][14] === '営業自己発注') s.getRange(startRow + ri, 15).setFontColor('#6a1b9a').setFontWeight('bold');
     }
     applyStockCategoryValidation(s);
     applyStockCheckboxValidation(s);
@@ -977,9 +977,9 @@ function rebuildStockSheet() {
   var rows = [];
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    // ★ 2026-06-04: ステータス = K列(11)が緊急承認済/営業自己発注、または I列(9)='緊急'(作成時フラグ)なら記載
+    // ★ 2026-06-04: ステータス = K列(11)が緊急承認済/自己発注、または I列(9)='緊急'(作成時フラグ)なら記載
     var st10 = String(row[10]||'');
-    var rowStatus = (st10 === '緊急承認済' || st10 === '営業自己発注') ? st10 : (String(row[8]||'') === '緊急' ? '緊急承認済' : '');
+    var rowStatus = (st10 === '緊急承認済') ? st10 : ((st10 === '自己発注' || st10 === '営業自己発注') ? '自己発注' : (String(row[8]||'') === '緊急' ? '緊急承認済' : ''));
     var lines = [];
     try { lines = JSON.parse(row[13] || '[]'); } catch(e) {}
     lines.forEach(function(ln) {
@@ -1004,7 +1004,7 @@ function rebuildStockSheet() {
     for (var ri = 0; ri < rows.length; ri++) {
       if (rows[ri][13] === 'M') s.getRange(ri+2, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
       if (rows[ri][14] === '緊急承認済') s.getRange(ri+2, 15).setFontColor('#d93025').setFontWeight('bold');
-      else if (rows[ri][14] === '営業自己発注') s.getRange(ri+2, 15).setFontColor('#6a1b9a').setFontWeight('bold');
+      else if (rows[ri][14] === '自己発注' || rows[ri][14] === '営業自己発注') s.getRange(ri+2, 15).setFontColor('#6a1b9a').setFontWeight('bold');
     }
     applyStockCategoryValidation(s);
     applyStockCheckboxValidation(s);
@@ -1014,7 +1014,7 @@ function rebuildStockSheet() {
 
 // ★ 2026-06-04: 既存の在庫管理シートに「ステータス」列(O=15)を非破壊で挿入するマイグレーション
 //   無償(N=14)の右に1列挿入 → 分類/入庫済み/シートURL は自動的に右へシフト(入力データ・チェック保持)。
-//   既存行は発注一覧の作成時情報(K=緊急承認済/営業自己発注 or I=緊急)から遡及記入。
+//   既存行は発注一覧の作成時情報(K=緊急承認済/自己発注 or I=緊急)から遡及記入。
 //   冪等: 既に O列(15)が「ステータス」なら何もしない。GASエディタで一度だけ実行する。
 function migrateStockAddStatusColumn() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1040,7 +1040,7 @@ function migrateStockAddStatusColumn() {
     for (var i = 1; i < idata.length; i++) {
       var no = String(idata[i][1] || ''); if (!no) continue;
       var k = String(idata[i][10] || ''), iflag = String(idata[i][8] || '');
-      statusByOrderNo[no] = (k === '緊急承認済' || k === '営業自己発注') ? k : (iflag === '緊急' ? '緊急承認済' : '');
+      statusByOrderNo[no] = (k === '緊急承認済') ? k : ((k === '自己発注' || k === '営業自己発注') ? '自己発注' : (iflag === '緊急' ? '緊急承認済' : ''));
     }
   }
   // 既存行に遡及記入 (B列=注文No で照合)
@@ -1055,7 +1055,7 @@ function migrateStockAddStatusColumn() {
     s.getRange(2, 15, out.length, 1).setValues(out);
     for (var rr = 0; rr < out.length; rr++) {
       if (out[rr][0] === '緊急承認済') s.getRange(rr+2, 15).setFontColor('#d93025').setFontWeight('bold');
-      else if (out[rr][0] === '営業自己発注') s.getRange(rr+2, 15).setFontColor('#6a1b9a').setFontWeight('bold');
+      else if (out[rr][0] === '自己発注' || out[rr][0] === '営業自己発注') s.getRange(rr+2, 15).setFontColor('#6a1b9a').setFontWeight('bold');
     }
   }
   // 入力規則を新しい列位置で再適用 (念のため): 分類→16 / 入庫済み→17
@@ -1066,9 +1066,9 @@ function migrateStockAddStatusColumn() {
 
 // ★ 2026-06-04: 在庫管理を新ルールに合わせて整理 (井上さん指示)
 //   新ルール = 在庫管理に出すのは「発注済の商品」だけ:
-//     - 即発注(緊急承認済/営業自己発注): 申請時から表示 → 残す
+//     - 即発注(緊急承認済/自己発注): 申請時から表示 → 残す
 //     - 通常発注: 発注完了(発注済)後のみ表示 → 申請中/承認済の行は削除
-//   status が {申請中, 承認済, 却下, 取消} の在庫管理行を削除。{緊急承認済, 営業自己発注, 発注済, 経理確認済} は残す。
+//   status が {申請中, 承認済, 却下, 取消} の在庫管理行を削除。{緊急承認済, 自己発注, 発注済, 経理確認済} は残す。
 //   発注一覧に無い注文No(孤児)は触らない。冪等(新ルール下では再実行しても削除対象は増えない)。
 function cleanupStockUnordered() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1100,6 +1100,39 @@ function cleanupStockUnordered() {
     ') / 残し' + kept + '行 / 孤児' + orphan + '行は保持';
   Logger.log(summary);
   return { removed: toDelete.length, removedByStatus: removedByStatus, kept: kept, orphan: orphan, summary: summary };
+}
+
+// ★ 2026-06-04: 「営業自己発注」表記を「自己発注」に統一 (井上さん指示: 営業以外も自己発注するため文言から「営業」を外す)
+//   発注一覧 K列(11=idx10) / 在庫管理 O列(15=idx14) に残る旧値「営業自己発注」を「自己発注」へ置換。
+//   値の置換のみ(色は再適用)。冪等(再実行時は対象0)。新規発注は既に「自己発注」で書込まれる(applyStatusColor/stockStatus)。
+function migrateSelfOrderLabel() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var result = { index: 0, stock: 0 };
+  // --- 発注一覧 K列(11) ---
+  var idx = ss.getSheetByName(INDEX_SHEET);
+  if (idx) {
+    var iv = idx.getDataRange().getValues();
+    for (var i = 1; i < iv.length; i++) {
+      if (String(iv[i][10]) === '営業自己発注') {
+        applyStatusColor(idx, i + 1, '自己発注');  // 値+色を再適用
+        result.index++;
+      }
+    }
+  }
+  // --- 在庫管理 O列(15=idx14) ---
+  var stk = ss.getSheetByName(STOCK_SHEET);
+  if (stk) {
+    var sv = stk.getDataRange().getValues();
+    for (var j = 1; j < sv.length; j++) {
+      if (String(sv[j][14]) === '営業自己発注') {
+        stk.getRange(j + 1, 15).setValue('自己発注').setFontColor('#6a1b9a').setFontWeight('bold');
+        result.stock++;
+      }
+    }
+  }
+  result.summary = '✅ 営業自己発注→自己発注 統一: 発注一覧 ' + result.index + '行 / 在庫管理 ' + result.stock + '行';
+  Logger.log(result.summary);
+  return result;
 }
 
 // ============ ★ システム整合性チェック (2026-05-29) ============
@@ -1317,9 +1350,9 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
         checkedMap[data[c][7]] = data[c][16];    // Q列(17)=入庫済みチェック
       }
     }
-    // ★ 2026-06-04: ステータスは発注一覧の作成時情報から再導出 (K=緊急承認済/営業自己発注 or I=緊急)
+    // ★ 2026-06-04: ステータスは発注一覧の作成時情報から再導出 (K=緊急承認済/自己発注 or I=緊急)
     var st10b = String(idxRowData[10]||'');
-    var statusVal = (st10b === '緊急承認済' || st10b === '営業自己発注') ? st10b : (String(idxRowData[8]||'') === '緊急' ? '緊急承認済' : '');
+    var statusVal = (st10b === '緊急承認済') ? st10b : ((st10b === '自己発注' || st10b === '営業自己発注') ? '自己発注' : (String(idxRowData[8]||'') === '緊急' ? '緊急承認済' : ''));
     for (var d = stockRows.length - 1; d >= 0; d--) s.deleteRow(stockRows[d]);
     var now = idxRowData[0], supplier = idxRowData[3], branch = idxRowData[4], siteName = idxRowData[5], orderer = idxRowData[7], url = idxRowData[11];
     var rows = [];
@@ -1341,7 +1374,7 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
       for (var ri = 0; ri < rows.length; ri++) {
         if (rows[ri][13] === 'M') s.getRange(startRow + ri, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
         if (rows[ri][14] === '緊急承認済') s.getRange(startRow + ri, 15).setFontColor('#d93025').setFontWeight('bold');
-        else if (rows[ri][14] === '営業自己発注') s.getRange(startRow + ri, 15).setFontColor('#6a1b9a').setFontWeight('bold');
+        else if (rows[ri][14] === '自己発注' || rows[ri][14] === '営業自己発注') s.getRange(startRow + ri, 15).setFontColor('#6a1b9a').setFontWeight('bold');
       }
       applyStockCategoryValidation(s);
       applyStockCheckboxValidation(s);
@@ -1390,6 +1423,7 @@ function applyStatusColor(sheet, row, status) {
       cell.setFontColor('#137333').setBackground('#e6f4ea'); break;
     case '緊急承認済':
       cell.setFontColor('#ffffff').setBackground('#d93025'); break;
+    case '自己発注':
     case '営業自己発注':
       cell.setFontColor('#6a1b9a').setBackground('#f3e5f5'); break;
     case '発注済':
@@ -2402,8 +2436,8 @@ function markOrderCompleted(id) {
   for (var i = 1; i < data.length; i++) {
     if (data[i][12] === id) {
       var currentStatus = data[i][10];
-      if (currentStatus !== '承認済' && currentStatus !== '緊急承認済' && currentStatus !== '営業自己発注') {
-        return { success: false, error: '承認済または営業自己発注の発注のみ完了にできます (現在: ' + currentStatus + ')' };
+      if (currentStatus !== '承認済' && currentStatus !== '緊急承認済' && currentStatus !== '自己発注' && currentStatus !== '営業自己発注') {
+        return { success: false, error: '承認済または自己発注の発注のみ完了にできます (現在: ' + currentStatus + ')' };
       }
       applyStatusColor(s, i + 1, '発注済');
       // 発注完了日を Q列(17) に記録
@@ -2420,7 +2454,7 @@ function markOrderCompleted(id) {
           orderNo: data[i][1], supplier: data[i][3], branch: data[i][4],
           siteName: data[i][5], orderer: data[i][7],
           urgent: (String(data[i][8]) === '緊急'),
-          selfOrder: (currentStatus === '営業自己発注'),
+          selfOrder: (currentStatus === '自己発注' || currentStatus === '営業自己発注'),
           lines: reconLines
         };
         addToStockSheet(ss, reconData, data[i][11] || '');

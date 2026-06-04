@@ -554,9 +554,9 @@ textarea { resize: vertical; min-height: 60px; }
   <button type="button" class="btn-submit" id="btnSubmit" onclick="handleSend()" disabled style="display:none">
     📦 送信（承認依頼 + メール通知）
   </button>
-  <!-- 2026-06-03: 営業が自分で発注する専用ボタン。承認スキップ＝即発注扱い・メール送信なし・K列="営業自己発注" -->
+  <!-- 2026-06-03: 自分で発注する専用ボタン。承認スキップ＝即発注扱い・メール送信なし・K列="自己発注" -->
   <button type="button" class="btn-submit" id="btnSelfOrder" onclick="handleSelfOrder()" disabled style="display:none;background:#6a1b9a;margin-top:8px">
-    💼 営業が自分で発注（承認不要・即発注）
+    💼 自己発注（承認不要・即発注）
   </button>
 </div>
 
@@ -1579,7 +1579,7 @@ function renderOrderListArea() {
     const statusColor = st === '申請中' ? 'background:#fef7e0;color:#b06000' :
                          st === '承認済' ? 'background:#e6f4ea;color:#137333' :
                          st === '緊急承認済' ? 'background:#d93025;color:#fff' :
-                         st === '営業自己発注' ? 'background:#f3e5f5;color:#6a1b9a' :
+                         (st === '自己発注' || st === '営業自己発注') ? 'background:#f3e5f5;color:#6a1b9a' :
                          st === '発注済' ? 'background:#e8f0fe;color:#1a73e8' :
                          st === '却下' ? 'background:#fce8e6;color:#c5221f' :
                          st === '取消' ? 'background:#f1f3f4;color:#5f6368' :
@@ -1597,7 +1597,7 @@ function renderOrderListArea() {
       '<button class="btn-view" onclick="openEditModal(\'order\',\'' + o.id + '\')">📝 ' + (st === '申請中' ? '編集' : '詳細') + '</button>' +
       '<button class="btn-view" onclick="downloadPdfById(\'' + o.id + '\',\'order\',\'発注_' + (o.orderNo || '') + '\')" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;border-width:1.5px;border-style:solid">📥 PDF</button>' +
       (st === '申請中' ? '<button class="btn-transfer" onclick="approveByUI(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--success)">✅ 承認</button>' : '') +
-      ((st === '承認済' || st === '緊急承認済' || st === '営業自己発注') ? '<button class="btn-transfer" onclick="markPoCompleted(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--success)">✅ 発注完了→非表示</button>' : '') +
+      ((st === '承認済' || st === '緊急承認済' || st === '自己発注' || st === '営業自己発注') ? '<button class="btn-transfer" onclick="markPoCompleted(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--success)">✅ 発注完了→非表示</button>' : '') +
       (canCancel ? '<button class="btn-transfer" onclick="cancelOrderById(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--danger)">↩️ 取消</button>' : '') +
       '</div></div>';
   });
@@ -2303,7 +2303,7 @@ function updatePoErrorBanner() {
 function validate() {
   const ok = getValidationErrors().length === 0;
   document.getElementById('btnSubmit').disabled = !ok;
-  // 営業自己発注ボタンは承認をスキップするため、承認者未選択でも有効化する (2026-06-04)
+  // 自己発注ボタンは承認をスキップするため、承認者未選択でも有効化する (2026-06-04)
   const okSelf = getValidationErrors({ skipApprover: true }).length === 0;
   var _bsoV = document.getElementById('btnSelfOrder');
   if (_bsoV) _bsoV.disabled = !okSelf;
@@ -2326,7 +2326,7 @@ function getValidationErrors(opts) {
     if (!document.getElementById('type-' + n)?.value) e.push('明細' + n + ':形態');
   });
   if (!document.getElementById('orderer').value) e.push('注文者');
-  // 営業自己発注 (skipApprover) は承認をスキップするため承認者を必須にしない (2026-06-04)
+  // 自己発注 (skipApprover) は承認をスキップするため承認者を必須にしない (2026-06-04)
   if (!(opts && opts.skipApprover) && !document.getElementById('approver').value) e.push('承認者');
   if (!document.getElementById('orderPerson').value) e.push('発注者');
   return e;
@@ -2394,7 +2394,7 @@ function handleSend() {
   pendingSendType = 'order';
   showPreview();
 }
-// 2026-06-03: 営業が自分で発注（承認スキップ・即発注・メール送信なし・K列="営業自己発注"）
+// 2026-06-03: 自分で発注（承認スキップ・即発注・メール送信なし・K列="自己発注"）
 function handleSelfOrder() {
   if (getValidationErrors({ skipApprover: true }).length > 0) return;
   if (!confirm('営業ご自身で発注します。\n承認をスキップして即発注扱いになり、承認者へのメールは送信されません。\nよろしいですか？')) return;
@@ -2410,9 +2410,9 @@ function showPreview() {
       (l.model||'-') + '</td><td>' + l.qty + '</td><td>&yen;' +
       l.price.toLocaleString() + '</td><td>&yen;' + l.amount.toLocaleString() + '</td><td>' + ((FORM_TYPES.find(t => t.value === l.type) || {}).label || l.type) + '</td></tr>';
   });
-  document.getElementById('previewTitle').textContent = data.selfOrder ? '⚠️ 営業自己発注の最終確認' : '⚠️ 発注書送信の最終確認';
+  document.getElementById('previewTitle').textContent = data.selfOrder ? '⚠️ 自己発注の最終確認' : '⚠️ 発注書送信の最終確認';
   document.getElementById('previewWarn').innerHTML = data.selfOrder
-    ? '💼 営業が自分で発注します（承認スキップ・即発注扱い）<br><strong>承認者へのメールは送信されません</strong>'
+    ? '💼 自己発注します（承認スキップ・即発注扱い）<br><strong>承認者へのメールは送信されません</strong>'
     : '📧 承認者へメールが送信されます<br>送信先: <strong>' + data.approverEmail + '</strong>';
   document.getElementById('previewContent').innerHTML =
     '<table class="preview-table">' +
@@ -2426,7 +2426,7 @@ function showPreview() {
     (data.siteName ? '<tr><th>現場名</th><td>' + data.siteName + '</td></tr>' : '') +
     (data.notes ? '<tr><th>特記</th><td>' + data.notes + '</td></tr>' : '') +
     '<tr><th>注文者</th><td>' + data.orderer + '</td></tr>' +
-    '<tr><th>状態</th><td>' + (data.selfOrder ? '<span style="color:#6a1b9a;font-weight:bold">営業自己発注</span>' : (data.urgent ? '<span style="color:red;font-weight:bold">緊急</span>' : 'PASS')) + '</td></tr>' +
+    '<tr><th>状態</th><td>' + (data.selfOrder ? '<span style="color:#6a1b9a;font-weight:bold">自己発注</span>' : (data.urgent ? '<span style="color:red;font-weight:bold">緊急</span>' : 'PASS')) + '</td></tr>' +
     '<tr><th>承認者</th><td>' + data.approverName + '</td></tr></table>';
   document.getElementById('btnConfirm').textContent = 'この内容で送信する';
   document.getElementById('btnConfirm').style.background = 'var(--success)';
@@ -2478,7 +2478,7 @@ async function executeSend() {
       if (pprog) pprog.style.display = 'none';
       document.getElementById('successScreen').classList.add('show');
       document.getElementById('successMessage').textContent = data.selfOrder
-        ? '【営業自己発注】注文No.' + data.orderNo + ' を登録しました（承認スキップ・即発注扱い／メール送信なし）。'
+        ? '【自己発注】注文No.' + data.orderNo + ' を登録しました（承認スキップ・即発注扱い／メール送信なし）。'
         : (data.urgent
           ? '【緊急】注文No.' + data.orderNo + ' を登録し、即発注扱いです。'
           : '注文No.' + data.orderNo + ' をスプレッドシートに記録し、承認依頼メールを送信しました。');
