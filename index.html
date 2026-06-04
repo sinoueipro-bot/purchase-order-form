@@ -431,7 +431,7 @@ textarea { resize: vertical; min-height: 60px; }
   <div class="field-group" style="background:#fef7e0;border:1.5px solid #f9ab00;border-radius:8px;padding:10px 12px;margin-bottom:8px">
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:#b06000">
       <input type="checkbox" id="skipPurchaserNotify" style="width:18px;height:18px;cursor:pointer">
-      <span>📌 事務員への発注依頼は不要（自社のみで完結）</span>
+      <span>📌 発注依頼は不要</span>
     </label>
     <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;padding-left:26px">チェックすると、承認後の事務員通知メールが送信されません</div>
   </div>
@@ -444,11 +444,11 @@ textarea { resize: vertical; min-height: 60px; }
     <select id="approver" required onchange="validate()"><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
-    <div class="field-label"><span class="required-badge">必須</span>発注者</div>
+    <div class="field-label"><span class="required-badge" id="orderPersonReqBadge">必須</span>発注者</div>
     <select id="orderPerson" required onchange="validate()"><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
-    <div class="field-label">緊急（即発注扱い）</div>
+    <div class="field-label">緊急（承認フロースキップ）</div>
     <div class="toggle-wrapper">
       <label class="toggle"><input type="checkbox" id="urgent"><span class="toggle-slider"></span></label>
       <span class="urgent-label" id="urgentLabel">PASS</span>
@@ -816,6 +816,12 @@ function goToPoWizardStep(step) {
   document.querySelectorAll('.wizard-step-view[data-po-step]').forEach(v => v.classList.remove('active'));
   const view = document.querySelector('.wizard-step-view[data-po-step="' + step + '"]');
   if (view) view.classList.add('active');
+
+  // Step 2 (注文明細): WEBリテラシーが低い人が「どこに入力するか」迷わないよう、行が0なら自動で1行表示
+  // （読込時/resetForm でも addLineItem 済だが、経路次第で0行になりうるため最終ガード。既に行があれば何もしない=冪等）
+  if (step === 2 && document.querySelectorAll('#lineItems .line-item').length === 0) {
+    addLineItem();
+  }
 
   // 進捗インジケーター更新
   const progress = document.getElementById('poWizardProgress');
@@ -2328,8 +2334,17 @@ function getValidationErrors(opts) {
   if (!document.getElementById('orderer').value) e.push('注文者');
   // 自己発注 (skipApprover) は承認をスキップするため承認者を必須にしない (2026-06-04)
   if (!(opts && opts.skipApprover) && !document.getElementById('approver').value) e.push('承認者');
-  if (!document.getElementById('orderPerson').value) e.push('発注者');
+  // 「発注依頼は不要」チェック時は発注者を必須にしない (2026-06-04)
+  if (!document.getElementById('skipPurchaserNotify')?.checked && !document.getElementById('orderPerson').value) e.push('発注者');
   return e;
+}
+// 「発注依頼は不要」チェック時は発注者を任意にし、必須バッジを隠す (2026-06-04)
+function updateOrderPersonRequired() {
+  var skip = document.getElementById('skipPurchaserNotify')?.checked;
+  var sel = document.getElementById('orderPerson');
+  var badge = document.getElementById('orderPersonReqBadge');
+  if (sel) { if (skip) sel.removeAttribute('required'); else sel.setAttribute('required', ''); }
+  if (badge) badge.style.display = skip ? 'none' : '';
 }
 function setupValidation() {
   document.querySelectorAll('input,select,textarea').forEach(el => {
@@ -2340,6 +2355,9 @@ function setupValidation() {
     document.getElementById('urgentLabel').textContent = this.checked ? '緊急' : 'PASS';
     document.getElementById('urgentLabel').classList.toggle('active', this.checked);
   });
+  var _skip = document.getElementById('skipPurchaserNotify');
+  if (_skip) _skip.addEventListener('change', () => { updateOrderPersonRequired(); validate(); });
+  updateOrderPersonRequired();
 }
 
 // ============ 発注データ収集 ============
@@ -2518,6 +2536,9 @@ function resetForm() {
   var _sn = document.getElementById('specialNotes'); if (_sn) _sn.value = '';
   document.getElementById('orderer').value = '';
   document.getElementById('approver').value = '';
+  var _op = document.getElementById('orderPerson'); if (_op) _op.value = '';
+  var _spn = document.getElementById('skipPurchaserNotify'); if (_spn) _spn.checked = false;
+  updateOrderPersonRequired();
   document.getElementById('urgent').checked = false;
   document.getElementById('urgentLabel').textContent = 'PASS';
   document.getElementById('lineItems').innerHTML = '';
