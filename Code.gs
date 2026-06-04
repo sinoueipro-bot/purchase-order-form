@@ -767,9 +767,12 @@ function createFromTemplate(ss, tabName, data) {
   try { sh.getRange('F55').setValue(''); } catch(e) {}
   try { sh.getRange('D55').setValue(''); } catch(e) {}
   try { sh.getRange('D56').setValue(''); } catch(e) {}
-  // 特記事項(C58): 2026-06-03 申請フォームの特記事項(specialNotes)を発注書に記載。
+  // 特記事項(C59): 2026-06-03 申請フォームの特記事項(specialNotes)を発注書に記載。
   //   data.notes には二重発注検知用の転記マーカーが混入するため、印刷用はクリーンな specialNotes を使う。
-  try { sh.getRange('C58').setValue(data.specialNotes || ''); } catch(e) {}
+  //   2026-06-04 修正: 旧 C58 は特記事項ボックス(結合 C59:AE64)の1行上の非結合セルで、値が枠外上にずれて表示されていた(v78 +1行ずれ未適用)。
+  //   実測(debugNotesRegion)でボックス左上が C59 と確定 → C59 に書き込む。念のため旧位置 C58 はクリア。
+  try { sh.getRange('C59').setValue(data.specialNotes || ''); } catch(e) {}
+  try { sh.getRange('C58').setValue(''); } catch(e) {}
   sh.getRange('X62').setValue(today.getMonth()+1);
   sh.getRange('AA62').setValue(today.getDate());
   // ★ 2026-05-27 v82: 注文者は AJ61 (結合左上)。旧 AJ60 は結合外で表示されず空欄だった
