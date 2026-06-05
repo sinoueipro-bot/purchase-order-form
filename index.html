@@ -440,8 +440,9 @@ textarea { resize: vertical; min-height: 60px; }
     <select id="orderer" required onchange="validate()"><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
-    <div class="field-label"><span class="required-badge">必須</span>承認者</div>
+    <div class="field-label"><span class="required-badge" id="approverReqBadge">必須</span>承認者</div>
     <select id="approver" required onchange="validate()"><option value="">選択してください</option></select>
+    <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">💼「自己発注（承認不要）」で出す場合は、承認者は未選択のままでOKです</div>
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge" id="orderPersonReqBadge">必須</span>発注者</div>

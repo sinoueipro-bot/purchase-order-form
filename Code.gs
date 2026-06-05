@@ -929,7 +929,7 @@ function addToStockSheet(ss, data, sheetUrl) {
   _compactSheetByKey(s, 2);  // ★ 2026-05-29: 追記前に空行を自動削除して上詰め
   var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
   // ★ 2026-06-04: ステータス(O列) = 緊急承認/自己発注のときだけ記載・通常発注は空欄
-  var stockStatus = data.selfOrder ? '自己発注' : (data.urgent ? '緊急承認済' : '');
+  var stockStatus = data.selfOrder ? '承認スキップ' : (data.urgent ? '緊急承認済' : '');
   var lines = data.lines || [];
   var rows = [];
   lines.forEach(function(ln) {
@@ -979,7 +979,7 @@ function rebuildStockSheet() {
     var row = data[i];
     // ★ 2026-06-04: ステータス = K列(11)が緊急承認済/自己発注、または I列(9)='緊急'(作成時フラグ)なら記載
     var st10 = String(row[10]||'');
-    var rowStatus = (st10 === '緊急承認済') ? st10 : ((st10 === '自己発注' || st10 === '営業自己発注') ? '自己発注' : (String(row[8]||'') === '緊急' ? '緊急承認済' : ''));
+    var rowStatus = (st10 === '緊急承認済') ? st10 : ((st10 === '自己発注' || st10 === '営業自己発注') ? '承認スキップ' : (String(row[8]||'') === '緊急' ? '緊急承認済' : ''));
     var lines = [];
     try { lines = JSON.parse(row[13] || '[]'); } catch(e) {}
     lines.forEach(function(ln) {
@@ -1040,7 +1040,7 @@ function migrateStockAddStatusColumn() {
     for (var i = 1; i < idata.length; i++) {
       var no = String(idata[i][1] || ''); if (!no) continue;
       var k = String(idata[i][10] || ''), iflag = String(idata[i][8] || '');
-      statusByOrderNo[no] = (k === '緊急承認済') ? k : ((k === '自己発注' || k === '営業自己発注') ? '自己発注' : (iflag === '緊急' ? '緊急承認済' : ''));
+      statusByOrderNo[no] = (k === '緊急承認済') ? k : ((k === '自己発注' || k === '営業自己発注') ? '承認スキップ' : (iflag === '緊急' ? '緊急承認済' : ''));
     }
   }
   // 既存行に遡及記入 (B列=注文No で照合)
@@ -1352,7 +1352,7 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
     }
     // ★ 2026-06-04: ステータスは発注一覧の作成時情報から再導出 (K=緊急承認済/自己発注 or I=緊急)
     var st10b = String(idxRowData[10]||'');
-    var statusVal = (st10b === '緊急承認済') ? st10b : ((st10b === '自己発注' || st10b === '営業自己発注') ? '自己発注' : (String(idxRowData[8]||'') === '緊急' ? '緊急承認済' : ''));
+    var statusVal = (st10b === '緊急承認済') ? st10b : ((st10b === '自己発注' || st10b === '営業自己発注') ? '承認スキップ' : (String(idxRowData[8]||'') === '緊急' ? '緊急承認済' : ''));
     for (var d = stockRows.length - 1; d >= 0; d--) s.deleteRow(stockRows[d]);
     var now = idxRowData[0], supplier = idxRowData[3], branch = idxRowData[4], siteName = idxRowData[5], orderer = idxRowData[7], url = idxRowData[11];
     var rows = [];
