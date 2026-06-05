@@ -77,6 +77,19 @@ var STAFF_EMAILS = {
   '井上将吾': 's.inoue.ipro@gmail.com'
 };
 
+// ★ 発注者(orderPerson) 名前→メアド対応表 (2026-06-05)
+//   承認後の「発注してください」通知(notifyPurchaser)を、固定の事務員ではなく
+//   申請時に選んだ発注者本人へ届けるためのルーティング表。
+//   ★ index.html の ORDER_PERSONS (発注者ドロップダウン) と必ず同じ顔ぶれで維持すること。
+var ORDER_PERSON_EMAILS = {
+  '原田部長': 'harada@i-pro.co.jp',
+  '岩崎店長': 'iwasaki@i-pro.co.jp',
+  '亀谷常務': 'kametani@i-pro.co.jp',
+  '井上将吾': 's.inoue.ipro@gmail.com',
+  '眞鍋': 'manabe@i-pro.co.jp',
+  '辻塚': 'tsujitsuka@i-pro.co.jp'
+};
+
 // ============ 初期化 ============
 function initSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1582,9 +1595,25 @@ function notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl) {
     '<a href="'+sheetUrl+'" style="display:block;text-align:center;padding:14px;background:#1a73e8;color:white;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;margin:16px 0">発注書シートを開く</a>' +
     '</div></div>';
 
-  // 事務員全員に同報 (JIMUIN_EMAILS 2026-05-27 追加)
+  // ★ 2026-06-05: 発注依頼の宛先 = 申請時に選んだ発注者本人 (ORDER_PERSON_EMAILS で名前→メアド解決)。
+  //   発注者が未選択 or 対応表に無い場合のみ、従来どおり事務員全員(JIMUIN_EMAILS)へフォールバック。
+  var _toAddr = (JIMUIN_EMAILS || [PURCHASER.email]).join(',');
+  try {
+    var _idxS = ss.getSheetByName(INDEX_SHEET);
+    var _colOP = _findColumnByHeader(_idxS, '発注者');
+    if (_colOP > 0) {
+      var _vals = _idxS.getDataRange().getValues();
+      for (var _i = 1; _i < _vals.length; _i++) {
+        if (_vals[_i][12] === id) {
+          var _opName = String(_vals[_i][_colOP - 1] || '').trim();
+          if (_opName && ORDER_PERSON_EMAILS[_opName]) _toAddr = ORDER_PERSON_EMAILS[_opName];
+          break;
+        }
+      }
+    }
+  } catch(_e) { Logger.log('発注者ルックアップエラー: ' + _e.toString()); }
   MailApp.sendEmail({
-    to: (JIMUIN_EMAILS || [PURCHASER.email]).join(','),
+    to: _toAddr,
     subject: '【発注依頼】' + supplier + ' / ' + orderNo,
     body: '承認済: ' + supplier + ' / ' + orderNo + '\n発注書: ' + sheetUrl,
     htmlBody: hb
