@@ -972,13 +972,14 @@ function addDatalist(id, items) {
 }
 function fillSelect(id, items) {
   const sel = document.getElementById(id);
+  if (!sel) return;  // 削除済みフィールド(estBranch/estStaff等)は何もしない=初期化の中断を防ぐ (2026-06-11)
   items.forEach(v => sel.add(new Option(typeof v === 'object' ? v.name : v, typeof v === 'object' ? v.name : v)));
 }
 
 function setDefaultDate() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('issueDate').value = today;
-  document.getElementById('estDate').value = today;
+  var _ed = document.getElementById('estDate'); if (_ed) _ed.value = today;  // 見積もり削除済み→ガード (2026-06-11)
 }
 function generateOrderNo() {
   const n = new Date();
@@ -1169,6 +1170,7 @@ function calcEstTotal() {
 
 // ============ 見積バリデーション ============
 function validateEst() {
+  if (!document.getElementById('estDate')) return true;  // 見積もり機能は削除済み(2026-05-12)→no-op。init完走後 setupValidation の入力リスナから毎回呼ばれるため throw を防ぐ (2026-06-11)
   const errs = getEstErrors();
   const btn = document.getElementById('btnEstSubmit');
   btn.disabled = errs.length > 0;
