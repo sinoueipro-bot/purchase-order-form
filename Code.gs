@@ -475,6 +475,7 @@ function doGet(e) {
   if (action === 'getOrderDetails') return jsonResponse(getOrderDetails(id));
   // 画面UI経由の承認API（パスワード必須）
   if (action === 'approveByUI') return jsonResponse(approveOrderByUI(id, e.parameter.password));
+  if (action === 'ensureStockMemo') return jsonResponse(_ensureStockMemoColumnApi(e.parameter.pw));
   // 見積関連API (listEstimates / getEstimateData / markTransferred / getEstimateDetails)
   // と一時API hideEstimateAll は 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md
 
@@ -893,7 +894,7 @@ function initStockSheet() {
   var s = ss.getSheetByName(STOCK_SHEET);
   if (!s) s = ss.insertSheet(STOCK_SHEET);
   // ★ 2026-06-04: 18列構成 (無償Nの右に「ステータス」O列追加・分類P/入庫済みQ/シートURLR に移動)
-  var headers = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','ステータス','分類','入庫済み','シートURL'];
+  var headers = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','ステータス','分類','入庫済み','メモ','シートURL'];
   s.getRange(1,1,1,headers.length).setValues([headers]);
   s.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#0f9d58').setFontColor('#fff');
   s.setFrozenRows(1);
@@ -904,7 +905,8 @@ function initStockSheet() {
   s.setColumnWidth(15, 110);  // ステータス (緊急承認済/自己発注)
   s.setColumnWidth(16, 130);  // 分類
   s.setColumnWidth(17, 90);   // 入庫済み (チェックボックス)
-  s.setColumnWidth(18, 220);  // シートURL
+  s.setColumnWidth(18, 240);  // メモ (手動入力)
+  s.setColumnWidth(19, 220);  // シートURL
   s.getRange(1, 14).setBackground('#1a73e8').setFontColor('#fff'); // 無償(M)ヘッダー青
   s.getRange(1, 15).setBackground('#9334e6').setFontColor('#fff'); // ステータスヘッダー紫
   s.getRange(1, 16).setBackground('#fbbc04').setFontColor('#000'); // 分類ヘッダー黄
@@ -912,7 +914,33 @@ function initStockSheet() {
   s.getRange(2, 15, 1000, 1).clearDataValidations();  // ステータス列はプルダウンなし
   applyStockCategoryValidation(s);
   applyStockCheckboxValidation(s);
-  Logger.log('在庫管理シート初期化完了 (18列)');
+  Logger.log('在庫管理シート初期化完了 (19列)');
+}
+
+// ★ 2026-06-11: 在庫管理に「メモ」列(手動入力・R=18)が無ければ挿入。旧シートURL(18)はS(19)へ。冪等。
+//   井上さん依頼「入庫済みの真横に手動メモ列」。全書込経路の冒頭で呼び、列構造を保証する。
+function _ensureStockMemoColumn(s) {
+  if (!s) return;
+  var lastCol = s.getLastColumn();
+  if (lastCol < 1) return;
+  var headers = s.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (headers.indexOf('メモ') !== -1) return;  // 既にメモ列あり=何もしない
+  s.insertColumnAfter(17);  // 入庫済み(17)の右に挿入 → 旧シートURL(18)はS(19)へ自動シフト
+  s.getRange(1, 18).setValue('メモ').setFontWeight('bold').setBackground('#0f9d58').setFontColor('#fff');
+  s.setColumnWidth(18, 240);
+  s.getRange(2, 18, 1000, 1).clearDataValidations();  // メモは自由入力(プルダウン/チェックなし)
+  Logger.log('在庫管理にメモ列(R=18)挿入・シートURLはS=19へ移動');
+}
+
+// 既存シートにメモ列を今すぐ追加するAPI (doGet ?action=ensureStockMemo&pw=... から呼ぶ)
+function _ensureStockMemoColumnApi(pw) {
+  if (pw !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(STOCK_SHEET);
+  if (!s) return { success: false, error: '在庫管理シートがありません' };
+  var before = s.getLastColumn();
+  _ensureStockMemoColumn(s);
+  return { success: true, colsBefore: before, colsAfter: s.getLastColumn(), memoCol: _findColumnByHeader(s, 'メモ'), urlCol: _findColumnByHeader(s, 'シートURL') };
 }
 
 // 分類列(P=16)に4択プルダウンを適用
@@ -934,6 +962,7 @@ function applyStockCheckboxValidation(s) {
 function addToStockSheet(ss, data, sheetUrl) {
   var s = ss.getSheetByName(STOCK_SHEET);
   if (!s) { initStockSheet(); s = ss.getSheetByName(STOCK_SHEET); }
+  _ensureStockMemoColumn(s);  // メモ列(R=18)が無ければ挿入してから書く (2026-06-11)
   // ★ 2026-06-04: 同一注文No が既に在庫管理にあれば二重追加しない(移行期・発注完了の再クリック対策)
   var _ex = s.getDataRange().getValues();
   for (var _ei = 1; _ei < _ex.length; _ei++) {
@@ -955,13 +984,14 @@ function addToStockSheet(ss, data, sheetUrl) {
         stockStatus,                   // O: ステータス
         '',                            // P: 分類(プルダウン)
         false,                         // Q: 入庫済み (チェックボックス初期OFF)
-        sheetUrl||''                   // R: シートURL
+        '',                            // R: メモ (手動入力・自動処理は触らない)
+        sheetUrl||''                   // S: シートURL
       ]);
     }
   });
   if (rows.length > 0) {
     var startRow = s.getLastRow() + 1;
-    s.getRange(startRow, 1, rows.length, 18).setValues(rows);
+    s.getRange(startRow, 1, rows.length, 19).setValues(rows);
     s.getRange(startRow, 11, rows.length, 2).setNumberFormat('#,##0'); // 単価・金額
     // 無償(M)は N列を青太字 / ステータスは緊急=赤・自己発注=紫で目立たせる
     for (var ri = 0; ri < rows.length; ri++) {
@@ -984,8 +1014,8 @@ function rebuildStockSheet() {
   // ヘッダー・列幅・プルダウンを最新化 (既存シートでもヘッダーを16列に上書き)
   initStockSheet();
   var s = ss.getSheetByName(STOCK_SHEET);
-  // 既存データ(ヘッダー除く)をクリア (18列)
-  if (s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow()-1, 18).clearContent();
+  // 既存データ(ヘッダー除く)をクリア (19列)
+  if (s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow()-1, 19).clearContent();
   var data = idx.getDataRange().getValues();
   var rows = [];
   for (var i = 1; i < data.length; i++) {
@@ -1005,13 +1035,14 @@ function rebuildStockSheet() {
           rowStatus,                     // O: ステータス
           '',                            // P: 分類(空)
           false,                         // Q: 入庫済み (チェックボックス初期OFF)
-          row[11]||''                    // R: シートURL
+          '',                            // R: メモ (rebuildは手動メモを消去=分類/入庫と同様)
+          row[11]||''                    // S: シートURL
         ]);
       }
     });
   }
   if (rows.length > 0) {
-    s.getRange(2, 1, rows.length, 18).setValues(rows);
+    s.getRange(2, 1, rows.length, 19).setValues(rows);
     s.getRange(2, 11, rows.length, 2).setNumberFormat('#,##0');
     // 無償(M)は N列青太字 / ステータスは緊急=赤・自己発注=紫
     for (var ri = 0; ri < rows.length; ri++) {
@@ -1188,7 +1219,7 @@ function checkSystemIntegrity() {
   if (!stock) {
     Logger.log('在庫管理シートなし(未作成 or 削除済み)。必要なら rebuildStockSheet で再生成可');
   } else {
-    var expStock = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','ステータス','分類','入庫済み','シートURL'];
+    var expStock = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','ステータス','分類','入庫済み','メモ','シートURL'];
     var stH = stock.getRange(1,1,1,Math.max(stock.getLastColumn(),18)).getValues()[0];
     var sOk = true;
     for (var h2=0; h2<18; h2++) {
@@ -1337,6 +1368,7 @@ function syncFromOrderSheet(sheet) {
 function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
   var s = ss.getSheetByName(STOCK_SHEET);
   if (!s) return;
+  _ensureStockMemoColumn(s);  // メモ列(R=18)保証 (2026-06-11)
   var data = s.getDataRange().getValues();
   var stockRows = [];
   for (var i = 1; i < data.length; i++) {
@@ -1357,10 +1389,12 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
     // 商品数が変わった → 削除して再追加 (分類・入庫済みは商品名で引き継ぎ)
     var categoryMap = {};
     var checkedMap = {};
+    var memoMap = {};
     for (var c = 0; c < data.length; c++) {
       if (String(data[c][1]) === String(orderNo)) {
         categoryMap[data[c][7]] = data[c][15];   // P列(16)=分類
         checkedMap[data[c][7]] = data[c][16];    // Q列(17)=入庫済みチェック
+        memoMap[data[c][7]] = data[c][17];       // R列(18)=メモ(移行後・手動入力を引き継ぐ)
       }
     }
     // ★ 2026-06-04: ステータスは発注一覧の作成時情報から再導出 (K=緊急承認済/自己発注 or I=緊急)
@@ -1377,12 +1411,13 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
         statusVal,                                       // O: ステータス
         categoryMap[ln.product]||'',                     // P: 分類
         checkedMap[ln.product] === true ? true : false,  // Q: 入庫済み (商品名で引き継ぎ)
-        url||''                                          // R: シートURL
+        memoMap[ln.product]||'',                          // R: メモ (商品名で引き継ぎ)
+        url||''                                          // S: シートURL
       ]);
     });
     if (rows.length > 0) {
       var startRow = s.getLastRow() + 1;
-      s.getRange(startRow, 1, rows.length, 18).setValues(rows);
+      s.getRange(startRow, 1, rows.length, 19).setValues(rows);
       s.getRange(startRow, 11, rows.length, 2).setNumberFormat('#,##0');
       for (var ri = 0; ri < rows.length; ri++) {
         if (rows[ri][13] === 'M') s.getRange(startRow + ri, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
