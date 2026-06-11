@@ -1170,7 +1170,6 @@ function calcEstTotal() {
 
 // ============ 見積バリデーション ============
 function validateEst() {
-  if (!document.getElementById('estDate')) return true;  // 見積もり機能は削除済み(2026-05-12)→no-op。init完走後 setupValidation の入力リスナから毎回呼ばれるため throw を防ぐ (2026-06-11)
   const errs = getEstErrors();
   const btn = document.getElementById('btnEstSubmit');
   btn.disabled = errs.length > 0;
@@ -2361,8 +2360,8 @@ function updateIrregularUI() {
 }
 function setupValidation() {
   document.querySelectorAll('input,select,textarea').forEach(el => {
-    el.addEventListener('change', () => { validate(); validateEst(); });
-    el.addEventListener('input', () => { validate(); validateEst(); });
+    el.addEventListener('change', () => { validate(); });
+    el.addEventListener('input', () => { validate(); });
   });
   var _ir = document.getElementById('irregularType');
   if (_ir) _ir.addEventListener('change', () => { updateIrregularUI(); validate(); });
