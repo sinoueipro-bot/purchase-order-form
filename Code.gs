@@ -476,6 +476,7 @@ function doGet(e) {
   // 画面UI経由の承認API（パスワード必須）
   if (action === 'approveByUI') return jsonResponse(approveOrderByUI(id, e.parameter.password));
   if (action === 'ensureStockMemo') return jsonResponse(_ensureStockMemoColumnApi(e.parameter.pw));
+  if (action === 'ensureStockDelivery') return jsonResponse(_ensureStockDeliveryColumnApi(e.parameter.pw));
   // 見積関連API (listEstimates / getEstimateData / markTransferred / getEstimateDetails)
   // と一時API hideEstimateAll は 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md
 
@@ -894,7 +895,7 @@ function initStockSheet() {
   var s = ss.getSheetByName(STOCK_SHEET);
   if (!s) s = ss.insertSheet(STOCK_SHEET);
   // ★ 2026-06-04: 18列構成 (無償Nの右に「ステータス」O列追加・分類P/入庫済みQ/シートURLR に移動)
-  var headers = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','ステータス','分類','入庫済み','メモ','シートURL'];
+  var headers = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','ステータス','分類','納品予定日','入庫済み','メモ','シートURL'];
   s.getRange(1,1,1,headers.length).setValues([headers]);
   s.getRange(1,1,1,headers.length).setFontWeight('bold').setBackground('#0f9d58').setFontColor('#fff');
   s.setFrozenRows(1);
@@ -904,9 +905,10 @@ function initStockSheet() {
   s.setColumnWidth(14, 80);   // 無償(M)
   s.setColumnWidth(15, 110);  // ステータス (緊急承認済/自己発注)
   s.setColumnWidth(16, 130);  // 分類
-  s.setColumnWidth(17, 90);   // 入庫済み (チェックボックス)
-  s.setColumnWidth(18, 240);  // メモ (手動入力)
-  s.setColumnWidth(19, 220);  // シートURL
+  s.setColumnWidth(17, 110);  // 納品予定日 (手動入力)
+  s.setColumnWidth(18, 90);   // 入庫済み (チェックボックス)
+  s.setColumnWidth(19, 240);  // メモ (手動入力)
+  s.setColumnWidth(20, 220);  // シートURL
   s.getRange(1, 14).setBackground('#1a73e8').setFontColor('#fff'); // 無償(M)ヘッダー青
   s.getRange(1, 15).setBackground('#9334e6').setFontColor('#fff'); // ステータスヘッダー紫
   s.getRange(1, 16).setBackground('#fbbc04').setFontColor('#000'); // 分類ヘッダー黄
@@ -943,6 +945,52 @@ function _ensureStockMemoColumnApi(pw) {
   return { success: true, colsBefore: before, colsAfter: s.getLastColumn(), memoCol: _findColumnByHeader(s, 'メモ'), urlCol: _findColumnByHeader(s, 'シートURL') };
 }
 
+// ★ 2026-06-16: 在庫管理に「納品予定日」列(手動入力)を 分類 の右に挿入。入庫済み/メモ/シートURLは右へシフト。冪等。
+//   井上さん依頼「分類と入庫済みの間に納品予定日」。全書込経路の冒頭で呼び列構造を保証。
+function _ensureStockDeliveryColumn(s) {
+  if (!s) return;
+  var lastCol = s.getLastColumn();
+  if (lastCol < 1) return;
+  var headers = s.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (headers.indexOf('納品予定日') !== -1) return;  // 既にあり
+  var catCol = headers.indexOf('分類');               // 0始まり
+  if (catCol === -1) return;                          // 分類が無い=想定外、触らない
+  s.insertColumnAfter(catCol + 1);                    // 分類(1始まり catCol+1)の右に挿入
+  var nc = catCol + 2;                                // 新「納品予定日」列(1始まり)
+  s.getRange(1, nc).setValue('納品予定日').setFontWeight('bold').setBackground('#0f9d58').setFontColor('#fff');
+  s.setColumnWidth(nc, 110);
+  s.getRange(2, nc, 1000, 1).clearDataValidations();  // 分類のプルダウンを継承しないようクリア
+  s.getRange(2, nc, 1000, 1).clearContent();          // 継承した値も消す(FALSE/残骸防止)
+  Logger.log('在庫管理に納品予定日列を分類の右に挿入');
+}
+
+// 既存シートに納品予定日列を追加 + メモ列のFALSE残骸を一掃 (doGet ?action=ensureStockDelivery&pw=...)
+function _ensureStockDeliveryColumnApi(pw) {
+  if (pw !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(STOCK_SHEET);
+  if (!s) return { success: false, error: '在庫管理シートがありません' };
+  var before = s.getLastColumn();
+  _ensureStockDeliveryColumn(s);
+  // ★ メモ列のFALSE残骸を一掃(insertColumnAfter時にチェックボックス値を継承していた分)
+  var memoCol = _findColumnByHeader(s, 'メモ');
+  var cleared = 0;
+  if (memoCol > 0 && s.getLastRow() > 1) {
+    var rng = s.getRange(2, memoCol, s.getLastRow() - 1, 1);
+    rng.clearDataValidations();
+    var vals = rng.getValues();
+    for (var i = 0; i < vals.length; i++) {
+      var v = vals[i][0];
+      if (v === false || v === true || v === 'FALSE' || v === 'TRUE') { vals[i][0] = ''; cleared++; }
+    }
+    rng.setValues(vals);
+  }
+  return { success: true, colsBefore: before, colsAfter: s.getLastColumn(),
+    deliveryCol: _findColumnByHeader(s, '納品予定日'), categoryCol: _findColumnByHeader(s, '分類'),
+    checkCol: _findColumnByHeader(s, '入庫済み'), memoCol: memoCol, urlCol: _findColumnByHeader(s, 'シートURL'),
+    memoFalseCleared: cleared };
+}
+
 // 分類列(P=16)に4択プルダウンを適用
 function applyStockCategoryValidation(s) {
   var rule = SpreadsheetApp.newDataValidation()
@@ -955,14 +1003,15 @@ function applyStockCategoryValidation(s) {
 // ★ 2026-05-31: 入庫済み列(Q=17)にチェックボックスを適用
 function applyStockCheckboxValidation(s) {
   var rule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
-  s.getRange(2, 17, 1000, 1).setDataValidation(rule);  // 入庫済み列 Q(17)
+  s.getRange(2, 18, 1000, 1).setDataValidation(rule);  // 入庫済み列(18)
 }
 
 // 発注1件の商品を在庫管理シートに追記 (addToIndex から呼ばれる)
 function addToStockSheet(ss, data, sheetUrl) {
   var s = ss.getSheetByName(STOCK_SHEET);
   if (!s) { initStockSheet(); s = ss.getSheetByName(STOCK_SHEET); }
-  _ensureStockMemoColumn(s);  // メモ列(R=18)が無ければ挿入してから書く (2026-06-11)
+  _ensureStockMemoColumn(s);  // メモ列が無ければ挿入してから書く (2026-06-11)
+  _ensureStockDeliveryColumn(s);  // 納品予定日列が無ければ挿入してから書く (2026-06-16)
   // ★ 2026-06-04: 同一注文No が既に在庫管理にあれば二重追加しない(移行期・発注完了の再クリック対策)
   var _ex = s.getDataRange().getValues();
   for (var _ei = 1; _ei < _ex.length; _ei++) {
@@ -982,16 +1031,17 @@ function addToStockSheet(ss, data, sheetUrl) {
         (ln.qty && ln.price) ? ln.qty*ln.price : '', ln.remark||'',
         (ln.type === 'M') ? 'M' : '',  // N: 無償(M)
         stockStatus,                   // O: ステータス
-        '',                            // P: 分類(プルダウン)
-        false,                         // Q: 入庫済み (チェックボックス初期OFF)
-        '',                            // R: メモ (手動入力・自動処理は触らない)
-        sheetUrl||''                   // S: シートURL
+        '',                            // 分類(プルダウン)
+        '',                            // 納品予定日 (手動入力)
+        false,                         // 入庫済み (チェックボックス初期OFF)
+        '',                            // メモ (手動入力・自動処理は触らない)
+        sheetUrl||''                   // シートURL
       ]);
     }
   });
   if (rows.length > 0) {
     var startRow = s.getLastRow() + 1;
-    s.getRange(startRow, 1, rows.length, 19).setValues(rows);
+    s.getRange(startRow, 1, rows.length, 20).setValues(rows);
     s.getRange(startRow, 11, rows.length, 2).setNumberFormat('#,##0'); // 単価・金額
     // 無償(M)は N列を青太字 / ステータスは緊急=赤・自己発注=紫で目立たせる
     for (var ri = 0; ri < rows.length; ri++) {
@@ -1015,7 +1065,7 @@ function rebuildStockSheet() {
   initStockSheet();
   var s = ss.getSheetByName(STOCK_SHEET);
   // 既存データ(ヘッダー除く)をクリア (19列)
-  if (s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow()-1, 19).clearContent();
+  if (s.getLastRow() > 1) s.getRange(2, 1, s.getLastRow()-1, 20).clearContent();
   var data = idx.getDataRange().getValues();
   var rows = [];
   for (var i = 1; i < data.length; i++) {
@@ -1033,16 +1083,17 @@ function rebuildStockSheet() {
           (ln.qty && ln.price) ? ln.qty*ln.price : '', ln.remark||'',
           (ln.type === 'M') ? 'M' : '',  // N: 無償(M)
           rowStatus,                     // O: ステータス
-          '',                            // P: 分類(空)
-          false,                         // Q: 入庫済み (チェックボックス初期OFF)
-          '',                            // R: メモ (rebuildは手動メモを消去=分類/入庫と同様)
-          row[11]||''                    // S: シートURL
+          '',                            // 分類(空)
+          '',                            // 納品予定日 (rebuildは手動入力を消去)
+          false,                         // 入庫済み (チェックボックス初期OFF)
+          '',                            // メモ (rebuildは手動メモを消去=分類/入庫と同様)
+          row[11]||''                    // シートURL
         ]);
       }
     });
   }
   if (rows.length > 0) {
-    s.getRange(2, 1, rows.length, 19).setValues(rows);
+    s.getRange(2, 1, rows.length, 20).setValues(rows);
     s.getRange(2, 11, rows.length, 2).setNumberFormat('#,##0');
     // 無償(M)は N列青太字 / ステータスは緊急=赤・自己発注=紫
     for (var ri = 0; ri < rows.length; ri++) {
@@ -1219,7 +1270,7 @@ function checkSystemIntegrity() {
   if (!stock) {
     Logger.log('在庫管理シートなし(未作成 or 削除済み)。必要なら rebuildStockSheet で再生成可');
   } else {
-    var expStock = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','ステータス','分類','入庫済み','メモ','シートURL'];
+    var expStock = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','ステータス','分類','納品予定日','入庫済み','メモ','シートURL'];
     var stH = stock.getRange(1,1,1,Math.max(stock.getLastColumn(),18)).getValues()[0];
     var sOk = true;
     for (var h2=0; h2<18; h2++) {
@@ -1368,7 +1419,8 @@ function syncFromOrderSheet(sheet) {
 function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
   var s = ss.getSheetByName(STOCK_SHEET);
   if (!s) return;
-  _ensureStockMemoColumn(s);  // メモ列(R=18)保証 (2026-06-11)
+  _ensureStockMemoColumn(s);  // メモ列保証 (2026-06-11)
+  _ensureStockDeliveryColumn(s);  // 納品予定日列保証 (2026-06-16)
   var data = s.getDataRange().getValues();
   var stockRows = [];
   for (var i = 1; i < data.length; i++) {
@@ -1383,18 +1435,20 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
       s.getRange(rr, 7, 1, 7).setValues([[ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'', ln.amount||'', ln.remark||'']]);
       s.getRange(rr, 14).setValue((ln.type==='M')?'M':'');  // N 無償
       s.getRange(rr, 11, 1, 2).setNumberFormat('#,##0');
-      // O ステータス(15)/P 分類(16)/Q 入庫済み(17) は触らない=保持
+      // ステータス(15)〜シートURL(20) は触らない=保持 (分類/納品予定日/入庫済み/メモ含む)
     }
   } else {
     // 商品数が変わった → 削除して再追加 (分類・入庫済みは商品名で引き継ぎ)
     var categoryMap = {};
+    var deliveryMap = {};
     var checkedMap = {};
     var memoMap = {};
     for (var c = 0; c < data.length; c++) {
       if (String(data[c][1]) === String(orderNo)) {
-        categoryMap[data[c][7]] = data[c][15];   // P列(16)=分類
-        checkedMap[data[c][7]] = data[c][16];    // Q列(17)=入庫済みチェック
-        memoMap[data[c][7]] = data[c][17];       // R列(18)=メモ(移行後・手動入力を引き継ぐ)
+        categoryMap[data[c][7]] = data[c][15];   // 分類(16)
+        deliveryMap[data[c][7]] = data[c][16];   // 納品予定日(17)
+        checkedMap[data[c][7]] = data[c][17];    // 入庫済み(18)
+        memoMap[data[c][7]] = data[c][18];       // メモ(19)
       }
     }
     // ★ 2026-06-04: ステータスは発注一覧の作成時情報から再導出 (K=緊急承認済/自己発注 or I=緊急)
@@ -1409,15 +1463,16 @@ function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
         ln.maker||'', ln.product||'', ln.model||'', ln.qty||'', ln.price||'',
         ln.amount||'', ln.remark||'', (ln.type==='M')?'M':'',  // L金額/M備考/N無償
         statusVal,                                       // O: ステータス
-        categoryMap[ln.product]||'',                     // P: 分類
-        checkedMap[ln.product] === true ? true : false,  // Q: 入庫済み (商品名で引き継ぎ)
-        memoMap[ln.product]||'',                          // R: メモ (商品名で引き継ぎ)
-        url||''                                          // S: シートURL
+        categoryMap[ln.product]||'',                     // 分類
+        deliveryMap[ln.product]||'',                     // 納品予定日 (商品名で引き継ぎ)
+        checkedMap[ln.product] === true ? true : false,  // 入庫済み (商品名で引き継ぎ)
+        memoMap[ln.product]||'',                          // メモ (商品名で引き継ぎ)
+        url||''                                          // シートURL
       ]);
     });
     if (rows.length > 0) {
       var startRow = s.getLastRow() + 1;
-      s.getRange(startRow, 1, rows.length, 19).setValues(rows);
+      s.getRange(startRow, 1, rows.length, 20).setValues(rows);
       s.getRange(startRow, 11, rows.length, 2).setNumberFormat('#,##0');
       for (var ri = 0; ri < rows.length; ri++) {
         if (rows[ri][13] === 'M') s.getRange(startRow + ri, 14).setFontColor('#1a73e8').setFontWeight('bold').setHorizontalAlignment('center');
