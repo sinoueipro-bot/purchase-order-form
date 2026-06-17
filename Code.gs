@@ -90,6 +90,10 @@ var ORDER_PERSON_EMAILS = {
   '辻塚': 'tsujitsuka@i-pro.co.jp'
 };
 
+// ★ 発注権限保持者 (2026-06-17): この5人が発注依頼者なら承認フロー不要。
+//   承認者を空欄で送信 → 自動で「承認済」+ 発注依頼を発注者へ。★ index.html の ORDER_AUTHORITY と一致させること。
+var ORDER_AUTHORITY = ['辻塚', '原田部長', '眞鍋', '岩﨑', '亀谷常務'];
+
 // ============ 初期化 ============
 function initSheet() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -602,6 +606,8 @@ function processOrder(data) {
 
   // ★ 2026-05-27 v82 修正: 画面で選んだ承認者(data.approverEmail)を最優先で使う
   //   旧コードは無条件に固定値(井上)で上書きしていたため、誰を選んでも井上に飛んでいた
+  // ★ 2026-06-17: フォールバック前に「承認者が空欄だったか」を記録 (発注権限者の承認スキップ判定に使う)
+  var noApproverSelected = !data.approverEmail;
   if (!data.approverEmail) {
     var approver = data.urgent ? APPROVER_URGENT : APPROVER_PASS;
     data.approverName = approver.name;
@@ -643,6 +649,15 @@ function processOrder(data) {
     var lr = sheet.getLastRow();
     applyStatusColor(sheet, lr, '緊急承認済');
     sendUrgentEmail(data, os, uniqueId);
+  } else if (noApproverSelected && ORDER_AUTHORITY.indexOf(data.orderer) !== -1) {
+    // ★ 2026-06-17: 発注権限者が承認者を選ばず送信 → 承認不要。自動で承認済 + 発注依頼を発注者へ
+    var sheetA = ss.getSheetByName(INDEX_SHEET);
+    var lrA = sheetA.getLastRow();
+    applyStatusColor(sheetA, lrA, '承認済');
+    sheetA.getRange(lrA, 10).setValue('承認不要(発注権限)');  // J列(10)=承認者欄に明記
+    if (!data.skipPurchaserNotify) {
+      try { notifyPurchaser(uniqueId, data.orderNo, data.supplier, data.orderer, data.total, sheetUrl); } catch(e) { Logger.log('発注依頼通知エラー(発注権限): ' + e.toString()); }
+    }
   } else {
     sendApprovalEmail(data, os, uniqueId);
   }

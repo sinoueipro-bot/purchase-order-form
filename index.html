@@ -440,12 +440,13 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge">必須</span>発注依頼者</div>
-    <select id="orderer" required onchange="validate()"><option value="">選択してください</option></select>
+    <select id="orderer" required onchange="updateIrregularUI(); validate()"><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge" id="approverReqBadge">必須</span>承認者</div>
     <select id="approver" required onchange="validate()"><option value="">選択してください</option></select>
     <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">💼「自己発注（承認不要）」で出す場合は、承認者は未選択のままでOKです</div>
+    <div id="authorityNote" style="display:none;font-size:11px;color:#137333;margin-top:4px;font-weight:600">🔑 発注権限者のため承認は任意です。空欄で送ると自動で「承認済」になり、選んだ発注者へ発注依頼が飛びます。</div>
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge" id="orderPersonReqBadge">必須</span>発注者</div>
@@ -703,6 +704,8 @@ const ORDER_PERSONS = APPROVERS.concat([
   { name: '眞鍋', email: 'manabe@i-pro.co.jp' },
   { name: '辻塚', email: 'tsujitsuka@i-pro.co.jp' }
 ]);
+// ★ 発注権限保持者 (2026-06-17): 発注依頼者がこの5人なら承認者を任意化(空欄で承認スキップ=自動承認済+発注依頼)。★ Code.gs の ORDER_AUTHORITY と一致
+const ORDER_AUTHORITY = ['辻塚','原田部長','眞鍋','岩﨑','亀谷常務'];
 const FORM_TYPES = [
   { value: 'U', label: 'その他' },
   { value: 'M', label: 'M' }
@@ -2324,8 +2327,9 @@ function getValidationErrors(opts) {
   });
   if (!document.getElementById('orderer').value) e.push('発注依頼者');
   var ir = document.getElementById('irregularType')?.value || '';
-  // 承認スキップ(②)・自己発注(③) は承認をスキップするため承認者を必須にしない
-  var skipApprover = (ir === '2' || ir === '3') || (opts && opts.skipApprover);
+  // 承認スキップ(②)・自己発注(③)・発注権限者 は承認者を必須にしない
+  var isAuthority = ORDER_AUTHORITY.indexOf(document.getElementById('orderer').value) !== -1;
+  var skipApprover = (ir === '2' || ir === '3') || isAuthority || (opts && opts.skipApprover);
   if (!skipApprover && !document.getElementById('approver').value) e.push('承認者');
   // 発注依頼不要(①) は発注業務がないため発注者を必須にしない
   if (ir !== '1' && !document.getElementById('orderPerson').value) e.push('発注者');
@@ -2339,12 +2343,15 @@ function updateIrregularUI() {
   var opBadge = document.getElementById('orderPersonReqBadge');
   if (opSel) { if (ir === '1') opSel.removeAttribute('required'); else opSel.setAttribute('required', ''); }
   if (opBadge) opBadge.style.display = (ir === '1') ? 'none' : '';
-  // 承認者: 承認スキップ(②)・自己発注(③)のとき任意
+  // 承認者: 承認スキップ(②)・自己発注(③)・発注権限者のとき任意
+  var isAuthority = ORDER_AUTHORITY.indexOf(document.getElementById('orderer')?.value || '') !== -1;
   var apSel = document.getElementById('approver');
   var apBadge = document.getElementById('approverReqBadge');
-  var apOpt = (ir === '2' || ir === '3');
+  var apOpt = (ir === '2' || ir === '3') || isAuthority;
   if (apSel) { if (apOpt) apSel.removeAttribute('required'); else apSel.setAttribute('required', ''); }
   if (apBadge) apBadge.style.display = apOpt ? 'none' : '';
+  var authNote = document.getElementById('authorityNote');
+  if (authNote) authNote.style.display = (isAuthority && ir !== '2' && ir !== '3') ? '' : 'none';
   // 送信ボタンのラベル・色 + ヒント文
   var lbl = document.getElementById('btnSubmitLabel');
   var hint = document.getElementById('irregularHint');
@@ -2438,12 +2445,15 @@ function showPreview() {
       (l.model||'-') + '</td><td>' + l.qty + '</td><td>&yen;' +
       l.price.toLocaleString() + '</td><td>&yen;' + l.amount.toLocaleString() + '</td><td>' + ((FORM_TYPES.find(t => t.value === l.type) || {}).label || l.type) + '</td></tr>';
   });
-  document.getElementById('previewTitle').textContent = data.selfOrder ? '⚠️ 自己発注の最終確認' : (data.urgent ? '⚠️ 承認スキップ・即発注の最終確認' : '⚠️ 発注書送信の最終確認');
+  var _isAuthSkip = (typeof ORDER_AUTHORITY !== 'undefined') && ORDER_AUTHORITY.indexOf(data.orderer) !== -1 && !data.approverEmail && !data.selfOrder && !data.urgent;
+  document.getElementById('previewTitle').textContent = data.selfOrder ? '⚠️ 自己発注の最終確認' : (data.urgent ? '⚠️ 承認スキップ・即発注の最終確認' : (_isAuthSkip ? '⚠️ 承認不要（発注権限）の最終確認' : '⚠️ 発注書送信の最終確認'));
   document.getElementById('previewWarn').innerHTML = data.selfOrder
     ? '💼 自己発注します（承認スキップ・即発注扱い）<br><strong>メールは一切送信されません</strong>'
     : (data.urgent
       ? '⚡ 緊急：承認をスキップして即発注します<br>承認者・発注者・事務員へ緊急メールが送信されます'
-      : '📧 承認者へメールが送信されます<br>送信先: <strong>' + data.approverEmail + '</strong>');
+      : (_isAuthSkip
+        ? '🔑 発注権限者：承認なしで送信します<br>自動で「承認済」になり、選んだ発注者へ発注依頼が送信されます'
+        : '📧 承認者へメールが送信されます<br>送信先: <strong>' + data.approverEmail + '</strong>'));
   document.getElementById('previewContent').innerHTML =
     '<table class="preview-table">' +
     '<tr><th>発行日</th><td>' + data.issueDate + '</td></tr>' +
@@ -2456,8 +2466,8 @@ function showPreview() {
     (data.siteName ? '<tr><th>現場名</th><td>' + data.siteName + '</td></tr>' : '') +
     (data.notes ? '<tr><th>特記</th><td>' + data.notes + '</td></tr>' : '') +
     '<tr><th>発注依頼者</th><td>' + data.orderer + '</td></tr>' +
-    '<tr><th>状態</th><td>' + (data.selfOrder ? '<span style="color:#6a1b9a;font-weight:bold">自己発注</span>' : (data.urgent ? '<span style="color:red;font-weight:bold">緊急</span>' : 'PASS')) + '</td></tr>' +
-    '<tr><th>承認者</th><td>' + data.approverName + '</td></tr></table>';
+    '<tr><th>状態</th><td>' + (data.selfOrder ? '<span style="color:#6a1b9a;font-weight:bold">自己発注</span>' : (data.urgent ? '<span style="color:red;font-weight:bold">緊急</span>' : (_isAuthSkip ? '<span style="color:#137333;font-weight:bold">承認不要(発注権限)</span>' : 'PASS'))) + '</td></tr>' +
+    '<tr><th>承認者</th><td>' + (_isAuthSkip ? '承認不要(発注権限)' : data.approverName) + '</td></tr></table>';
   document.getElementById('btnConfirm').textContent = 'この内容で送信する';
   document.getElementById('btnConfirm').style.background = 'var(--success)';
   document.getElementById('btnConfirm').disabled = false;
