@@ -363,12 +363,12 @@ textarea { resize: vertical; min-height: 60px; }
     <input type="text" id="supplier-custom" placeholder="仕入先を自由入力" oninput="validate()" style="display:none;margin-top:6px">
   </div>
   <div class="field-group">
-    <div class="field-label"><span class="required-badge">必須</span>事業所</div>
+    <div class="field-label"><span class="required-badge">必須</span>請求先</div>
     <select id="branch" required><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
-    <div class="field-label">件名</div>
-    <input type="text" id="siteName" placeholder="件名を入力（例: 亀谷様邸）">
+    <div class="field-label">現場名</div>
+    <input type="text" id="siteName" placeholder="現場名を入力（例: 亀谷様邸）">
   </div>
   <div class="field-group">
     <div class="row">
@@ -377,8 +377,8 @@ textarea { resize: vertical; min-height: 60px; }
         <input type="date" id="deliveryDate" placeholder="納期">
       </div>
       <div>
-        <div class="field-label">納品先</div>
-        <input type="text" id="deliveryPlace" placeholder="納品先（例: 現場・本社など）">
+        <div class="field-label">納入先</div>
+        <input type="text" id="deliveryPlace" placeholder="納入先（例: 現場・本社など）">
       </div>
     </div>
   </div>
@@ -424,7 +424,7 @@ textarea { resize: vertical; min-height: 60px; }
 <div class="wizard-step-view" data-po-step="3">
 <div class="step-title">
   <h2>✅ 送信先を選んで確認</h2>
-  <p>発注依頼者・承認者を選び、内容を確認してください</p>
+  <p>システム入力者・承認者を選び、内容を確認してください</p>
 </div>
 <div class="section">
   <div class="section-title">送信先</div>
@@ -439,7 +439,7 @@ textarea { resize: vertical; min-height: 60px; }
     <div id="irregularHint" style="font-size:11px;color:var(--text-secondary);margin-top:4px"></div>
   </div>
   <div class="field-group">
-    <div class="field-label"><span class="required-badge">必須</span>発注依頼者</div>
+    <div class="field-label"><span class="required-badge">必須</span>システム入力者</div>
     <select id="orderer" required onchange="updateIrregularUI(); validate()"><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
@@ -488,8 +488,7 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
 
   <div class="success-links">
-    <a id="linkSpreadsheet" class="link-spreadsheet" href="#" target="_blank">📊 スプレッドシートを開く</a>
-    <a id="linkEditSheet" class="link-edit" href="#" onclick="switchTab('list'); return false;">📋 一覧で確認</a>
+    <a id="linkSpreadsheet" class="link-spreadsheet" href="#" target="_blank">📄 作成した発注書を見る</a>
     <a id="linkPdf" class="link-edit" href="#" onclick="downloadPdfById(document.getElementById('successMessage').dataset.id||'', 'order', '発注_'+(document.getElementById('successMessage').dataset.no||'')); return false;" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;cursor:pointer">📥 PDFダウンロード</a>
   </div>
   <button class="btn-new" onclick="resetForm()">新しい発注書を作成</button>
@@ -520,11 +519,17 @@ textarea { resize: vertical; min-height: 60px; }
         <div style="font-size:13px;font-weight:700;color:var(--primary);margin-top:2px">承認者用</div>
         <div style="font-size:10px;color:var(--text-secondary);margin-top:1px">申請中のみ表示</div>
       </button>
-      <button type="button" id="rolePurchaserBtn" onclick="setRoleFilter('purchaser')"
-        style="flex:1;padding:14px 10px;border-radius:10px;border:2px solid var(--border);background:#e6f4ea;cursor:pointer;font-family:inherit;text-align:center;transition:all 0.15s">
-        <div style="font-size:22px;line-height:1">👷</div>
-        <div style="font-size:13px;font-weight:700;color:var(--success);margin-top:2px">発注担当用</div>
-        <div style="font-size:10px;color:var(--text-secondary);margin-top:1px">承認済のみ表示</div>
+      <button type="button" id="rolePurchaserHonshaBtn" onclick="setRoleFilter('purchaser_honsha')"
+        style="flex:1;padding:14px 6px;border-radius:10px;border:2px solid var(--border);background:#e6f4ea;cursor:pointer;font-family:inherit;text-align:center;transition:all 0.15s">
+        <div style="font-size:20px;line-height:1">🏢</div>
+        <div style="font-size:12px;font-weight:700;color:var(--success);margin-top:2px">本社発注担当用</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:1px">本社の承認済</div>
+      </button>
+      <button type="button" id="rolePurchaserFukuokaBtn" onclick="setRoleFilter('purchaser_fukuoka')"
+        style="flex:1;padding:14px 6px;border-radius:10px;border:2px solid var(--border);background:#e6f4ea;cursor:pointer;font-family:inherit;text-align:center;transition:all 0.15s">
+        <div style="font-size:20px;line-height:1">🏬</div>
+        <div style="font-size:12px;font-weight:700;color:var(--success);margin-top:2px">福岡発注担当用</div>
+        <div style="font-size:10px;color:var(--text-secondary);margin-top:1px">福岡店の承認済</div>
       </button>
     </div>
     <!-- 絞込中バナー -->
@@ -702,7 +707,8 @@ const APPROVERS = [
 // 発注者ドロップダウンの選択肢 = 承認者4名 + 事務員 眞鍋/辻塚 (2026-06-03)
 const ORDER_PERSONS = APPROVERS.concat([
   { name: '眞鍋', email: 'manabe@i-pro.co.jp' },
-  { name: '辻塚', email: 'tsujitsuka@i-pro.co.jp' }
+  { name: '辻塚', email: 'tsujitsuka@i-pro.co.jp' },
+  { name: '三井', email: 'mitsui@i-pro.co.jp' }
 ]);
 // ★ 発注権限保持者 (2026-06-17): 発注依頼者がこの5人なら承認者を任意化(空欄で承認スキップ=自動承認済+発注依頼)。★ Code.gs の ORDER_AUTHORITY と一致
 const ORDER_AUTHORITY = ['辻塚','原田部長','眞鍋','岩﨑','亀谷常務'];
@@ -857,7 +863,7 @@ function poWizardNext() {
     const errs = [];
     if (!document.getElementById('issueDate').value) errs.push('発行日');
     if (!getSupplierValue()) errs.push('仕入先');
-    if (!document.getElementById('branch').value) errs.push('事業所');
+    if (!document.getElementById('branch').value) errs.push('請求先');
     if (errs.length > 0) {
       showToast('⚠️ 未入力: ' + errs.join(', '), 'error');
       return;
@@ -885,13 +891,13 @@ function focusFirstPoError() {
   const errs = getValidationErrors();
   if (errs.length === 0) return;
   const first = errs[0];
-  const idMap = { '発行日':'issueDate','注文No.':'orderNo','仕入先':'supplier','事業所':'branch','注文者':'orderer','承認者':'approver','発注者':'orderPerson' };
+  const idMap = { '発行日':'issueDate','注文No.':'orderNo','仕入先':'supplier','請求先':'branch','システム入力者':'orderer','承認者':'approver','発注者':'orderPerson' };
   if (idMap[first]) {
     const el = document.getElementById(idMap[first]);
     if (el) { el.scrollIntoView({behavior:'smooth', block:'center'}); el.focus(); }
     // 適切なステップに移動
-    if (['発行日','注文No.','仕入先','事業所'].indexOf(first) !== -1) goToPoWizardStep(1);
-    else if (['注文者','承認者','発注者'].indexOf(first) !== -1) goToPoWizardStep(3);
+    if (['発行日','注文No.','仕入先','請求先'].indexOf(first) !== -1) goToPoWizardStep(1);
+    else if (['システム入力者','承認者','発注者'].indexOf(first) !== -1) goToPoWizardStep(3);
   } else if (first.indexOf('明細') === 0) {
     goToPoWizardStep(2);
   }
@@ -904,7 +910,7 @@ function renderPoConfirm() {
     '<div><strong>発行日:</strong> ' + data.issueDate + '</div>' +
     '<div><strong>注文No.:</strong> ' + data.orderNo + '</div>' +
     '<div><strong>仕入先:</strong> ' + (data.supplier || '-') + '</div>' +
-    '<div><strong>事業所:</strong> ' + data.branch + '</div>' +
+    '<div><strong>請求先:</strong> ' + data.branch + '</div>' +
     (data.siteName ? '<div><strong>現場:</strong> ' + data.siteName + '</div>' : '') +
     '</div>';
 
@@ -927,7 +933,7 @@ function renderPoConfirm() {
 
   const approverName = APPROVERS.find(a => a.email === data.approverEmail)?.name || '-';
   html += '<div style="margin-top:10px;font-size:13px">' +
-    '<div><strong>発注依頼者:</strong>' + (data.orderer || '-') + '</div>' +
+    '<div><strong>システム入力者:</strong>' + (data.orderer || '-') + '</div>' +
     '<div><strong>承認者:</strong> ' + approverName + '</div>' +
     '<div><strong>発注者:</strong> ' + (data.orderPersonName || '-') + '</div>' +
     '<div><strong>状態:</strong> ' + (data.urgent ? '<span style="color:var(--danger);font-weight:700">🔴 緊急（即発注）</span>' : 'PASS（通常承認）') + '</div>' +
@@ -1358,7 +1364,7 @@ function _legacy_resetEstForm() {
 let _estListCache = [];
 let _orderListCache = [];
 let _listFilter = 'all';  // 'all' | 'estimate' | 'order'
-let _roleFilter = 'none'; // 'none' | 'approver' (申請中) | 'purchaser' (承認済) | 'pending_transfer' (未発注見積=作成済のみ)
+let _roleFilter = 'none'; // 'none' | 'approver'(申請中) | 'purchaser_honsha'(本社の承認済) | 'purchaser_fukuoka'(福岡店の承認済)
 
 // スプシID（PDF URL組立用）
 const SS_ID = '1l2eJD1SSJY7s0Y8GW4l-x4F7dLnOvwQJ1ieDn5GFj9s';
@@ -1567,13 +1573,15 @@ function renderOrderListArea() {
   const sectionTitle = document.querySelector('#orderListSection .section-title');
   if (sectionTitle) {
     if (_roleFilter === 'approver') sectionTitle.innerHTML = '⏳ 承認待ち発注書 <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">(' + filtered.length + '件)</span>';
-    else if (_roleFilter === 'purchaser') sectionTitle.innerHTML = '✅ 発注すべき発注書(承認済) <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">(' + filtered.length + '件)</span>';
+    else if (_roleFilter === 'purchaser_honsha') sectionTitle.innerHTML = '🏢 本社で発注すべき発注書(承認済) <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">(' + filtered.length + '件)</span>';
+    else if (_roleFilter === 'purchaser_fukuoka') sectionTitle.innerHTML = '🏬 福岡で発注すべき発注書(承認済) <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">(' + filtered.length + '件)</span>';
     else sectionTitle.innerHTML = '📦 発注一覧 <span style="font-size:12px;font-weight:400;color:var(--text-secondary)">(' + filtered.length + '件)</span>';
   }
 
   if (filtered.length === 0) {
     const roleLabel = _roleFilter === 'approver' ? '（承認待ちの発注はありません）' :
-                       _roleFilter === 'purchaser' ? '（承認済の発注はありません）' : '';
+                       _roleFilter === 'purchaser_honsha' ? '（本社の承認済発注はありません）' :
+                       _roleFilter === 'purchaser_fukuoka' ? '（福岡店の承認済発注はありません）' : '';
     area.innerHTML = '<p style="color:var(--text-secondary);font-size:14px;text-align:center;padding:20px">' + (q ? '該当なし' : ('発注書がありません' + roleLabel)) + '</p>';
     return;
   }
@@ -1595,7 +1603,7 @@ function renderOrderListArea() {
       '<div class="est-header"><span class="est-no" style="color:var(--primary)">' + (o.orderNo || '-') + '</span>' +
       '<span class="est-status" style="' + statusColor + '">' + st + (o.urgent === '緊急' ? ' 🔴' : '') + '</span></div>' +
       '<div class="est-detail">' + (o.supplier || '') + (o.siteName ? ' / ' + o.siteName : '') + '</div>' +
-      '<div class="est-detail">' + formatDate(o.issueDate) + ' / 発注依頼者: ' + (o.orderer || '') + ' / 承認: ' + (o.approverName || '-') + '</div>' +
+      '<div class="est-detail">' + formatDate(o.issueDate) + ' / システム入力者: ' + (o.orderer || '') + ' / 承認: ' + (o.approverName || '-') + '</div>' +
       '<div class="est-amount">¥' + Number(o.total || 0).toLocaleString() + '</div>' +
       '<div class="est-actions" style="flex-wrap:wrap">' +
       '<button class="btn-view" onclick="openEditModal(\'order\',\'' + o.id + '\')">📝 ' + (st === '申請中' ? '編集' : '詳細') + '</button>' +
@@ -1651,45 +1659,31 @@ function setRoleFilter(role) {
 
 function updateRoleFilterUI() {
   const apBtn = document.getElementById('roleApproverBtn');
-  const puBtn = document.getElementById('rolePurchaserBtn');
+  const honBtn = document.getElementById('rolePurchaserHonshaBtn');
+  const fukBtn = document.getElementById('rolePurchaserFukuokaBtn');
   const banner = document.getElementById('filterBanner');
-
-  // 承認者用ボタン
-  if (apBtn) {
-    const active = _roleFilter === 'approver';
-    apBtn.style.background = active ? 'var(--primary)' : '#e8f0fe';
-    apBtn.style.borderColor = active ? 'var(--primary)' : 'var(--border)';
-    apBtn.style.boxShadow = active ? '0 4px 10px rgba(26,115,232,0.3)' : 'none';
-    const divs = apBtn.querySelectorAll('div');
-    if (divs[1]) divs[1].style.color = active ? 'white' : 'var(--primary)';
+  const styleBtn = (btn, active, accent, idleBg) => {
+    if (!btn) return;
+    btn.style.background = active ? accent : idleBg;
+    btn.style.borderColor = active ? accent : 'var(--border)';
+    btn.style.boxShadow = active ? '0 4px 10px rgba(0,0,0,0.18)' : 'none';
+    const divs = btn.querySelectorAll('div');
+    if (divs[1]) divs[1].style.color = active ? 'white' : accent;
     if (divs[2]) divs[2].style.color = active ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)';
-  }
-  // 発注担当用ボタン
-  if (puBtn) {
-    const active = _roleFilter === 'purchaser';
-    puBtn.style.background = active ? 'var(--success)' : '#e6f4ea';
-    puBtn.style.borderColor = active ? 'var(--success)' : 'var(--border)';
-    puBtn.style.boxShadow = active ? '0 4px 10px rgba(15,157,88,0.3)' : 'none';
-    const divs = puBtn.querySelectorAll('div');
-    if (divs[1]) divs[1].style.color = active ? 'white' : 'var(--success)';
-    if (divs[2]) divs[2].style.color = active ? 'rgba(255,255,255,0.85)' : 'var(--text-secondary)';
-  }
-  // 絞込中バナー
+  };
+  styleBtn(apBtn, _roleFilter === 'approver', 'var(--primary)', '#e8f0fe');
+  styleBtn(honBtn, _roleFilter === 'purchaser_honsha', 'var(--success)', '#e6f4ea');
+  styleBtn(fukBtn, _roleFilter === 'purchaser_fukuoka', 'var(--success)', '#e6f4ea');
   if (banner) {
     if (_roleFilter === 'approver') {
       const cnt = _orderListCache.filter(o => o.status === '申請中').length;
-      banner.style.display = 'block';
-      banner.style.background = '#fef7e0';
-      banner.style.color = '#b06000';
-      banner.style.border = '1.5px solid #f9ab00';
+      banner.style.display = 'block'; banner.style.background = '#fef7e0'; banner.style.color = '#b06000'; banner.style.border = '1.5px solid #f9ab00';
       banner.innerHTML = '⏳ 承認待ち <strong>' + cnt + '件</strong> を表示中 　<span style="font-weight:400;font-size:12px">（タップで解除）</span>';
-    } else if (_roleFilter === 'purchaser') {
-      const cnt = _orderListCache.filter(o => o.status === '承認済' || o.status === '緊急承認済').length;
-      banner.style.display = 'block';
-      banner.style.background = '#e6f4ea';
-      banner.style.color = '#137333';
-      banner.style.border = '1.5px solid var(--success)';
-      banner.innerHTML = '✅ 承認済(発注すべき) <strong>' + cnt + '件</strong> を表示中 　<span style="font-weight:400;font-size:12px">（タップで解除）</span>';
+    } else if (_roleFilter === 'purchaser_honsha' || _roleFilter === 'purchaser_fukuoka') {
+      const br = _roleFilter === 'purchaser_honsha' ? '本社' : '福岡店';
+      const cnt = _orderListCache.filter(o => (o.status === '承認済' || o.status === '緊急承認済') && o.branch === br).length;
+      banner.style.display = 'block'; banner.style.background = '#e6f4ea'; banner.style.color = '#137333'; banner.style.border = '1.5px solid var(--success)';
+      banner.innerHTML = '✅ ' + br + ' の承認済(発注すべき) <strong>' + cnt + '件</strong> を表示中 　<span style="font-weight:400;font-size:12px">（タップで解除）</span>';
     } else {
       banner.style.display = 'none';
     }
@@ -1704,11 +1698,10 @@ function applyListFilter() {
 
 // 役割フィルタの適用
 function applyRoleFilter(orders) {
-  if (_roleFilter === 'approver') {
-    return orders.filter(o => o.status === '申請中');
-  } else if (_roleFilter === 'purchaser') {
-    return orders.filter(o => o.status === '承認済' || o.status === '緊急承認済');
-  }
+  const isApproved = o => (o.status === '承認済' || o.status === '緊急承認済');
+  if (_roleFilter === 'approver') return orders.filter(o => o.status === '申請中');
+  if (_roleFilter === 'purchaser_honsha') return orders.filter(o => isApproved(o) && o.branch === '本社');
+  if (_roleFilter === 'purchaser_fukuoka') return orders.filter(o => isApproved(o) && o.branch === '福岡店');
   return orders;
 }
 
@@ -1720,7 +1713,8 @@ function updateResultCount() {
   const oN = oFiltered.length;
   let prefix = '';
   if (_roleFilter === 'approver') prefix = '👔 承認待ち: ';
-  else if (_roleFilter === 'purchaser') prefix = '👷 承認済(発注すべき): ';
+  else if (_roleFilter === 'purchaser_honsha') prefix = '🏢 本社の承認済(発注すべき): ';
+  else if (_roleFilter === 'purchaser_fukuoka') prefix = '🏬 福岡の承認済(発注すべき): ';
   if (q) el.textContent = prefix + '🔍「' + q + '」 発注' + oN + '件';
   else el.textContent = prefix + '発注' + oN + '件';
 }
@@ -2314,7 +2308,7 @@ function getValidationErrors(opts) {
   const e = [];
   if (!document.getElementById('issueDate').value) e.push('発行日');
   if (!getSupplierValue()) e.push('仕入先');
-  if (!document.getElementById('branch').value) e.push('事業所');
+  if (!document.getElementById('branch').value) e.push('請求先');
   const lines = document.querySelectorAll('#lineItems .line-item');
   if (lines.length === 0) e.push('明細行');
   lines.forEach(item => {
@@ -2325,7 +2319,7 @@ function getValidationErrors(opts) {
     // 単価は任意（事務員が後で手書き記入するケースに対応）。バリデーション対象外
     if (!document.getElementById('type-' + n)?.value) e.push('明細' + n + ':形態');
   });
-  if (!document.getElementById('orderer').value) e.push('発注依頼者');
+  if (!document.getElementById('orderer').value) e.push('システム入力者');
   var ir = document.getElementById('irregularType')?.value || '';
   // 承認スキップ(②)・自己発注(③)・発注権限者 は承認者を必須にしない
   var isAuthority = ORDER_AUTHORITY.indexOf(document.getElementById('orderer').value) !== -1;
@@ -2459,13 +2453,13 @@ function showPreview() {
     '<tr><th>発行日</th><td>' + data.issueDate + '</td></tr>' +
     '<tr><th>注文No.</th><td>' + data.orderNo + '</td></tr>' +
     '<tr><th>仕入先</th><td>' + data.supplier + '</td></tr>' +
-    '<tr><th>事業所</th><td>' + data.branch + '</td></tr></table>' +
+    '<tr><th>請求先</th><td>' + data.branch + '</td></tr></table>' +
     '<table class="preview-detail-table"><thead><tr><th>No</th><th>メーカー</th><th>商品名</th><th>型式</th><th>数量</th><th>単価</th><th>金額</th><th>形態</th></tr></thead><tbody>' + rows + '</tbody></table>' +
     '<div class="preview-total">合計: &yen;' + data.total.toLocaleString() + '</div>' +
     '<table class="preview-table">' +
     (data.siteName ? '<tr><th>現場名</th><td>' + data.siteName + '</td></tr>' : '') +
     (data.notes ? '<tr><th>特記</th><td>' + data.notes + '</td></tr>' : '') +
-    '<tr><th>発注依頼者</th><td>' + data.orderer + '</td></tr>' +
+    '<tr><th>システム入力者</th><td>' + data.orderer + '</td></tr>' +
     '<tr><th>状態</th><td>' + (data.selfOrder ? '<span style="color:#6a1b9a;font-weight:bold">自己発注</span>' : (data.urgent ? '<span style="color:red;font-weight:bold">緊急</span>' : (_isAuthSkip ? '<span style="color:#137333;font-weight:bold">承認不要(発注権限)</span>' : 'PASS'))) + '</td></tr>' +
     '<tr><th>承認者</th><td>' + (_isAuthSkip ? '承認不要(発注権限)' : data.approverName) + '</td></tr></table>';
   document.getElementById('btnConfirm').textContent = 'この内容で送信する';
@@ -2517,14 +2511,14 @@ async function executeSend() {
       const pprog = document.getElementById('poWizardProgress');
       if (pprog) pprog.style.display = 'none';
       document.getElementById('successScreen').classList.add('show');
+      var _finalNo = result.orderNo || data.orderNo;
       document.getElementById('successMessage').textContent = data.selfOrder
-        ? '【自己発注】注文No.' + data.orderNo + ' を登録しました（承認スキップ・即発注扱い／メール送信なし）。'
+        ? '【自己発注】注文No.' + _finalNo + ' を登録しました（承認スキップ・即発注扱い／メール送信なし）。'
         : (data.urgent
-          ? '【緊急】注文No.' + data.orderNo + ' を登録し、即発注扱いです。'
-          : '注文No.' + data.orderNo + ' をスプレッドシートに記録し、承認依頼メールを送信しました。');
+          ? '【緊急】注文No.' + _finalNo + ' を登録し、即発注扱いです。'
+          : '注文No.' + _finalNo + ' をスプレッドシートに記録し、承認依頼メールを送信しました。');
       document.getElementById('linkSpreadsheet').href = result.sheetUrl || result.spreadsheetUrl || '#';
-      // linkEditSheet は onclick で switchTab('list') を呼ぶ（hrefは未使用）
-      document.getElementById('successMessage').dataset.no = data.orderNo || '';
+      document.getElementById('successMessage').dataset.no = _finalNo || '';
       document.getElementById('successMessage').dataset.id = result.orderId || result.id || '';
       // linkPdf は onclick で downloadPdfById を呼ぶ
       // 60秒以内の取消パネルを起動

@@ -87,7 +87,8 @@ var ORDER_PERSON_EMAILS = {
   '亀谷常務': 'kametani@i-pro.co.jp',
   '井上将吾': 's.inoue.ipro@gmail.com',
   '眞鍋': 'manabe@i-pro.co.jp',
-  '辻塚': 'tsujitsuka@i-pro.co.jp'
+  '辻塚': 'tsujitsuka@i-pro.co.jp',
+  '三井': 'mitsui@i-pro.co.jp'
 };
 
 // ★ 発注権限保持者 (2026-06-17): この5人が発注依頼者なら承認フロー不要。
@@ -598,9 +599,30 @@ function resultPage(title, body, color, ssUrl) {
     '<div style="border:1px solid #ddd;border-top:none;padding:24px;border-radius:0 0 8px 8px"><p>'+body+'</p>'+link+'</div></div>';
 }
 
+// ★ 2026-06-18: 注文Noを当日内でユニークに採番。提出Noの日付8桁を接頭辞に既存最大連番+1を返す。
+function _nextUniqueOrderNo(ss, submittedNo) {
+  var prefix = String(submittedNo || '').replace(/[^0-9]/g, '').slice(0, 8);
+  if (prefix.length < 8) prefix = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd');
+  var s = ss.getSheetByName(INDEX_SHEET);
+  var maxSeq = 0;
+  if (s && s.getLastRow() > 1) {
+    var col = s.getRange(2, 2, s.getLastRow() - 1, 1).getValues();  // B列=注文No
+    for (var i = 0; i < col.length; i++) {
+      var v = String(col[i][0] || '');
+      if (v.indexOf(prefix) === 0) {
+        var seq = parseInt(v.slice(prefix.length), 10);
+        if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+      }
+    }
+  }
+  return prefix + String(maxSeq + 1).padStart(3, '0');
+}
+
 // ============ 発注処理 ============
 function processOrder(data) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // ★ 2026-06-18: 注文Noを当日内でユニークに採番(同日2件目→...002)。フロントの暫定001を上書き
+  data.orderNo = _nextUniqueOrderNo(ss, data.orderNo);
   var tabName = data.issueDate.replace(/-/g,'') + '_' + data.orderer;
   if (data.siteName) tabName += '_' + data.siteName;
 
