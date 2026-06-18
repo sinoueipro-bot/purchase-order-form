@@ -401,7 +401,7 @@ textarea { resize: vertical; min-height: 60px; }
 <div class="section">
   <div class="section-title">注文明細</div>
   <div id="lineItems"></div>
-  <button type="button" class="btn-add-line" onclick="addLineItem()">+ 行を追加</button>
+  <button type="button" class="btn-add-line" onclick="addLineItem()">+ 注文商品を追加する</button>
 </div>
 <div class="total-bar">
   <span class="label">合計金額</span>
@@ -704,12 +704,17 @@ const APPROVERS = [
   { name: '亀谷常務', email: 'kametani@i-pro.co.jp' },
   { name: '井上将吾', email: 's.inoue.ipro@gmail.com' }
 ];
-// 発注者ドロップダウンの選択肢 = 承認者4名 + 事務員 眞鍋/辻塚 (2026-06-03)
-const ORDER_PERSONS = APPROVERS.concat([
-  { name: '眞鍋', email: 'manabe@i-pro.co.jp' },
-  { name: '辻塚', email: 'tsujitsuka@i-pro.co.jp' },
-  { name: '三井', email: 'mitsui@i-pro.co.jp' }
-]);
+// 名前→メアド対応表。★ Code.gs STAFF_EMAILS と必ず同一の顔ぶれ・メアドで維持すること
+const STAFF_EMAILS = {
+  '眞鍋': 'manabe@i-pro.co.jp', '松永': 'ipro_ip02@icloud.com', '中嶋': 'nakashima@i-pro.co.jp',
+  '川上': 'kawakami@i-pro.co.jp', '入江': 'ipro_ip06@icloud.com', '川口': 'ipro_ip04@icloud.com',
+  '辻塚': 'tsujitsuka@i-pro.co.jp', '三浦': 'ipro_ip03@icloud.com', '三井': 'mitsui@i-pro.co.jp',
+  '渡邊': 'ipro_ip05@icloud.com', '久我': 'kuga@i-pro.co.jp', '岩﨑': 'ipro_ip07@icloud.com',
+  '𦚰村': 'ipro_ip08@icloud.com', '原田部長': 'harada@i-pro.co.jp', '亀谷常務': 'kametani@i-pro.co.jp',
+  '井上将吾': 's.inoue.ipro@gmail.com'
+};
+// 発注者ドロップダウンの選択肢 = 全16名(=STAFF全員)。自分で発注することがあるため全員選べる (2026-06-18)
+const ORDER_PERSONS = STAFF.map(n => ({ name: n, email: STAFF_EMAILS[n] || '' }));
 // ★ 発注権限保持者 (2026-06-17): 発注依頼者がこの5人なら承認者を任意化(空欄で承認スキップ=自動承認済+発注依頼)。★ Code.gs の ORDER_AUTHORITY と一致
 const ORDER_AUTHORITY = ['辻塚','原田部長','眞鍋','岩﨑','亀谷常務'];
 const FORM_TYPES = [
@@ -2195,8 +2200,8 @@ function addLineItem() {
   d.innerHTML = '<div class="line-item-header"><span class="line-item-num">No.' + num + '</span>' +
     (num > 1 ? '<button type="button" class="btn-remove-line" onclick="removeLineItem(' + num + ')">&times;</button>' : '') +
     '</div>' +
-    '<div class="row"><div><div class="field-label"><span class="required-badge">必須</span>メーカー</div>' +
-    '<input type="text" id="maker-' + num + '" list="makerList" placeholder="メーカー" oninput="validate()"></div>' +
+    '<div class="row"><div><div class="field-label">メーカー<span style="font-size:10px;color:var(--text-secondary);margin-left:4px">（任意）</span></div>' +
+    '<input type="text" id="maker-' + num + '" list="makerList" placeholder="メーカー（任意）" oninput="validate()"></div>' +
     '<div><div class="field-label"><span class="required-badge">必須</span>形態</div>' +
     '<select id="type-' + num + '" onchange="validate()"><option value="" disabled selected>選択</option>' +
     FORM_TYPES.map(t => '<option value="' + t.value + '">' + t.label + '</option>').join('') + '</select></div></div>' +
@@ -2210,6 +2215,12 @@ function addLineItem() {
     '<div class="amount-display" id="amount-' + num + '">&yen;0</div>' +
     '<div><div class="field-label">備考</div><input type="text" id="remark-' + num + '" placeholder="備考"></div>';
   c.appendChild(d);
+  // 2026-06-18 2行目以降は形態(その他/M)を1行目(最初の明細)から引き継ぐ
+  if (num > 1) {
+    var _firstType = document.querySelector('#lineItems select[id^="type-"]');
+    var _newType = document.getElementById('type-' + num);
+    if (_firstType && _newType && _firstType.value) _newType.value = _firstType.value;
+  }
   validate();
 }
 function removeLineItem(num) {
@@ -2313,7 +2324,7 @@ function getValidationErrors(opts) {
   if (lines.length === 0) e.push('明細行');
   lines.forEach(item => {
     const n = item.id.replace('line-', '');
-    if (!document.getElementById('maker-' + n)?.value) e.push('明細' + n + ':メーカー');
+    // メーカーは任意（2026-06-18 必須解除）。バリデーション対象外
     if (!document.getElementById('product-' + n)?.value) e.push('明細' + n + ':商品名');
     if (!document.getElementById('qty-' + n)?.value) e.push('明細' + n + ':数量');
     // 単価は任意（事務員が後で手書き記入するケースに対応）。バリデーション対象外

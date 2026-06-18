@@ -81,15 +81,9 @@ var STAFF_EMAILS = {
 //   承認後の「発注してください」通知(notifyPurchaser)を、固定の事務員ではなく
 //   申請時に選んだ発注者本人へ届けるためのルーティング表。
 //   ★ index.html の ORDER_PERSONS (発注者ドロップダウン) と必ず同じ顔ぶれで維持すること。
-var ORDER_PERSON_EMAILS = {
-  '原田部長': 'harada@i-pro.co.jp',
-  '岩崎店長': 'iwasaki@i-pro.co.jp',
-  '亀谷常務': 'kametani@i-pro.co.jp',
-  '井上将吾': 's.inoue.ipro@gmail.com',
-  '眞鍋': 'manabe@i-pro.co.jp',
-  '辻塚': 'tsujitsuka@i-pro.co.jp',
-  '三井': 'mitsui@i-pro.co.jp'
-};
+// 2026-06-18 発注者ドロップダウンを全16名(=STAFF)に拡張したため、本人ルーティングも STAFF_EMAILS と同一に統一。
+//   岩崎店長 は旧データ互換のため別名で残置(岩﨑と同一人物)。
+var ORDER_PERSON_EMAILS = Object.assign({}, STAFF_EMAILS, { '岩崎店長': 'iwasaki@i-pro.co.jp' });
 
 // ★ 発注権限保持者 (2026-06-17): この5人が発注依頼者なら承認フロー不要。
 //   承認者を空欄で送信 → 自動で「承認済」+ 発注依頼を発注者へ。★ index.html の ORDER_AUTHORITY と一致させること。
