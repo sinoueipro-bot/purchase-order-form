@@ -2215,11 +2215,14 @@ function addLineItem() {
     '<div class="amount-display" id="amount-' + num + '">&yen;0</div>' +
     '<div><div class="field-label">備考</div><input type="text" id="remark-' + num + '" placeholder="備考"></div>';
   c.appendChild(d);
-  // 2026-06-18 2行目以降は形態(その他/M)を1行目(最初の明細)から引き継ぐ
+  // 2026-06-18 2行目以降は 形態(その他/M) と メーカー名 を1行目(最初の明細)から引き継ぐ
   if (num > 1) {
     var _firstType = document.querySelector('#lineItems select[id^="type-"]');
     var _newType = document.getElementById('type-' + num);
     if (_firstType && _newType && _firstType.value) _newType.value = _firstType.value;
+    var _firstMaker = document.querySelector('#lineItems input[id^="maker-"]');
+    var _newMaker = document.getElementById('maker-' + num);
+    if (_firstMaker && _newMaker && _firstMaker.value) _newMaker.value = _firstMaker.value;
   }
   validate();
 }
