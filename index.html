@@ -378,7 +378,13 @@ textarea { resize: vertical; min-height: 60px; }
       </div>
       <div>
         <div class="field-label">納入先</div>
-        <input type="text" id="deliveryPlace" placeholder="納入先（例: 現場・本社など）">
+        <select id="deliveryPlace" onchange="onDeliveryChange()">
+          <option value="">選択してください</option>
+          <option value="本社">本社</option>
+          <option value="福岡">福岡</option>
+          <option value="__OTHER__">自由記述（手入力）</option>
+        </select>
+        <input type="text" id="deliveryPlace-custom" placeholder="納入先を自由入力（例: 現場・〇〇邸）" oninput="validate()" style="display:none;margin-top:6px">
       </div>
     </div>
   </div>
@@ -2262,6 +2268,23 @@ function getSupplierValue() {
   return sel.value;
 }
 
+// 納入先select切替: 「自由記述」選択時のみ自由入力欄を表示
+function onDeliveryChange() {
+  const sel = document.getElementById('deliveryPlace');
+  const custom = document.getElementById('deliveryPlace-custom');
+  if (!sel || !custom) return;
+  if (sel.value === '__OTHER__') { custom.style.display = ''; custom.focus(); }
+  else { custom.style.display = 'none'; custom.value = ''; }
+  validate();
+}
+// 納入先の実値取得（自由記述なら手入力テキスト、それ以外は選択値）
+function getDeliveryValue() {
+  const sel = document.getElementById('deliveryPlace');
+  if (!sel) return '';
+  if (sel.value === '__OTHER__') return (document.getElementById('deliveryPlace-custom')?.value || '').trim();
+  return sel.value;
+}
+
 // 仕入先を値から自動選択（転記時などに使用）
 function setSupplierValue(val) {
   const sel = document.getElementById('supplier');
@@ -2413,7 +2436,7 @@ function collectFormData() {
     lines, total,
     siteName: document.getElementById('siteName').value,
     deliveryDate: document.getElementById('deliveryDate')?.value || '',
-    deliveryPlace: document.getElementById('deliveryPlace')?.value || '',
+    deliveryPlace: getDeliveryValue(),
     notes: [document.getElementById('notes')?.value || '', document.getElementById('specialNotes')?.value || ''].filter(Boolean).join('\n'),  // 転記マーカー(非表示) + 特記事項(specialNotes) を結合してO列へ（二重発注検知用にマーカー保持）
     specialNotes: document.getElementById('specialNotes')?.value || '',  // ユーザー入力の特記事項のみ（印刷用 発注書C58 はこちらを使う＝マーカー混入させない）
     orderer: document.getElementById('orderer').value,
