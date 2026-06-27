@@ -719,6 +719,13 @@ const STAFF_EMAILS = {
   '𦚰村': 'ipro_ip08@icloud.com', '原田部長': 'harada@i-pro.co.jp', '亀谷常務': 'kametani@i-pro.co.jp',
   '井上将吾': 's.inoue.ipro@gmail.com'
 };
+// ★ 2026-06-27: PC版+スマホ版の2メアドを持つメンバー(発注者選択時に両方へ通知)。★ Code.gs の MULTI_EMAILS と一致させること
+const MULTI_EMAILS = {
+  '原田部長': ['harada@i-pro.co.jp', 'ipro_ip01@icloud.com'],
+  '松永':     ['ipro_ip02@icloud.com', 'matsunaga@i-pro.co.jp'],
+  '三浦':     ['ipro_ip03@icloud.com', 'miura@i-pro.co.jp'],
+  '川口':     ['ipro_ip04@icloud.com', 'kawaguchi@i-pro.co.jp']
+};
 // 発注者ドロップダウンの選択肢 = 全16名(=STAFF全員)。自分で発注することがあるため全員選べる (2026-06-18)
 const ORDER_PERSONS = STAFF.map(n => ({ name: n, email: STAFF_EMAILS[n] || '' }));
 // ★ 発注権限保持者 (2026-06-17): 発注依頼者がこの5人なら承認者を任意化(空欄で承認スキップ=自動承認済+発注依頼)。★ Code.gs の ORDER_AUTHORITY と一致
@@ -980,7 +987,10 @@ function initAllDropdowns() {
   APPROVERS.forEach(a => app.add(new Option(a.name + '（' + a.email + '）', a.email)));
   // 発注者(承認者4名 + 事務員 眞鍋/辻塚) 2026-06-03
   const op = document.getElementById('orderPerson');
-  if (op) ORDER_PERSONS.forEach(a => op.add(new Option(a.name + '（' + a.email + '）', a.email)));
+  if (op) ORDER_PERSONS.forEach(a => {
+    var _ems = ((typeof MULTI_EMAILS !== 'undefined' && MULTI_EMAILS[a.name]) || [a.email]).filter(Boolean).join('・');
+    op.add(new Option(a.name + '（' + _ems + '）', a.email));
+  });
   // 見積書
   fillSelect('estBranch', BRANCHES);
   fillSelect('estStaff', STAFF);
