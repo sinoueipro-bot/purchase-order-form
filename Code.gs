@@ -85,6 +85,20 @@ var STAFF_EMAILS = {
 //   岩崎店長 は旧データ互換のため別名で残置(岩﨑と同一人物)。
 var ORDER_PERSON_EMAILS = Object.assign({}, STAFF_EMAILS, { '岩崎店長': 'iwasaki@i-pro.co.jp' });
 
+// ★ 2026-06-27: PC版+スマホ版の2メアドを持つメンバー。発注者/申請者として選ばれたら【両方】へ通知。
+//   ★ 名前→[全メアド]。STAFF_EMAILS/ORDER_PERSON_EMAILS の単一メアドより優先。追加者はここに足すだけ。
+var MULTI_EMAILS = {
+  '原田部長': ['harada@i-pro.co.jp', 'ipro_ip01@icloud.com'],
+  '松永':     ['ipro_ip02@icloud.com', 'matsunaga@i-pro.co.jp'],
+  '三浦':     ['ipro_ip03@icloud.com', 'miura@i-pro.co.jp'],
+  '川口':     ['ipro_ip04@icloud.com', 'kawaguchi@i-pro.co.jp']
+};
+// 名前(+予備の単一メアド)から通知先メアド配列を返す。MULTI_EMAILS該当者は両方、それ以外は予備1件。
+function _emailsForPerson(name, fallbackEmail) {
+  if (name && MULTI_EMAILS[name] && MULTI_EMAILS[name].length) return MULTI_EMAILS[name].slice();
+  return fallbackEmail ? [fallbackEmail] : [];
+}
+
 // ★ 発注権限保持者 (2026-06-17): この5人が発注依頼者なら承認フロー不要。
 //   承認者を空欄で送信 → 自動で「承認済」+ 発注依頼を発注者へ。★ index.html の ORDER_AUTHORITY と一致させること。
 var ORDER_AUTHORITY = ['辻塚', '原田部長', '眞鍋', '岩﨑', '亀谷常務'];
@@ -1627,7 +1641,7 @@ function sendApprovalEmail(data, os, uniqueId) {
 
   // 承認者 + 発注者(指定時)に送信。重複排除 (2026-05-29)
   var toListA = [approverEmail];
-  if (data.orderPersonEmail && toListA.indexOf(data.orderPersonEmail) === -1) toListA.push(data.orderPersonEmail);
+  _emailsForPerson(data.orderPersonName, data.orderPersonEmail).forEach(function(_e){ if (_e && toListA.indexOf(_e) === -1) toListA.push(_e); });
   MailApp.sendEmail({ to: toListA.join(','), subject: subj, body: '承認: '+approveUrl+'\n却下: '+rejectUrl, htmlBody: hb });
 }
 
@@ -1659,7 +1673,7 @@ function sendUrgentEmail(data, os, uniqueId) {
 
   // 承認者 + 発注者(指定時) + 事務員全員の宛先を統合（重複排除）
   var toList = [approverEmail];
-  if (data.orderPersonEmail && toList.indexOf(data.orderPersonEmail) === -1) toList.push(data.orderPersonEmail);
+  _emailsForPerson(data.orderPersonName, data.orderPersonEmail).forEach(function(_e){ if (_e && toList.indexOf(_e) === -1) toList.push(_e); });
   (JIMUIN_EMAILS || []).forEach(function(em){
     if (em && toList.indexOf(em) === -1) toList.push(em);
   });
@@ -1691,7 +1705,8 @@ function notifyOrderer(id, orderNo, supplier, orderer, total, sheetUrl, status) 
     '</div></div>';
 
   // 2026-06-03: 申請者本人のメアドへ直接送信 (STAFF_EMAILS で名前→メアド解決)。未登録なら従来通り PURCHASER へフォールバック
-  var ordererTo = (STAFF_EMAILS && STAFF_EMAILS[orderer]) ? STAFF_EMAILS[orderer] : PURCHASER.email;
+  var ordererTo = (MULTI_EMAILS[orderer]) ? MULTI_EMAILS[orderer].join(',')
+    : ((STAFF_EMAILS && STAFF_EMAILS[orderer]) ? STAFF_EMAILS[orderer] : PURCHASER.email);
   MailApp.sendEmail({
     to: ordererTo,
     subject: (isApproved ? '【承認通知】' : '【却下通知】') + '申請者: ' + orderer + ' / ' + supplier + ' / ' + orderNo,
@@ -1727,7 +1742,8 @@ function notifyPurchaser(id, orderNo, supplier, orderer, total, sheetUrl) {
       for (var _i = 1; _i < _vals.length; _i++) {
         if (_vals[_i][12] === id) {
           var _opName = String(_vals[_i][_colOP - 1] || '').trim();
-          if (_opName && ORDER_PERSON_EMAILS[_opName]) _toAddr = ORDER_PERSON_EMAILS[_opName];
+          if (_opName && MULTI_EMAILS[_opName]) _toAddr = MULTI_EMAILS[_opName].join(',');
+          else if (_opName && ORDER_PERSON_EMAILS[_opName]) _toAddr = ORDER_PERSON_EMAILS[_opName];
           break;
         }
       }
