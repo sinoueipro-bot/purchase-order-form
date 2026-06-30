@@ -490,6 +490,8 @@ function doGet(e) {
   if (action === 'approveByUI') return jsonResponse(approveOrderByUI(id, e.parameter.password));
   if (action === 'ensureStockMemo') return jsonResponse(_ensureStockMemoColumnApi(e.parameter.pw));
   if (action === 'backfillStock') return jsonResponse(backfillMissingStock(e.parameter.pw));
+  if (action === 'setupTrigger') return jsonResponse(_setupTriggerApi(e.parameter.pw));
+  if (action === 'recomputeTotals') return jsonResponse(recomputeAllTotals(e.parameter.pw));
   if (action === 'ensureStockDelivery') return jsonResponse(_ensureStockDeliveryColumnApi(e.parameter.pw));
   // 見積関連API (listEstimates / getEstimateData / markTransferred / getEstimateDetails)
   // と一時API hideEstimateAll は 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md
@@ -1131,6 +1133,42 @@ function backfillMissingStock(pw) {
   return { success: true, message: 'backfill完了(注文No重複は内部スキップ)', attemptedOrders: attempted, attemptedCount: attempted.length };
 }
 
+// ★ 2026-06-30: 編集トリガー(onEditInstallable)を有効化/再設定。doGet ?action=setupTrigger&pw=...
+function _setupTriggerApi(pw) {
+  if (pw !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
+  try {
+    setupEditTrigger();
+    var n = ScriptApp.getProjectTriggers().filter(function(t){ return t.getHandlerFunction() === 'onEditInstallable'; }).length;
+    return { success: true, message: '編集トリガー設定完了', onEditInstallableTriggers: n };
+  } catch (e) { return { success: false, error: e.toString() }; }
+}
+
+// ★ 2026-06-30: 在庫管理の金額合計を全注文Noぶん発注一覧の合計金額(G)へ再集計(>0のみ・空は保持)。
+//   onEditが取りこぼした場合や、過去入力分の一括同期に。doGet ?action=recomputeTotals&pw=...
+function recomputeAllTotals(pw) {
+  if (pw !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var stock = ss.getSheetByName(STOCK_SHEET);
+  var idx = ss.getSheetByName(INDEX_SHEET);
+  if (!stock || !idx) return { success: false, error: 'シートがありません' };
+  var sv = stock.getDataRange().getValues();
+  var sums = {};
+  for (var i = 1; i < sv.length; i++) {
+    var no = String(sv[i][1] || '').trim(); if (!no) continue;
+    sums[no] = (sums[no] || 0) + _stockNum(sv[i][11]);
+  }
+  var iv = idx.getDataRange().getValues();
+  var updated = [];
+  for (var j = 1; j < iv.length; j++) {
+    var no = String(iv[j][1] || '').trim();
+    if (sums.hasOwnProperty(no) && sums[no] > 0) {
+      idx.getRange(j + 1, 7).setValue(sums[no]).setNumberFormat('#,##0');
+      updated.push(no);
+    }
+  }
+  return { success: true, message: '合計金額 再集計完了', updatedOrders: updated, updatedCount: updated.length };
+}
+
 // ★ 既存の全発注を在庫管理シートに一括展開 (初回 or 再構築用・GASエディタで実行)
 // ⚠️ 既存の 分類・入庫済み 入力は消える。初回構築時のみ実行すること
 //   (ステータス列を「足すだけ」なら rebuild ではなく migrateStockAddStatusColumn を使う=入力保持)
@@ -1427,13 +1465,65 @@ function onEditInstallable(e) {
   try {
     if (!e || !e.range) return;
     var sheet = e.range.getSheet();
-    if (!_isOrderSheet(sheet.getName())) return;  // 発注書シート以外は無視
+    var _nm = sheet.getName();
+    // ★ 2026-06-30: 在庫管理で 単価/金額 を手入力 → 発注一覧の該当合計金額を自動集計・転記
+    if (_nm === STOCK_SHEET) { _syncStockAmountToIndex(e); return; }
+    if (!_isOrderSheet(_nm)) return;  // 発注書シート以外は無視
     var row = e.range.getRow();
     if (row < 18 || row > 49) return;             // 明細・集計部の編集のみ対象
     syncFromOrderSheet(sheet);
   } catch (err) {
     Logger.log('onEditInstallable エラー: ' + err.toString());
   }
+}
+
+// ★ 2026-06-30: 在庫管理の 単価(K=11)/金額(L=12) を手入力したら、その注文Noの金額合計を
+//   発注一覧の合計金額(G=7) へ転記(空欄を埋める/更新)。当月の発注金額把握用。
+//   単価編集で金額が空なら 単価×数量 を自動入力(手入力済み金額は上書きしない)。
+function _syncStockAmountToIndex(e) {
+  var sh = e.range.getSheet();
+  var c1 = e.range.getColumn(), c2 = e.range.getLastColumn();
+  if (c2 < 11 || c1 > 12) return;  // 単価(11)/金額(12) 列を含む編集のみ
+  var r1 = Math.max(e.range.getRow(), 2), r2 = e.range.getLastRow();
+  if (r2 < 2) return;
+  var ss = e.source || SpreadsheetApp.getActiveSpreadsheet();
+  // 単価を入れたが金額が空なら 単価×数量 を自動入力(手入力済み金額は触らない)
+  for (var r = r1; r <= r2; r++) {
+    var qty = _stockNum(sh.getRange(r, 10).getValue());
+    var price = _stockNum(sh.getRange(r, 11).getValue());
+    var amtCell = sh.getRange(r, 12);
+    var amtRaw = amtCell.getValue();
+    if (price > 0 && qty > 0 && (amtRaw === '' || amtRaw === null)) {
+      amtCell.setValue(qty * price).setNumberFormat('#,##0');
+    }
+  }
+  SpreadsheetApp.flush();
+  // 影響を受けた注文Noを集める
+  var affected = {};
+  for (var rr = r1; rr <= r2; rr++) {
+    var no = String(sh.getRange(rr, 2).getValue() || '').trim();
+    if (no) affected[no] = true;
+  }
+  var sv = sh.getDataRange().getValues();
+  var idx = ss.getSheetByName(INDEX_SHEET);
+  if (!idx) return;
+  var iv = idx.getDataRange().getValues();
+  for (var key in affected) {
+    var sum = 0;
+    for (var i = 1; i < sv.length; i++) {
+      if (String(sv[i][1]).trim() === key) sum += _stockNum(sv[i][11]);  // 金額=index11
+    }
+    if (sum > 0) {  // 金額未入力(=0)のときは発注一覧を空のまま保持・上書きしない
+      for (var j = 1; j < iv.length; j++) {
+        if (String(iv[j][1]).trim() === key) idx.getRange(j + 1, 7).setValue(sum).setNumberFormat('#,##0');
+      }
+    }
+  }
+}
+function _stockNum(v) {
+  if (typeof v === 'number') return v;
+  var n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, ''));
+  return isNaN(n) ? 0 : n;
 }
 
 // シート名が「発注書シート」(YYYYMMDD_ で始まる) か判定
