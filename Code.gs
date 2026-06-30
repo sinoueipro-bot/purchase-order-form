@@ -1460,6 +1460,15 @@ function setupEditTrigger() {
   Logger.log('✅ 編集トリガー(onEditInstallable)を設定しました。今後は発注書シートを直接編集すると発注一覧・在庫管理が自動更新されます');
 }
 
+// ★ 2026-06-30: 簡易onEditトリガー(インストール不要・各編集者の操作で自動発火)。
+//   在庫管理の 単価/金額 手入力 → 発注一覧の合計金額を自動集計。同一スプシの読み書きのみなので簡易トリガーで可。
+function onEdit(e) {
+  try {
+    if (!e || !e.range || e.range.getSheet().getName() !== STOCK_SHEET) return;
+    _syncStockAmountToIndex(e);
+  } catch (err) {}
+}
+
 // インストーラブル onEdit トリガー本体
 function onEditInstallable(e) {
   try {
