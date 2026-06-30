@@ -492,6 +492,7 @@ function doGet(e) {
   if (action === 'backfillStock') return jsonResponse(backfillMissingStock(e.parameter.pw));
   if (action === 'setupTrigger') return jsonResponse(_setupTriggerApi(e.parameter.pw));
   if (action === 'recomputeTotals') return jsonResponse(recomputeAllTotals(e.parameter.pw));
+  if (action === 'deleteOrphanTabs') return jsonResponse(deleteOrphanOrderTabs(e.parameter.pw, e.parameter.dry === '1'));
   if (action === 'ensureStockDelivery') return jsonResponse(_ensureStockDeliveryColumnApi(e.parameter.pw));
   // 見積関連API (listEstimates / getEstimateData / markTransferred / getEstimateDetails)
   // と一時API hideEstimateAll は 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md
@@ -1167,6 +1168,42 @@ function recomputeAllTotals(pw) {
     }
   }
   return { success: true, message: '合計金額 再集計完了', updatedOrders: updated, updatedCount: updated.length };
+}
+
+// ★ 2026-06-30: 発注一覧に紐づかない(=削除済み発注の)発注書タブを一括削除。
+//   除外: 発注一覧/在庫管理/入庫管理/見積一覧・テンプレ系・見積_系・現存発注のタブ。日付(YYYYMMDD_)タブのみ対象。
+//   doGet ?action=deleteOrphanTabs&pw=...&dry=1(プレビュー) / dry=0(実削除)
+function deleteOrphanOrderTabs(pw, dryRun) {
+  if (pw !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var idx = ss.getSheetByName(INDEX_SHEET);
+  if (!idx) return { success: false, error: '発注一覧がありません' };
+  var iv = idx.getDataRange().getValues();
+  var liveGids = {};
+  for (var i = 1; i < iv.length; i++) {
+    var m = String(iv[i][11] || '').match(/gid=(\d+)/);
+    if (m) liveGids[m[1]] = true;
+  }
+  var KEEP = { '発注一覧': 1, '在庫管理': 1, '入庫管理': 1, '見積一覧': 1 };
+  try { ss.setActiveSheet(idx); } catch (e) {}
+  var targetSheets = [], targetNames = [];
+  var sheets = ss.getSheets();
+  for (var k = 0; k < sheets.length; k++) {
+    var sh = sheets[k], name = sh.getName(), gid = String(sh.getSheetId());
+    if (KEEP[name]) continue;
+    if (name.indexOf('テンプレ') !== -1) continue;   // 発注書/見積書テンプレート系は除外
+    if (name.indexOf('見積') === 0) continue;         // 見積_/見積一覧 等は除外
+    if (!/^\d{8}_/.test(name)) continue;              // 日付つき発注書タブのみ対象
+    if (liveGids[gid]) continue;                      // 現存発注=残す
+    targetSheets.push(sh); targetNames.push(name);
+  }
+  var done = [];
+  if (!dryRun) {
+    for (var t = 0; t < targetSheets.length; t++) {
+      try { ss.deleteSheet(targetSheets[t]); done.push(targetNames[t]); } catch (e) { Logger.log('タブ削除失敗 ' + targetNames[t] + ': ' + e.toString()); }
+    }
+  }
+  return { success: true, dryRun: !!dryRun, count: targetNames.length, tabs: targetNames, deletedCount: done.length };
 }
 
 // ★ 既存の全発注を在庫管理シートに一括展開 (初回 or 再構築用・GASエディタで実行)
