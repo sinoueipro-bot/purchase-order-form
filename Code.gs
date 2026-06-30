@@ -1514,7 +1514,7 @@ function onEditInstallable(e) {
     var sheet = e.range.getSheet();
     var _nm = sheet.getName();
     // ★ 2026-06-30: 在庫管理で 単価/金額 を手入力 → 発注一覧の該当合計金額を自動集計・転記
-    if (_nm === STOCK_SHEET) { _syncStockAmountToIndex(e); return; }
+    if (_nm === STOCK_SHEET) { _syncStockAmountToIndex(e); _notifyStockDeliveryEdit(e); return; }
     if (!_isOrderSheet(_nm)) return;  // 発注書シート以外は無視
     var row = e.range.getRow();
     if (row < 18 || row > 49) return;             // 明細・集計部の編集のみ対象
@@ -1572,6 +1572,45 @@ function _stockNum(v) {
   if (typeof v === 'number') return v;
   var n = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, ''));
   return isNaN(n) ? 0 : n;
+}
+
+// ★ 2026-06-30: 在庫管理の Q列(納品予定日=17)記入 / R列(入庫済み=18)チェック時、その行の
+//   注文者(申請者本人)へメール通知。※MailApp使用のため【インストール型トリガー(onEditInstallable)経由のみ】動作。
+//   簡易onEditからは呼ばない(権限不足で送信不可)。メアド未登録の注文者はスキップ(誤送信防止)。
+function _notifyStockDeliveryEdit(e) {
+  var sh = e.range.getSheet();
+  var c1 = e.range.getColumn(), c2 = e.range.getLastColumn();
+  var hitDelivery = (c1 <= 17 && c2 >= 17);  // Q=納品予定日
+  var hitReceived = (c1 <= 18 && c2 >= 18);  // R=入庫済み
+  if (!hitDelivery && !hitReceived) return;
+  var r1 = Math.max(e.range.getRow(), 2), r2 = e.range.getLastRow();
+  for (var r = r1; r <= r2; r++) {
+    var orderer = String(sh.getRange(r, 6).getValue() || '').trim();   // 注文者 F=6
+    if (!orderer) continue;
+    var emails = (MULTI_EMAILS[orderer] && MULTI_EMAILS[orderer].length) ? MULTI_EMAILS[orderer].slice()
+               : ((STAFF_EMAILS && STAFF_EMAILS[orderer]) ? [STAFF_EMAILS[orderer]] : []);
+    if (!emails.length) { Logger.log('在庫管理通知: 注文者「' + orderer + '」のメアド未登録→スキップ'); continue; }
+    var orderNo = String(sh.getRange(r, 2).getValue() || '').trim();   // 注文No B=2
+    var supplier = String(sh.getRange(r, 3).getValue() || '').trim();  // 仕入先 C=3
+    var site = String(sh.getRange(r, 5).getValue() || '').trim();      // 現場名 E=5
+    var product = String(sh.getRange(r, 8).getValue() || '').trim();   // 商品名 H=8
+    var deliveryDate = sh.getRange(r, 17).getValue();
+    var received = sh.getRange(r, 18).getValue();
+    var subj, body;
+    if (hitReceived && received === true) {
+      subj = '【入庫完了】' + (product || site || orderNo);
+      body = orderer + ' 様\n\n発注された商品が入庫されました。\n\n注文No.: ' + orderNo + '\n仕入先: ' + supplier + '\n現場名: ' + site + '\n商品: ' + product + '\n\n(在庫管理システムより自動送信)';
+    } else if (hitDelivery && deliveryDate !== '' && deliveryDate !== null) {
+      var dStr = (Object.prototype.toString.call(deliveryDate) === '[object Date]')
+        ? Utilities.formatDate(deliveryDate, 'Asia/Tokyo', 'yyyy/MM/dd') : String(deliveryDate);
+      subj = '【納品予定日】' + (product || site || orderNo) + ' → ' + dStr;
+      body = orderer + ' 様\n\n発注された商品の納品予定日が設定されました。\n\n納品予定日: ' + dStr + '\n注文No.: ' + orderNo + '\n仕入先: ' + supplier + '\n現場名: ' + site + '\n商品: ' + product + '\n\n(在庫管理システムより自動送信)';
+    } else {
+      continue;  // Q削除・R=false等は通知しない
+    }
+    try { MailApp.sendEmail({ to: emails.join(','), subject: subj, body: body }); }
+    catch (err) { Logger.log('在庫管理通知メール失敗 No.' + orderNo + ': ' + err.toString()); }
+  }
 }
 
 // シート名が「発注書シート」(YYYYMMDD_ で始まる) か判定
