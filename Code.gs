@@ -493,6 +493,7 @@ function doGet(e) {
   if (action === 'setupTrigger') return jsonResponse(_setupTriggerApi(e.parameter.pw));
   if (action === 'recomputeTotals') return jsonResponse(recomputeAllTotals(e.parameter.pw));
   if (action === 'deleteOrphanTabs') return jsonResponse(deleteOrphanOrderTabs(e.parameter.pw, e.parameter.dry === '1', e.parameter.hidden === '1'));
+  if (action === 'deleteAllEstimates') return jsonResponse(deleteAllEstimates(e.parameter.pw, e.parameter.dry === '1'));
   if (action === 'ensureStockDelivery') return jsonResponse(_ensureStockDeliveryColumnApi(e.parameter.pw));
   // 見積関連API (listEstimates / getEstimateData / markTransferred / getEstimateDetails)
   // と一時API hideEstimateAll は 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md
@@ -1205,6 +1206,33 @@ function deleteOrphanOrderTabs(pw, dryRun, hiddenOnly) {
     }
   }
   return { success: true, dryRun: !!dryRun, count: targetNames.length, tabs: targetNames, deletedCount: done.length };
+}
+
+// ★ 2026-06-30: 見積タブ(見積_*)を全削除 + 見積一覧のデータ行を全クリア(ヘッダー1行目は残す)。井上さん指示=見積リセット。
+//   doGet ?action=deleteAllEstimates&pw=...&dry=1(プレビュー) / dry=0(実削除)
+function deleteAllEstimates(pw, dryRun) {
+  if (pw !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  try { ss.setActiveSheet(ss.getSheetByName(INDEX_SHEET)); } catch (e) {}
+  var sheets = ss.getSheets();
+  var tabs = [];
+  for (var i = 0; i < sheets.length; i++) {
+    var nm = sheets[i].getName();
+    if (nm.indexOf('見積_') === 0) {  // 見積_YYYYMMDD_... のみ(見積書テンプレ・見積一覧は除外)
+      tabs.push(nm);
+      if (!dryRun) { try { ss.deleteSheet(sheets[i]); } catch (e2) { Logger.log('見積タブ削除失敗 ' + nm + ': ' + e2); } }
+    }
+  }
+  var clearedRows = 0;
+  var est = ss.getSheetByName(EST_INDEX_SHEET);
+  if (est) {
+    var lastRow = est.getLastRow();
+    if (lastRow > 1) {
+      clearedRows = lastRow - 1;
+      if (!dryRun) est.deleteRows(2, lastRow - 1);
+    }
+  }
+  return { success: true, dryRun: !!dryRun, tabs: tabs, deletedTabCount: tabs.length, clearedEstimateRows: clearedRows };
 }
 
 // ★ 既存の全発注を在庫管理シートに一括展開 (初回 or 再構築用・GASエディタで実行)
