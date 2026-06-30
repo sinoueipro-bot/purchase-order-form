@@ -489,6 +489,7 @@ function doGet(e) {
   // 画面UI経由の承認API（パスワード必須）
   if (action === 'approveByUI') return jsonResponse(approveOrderByUI(id, e.parameter.password));
   if (action === 'ensureStockMemo') return jsonResponse(_ensureStockMemoColumnApi(e.parameter.pw));
+  if (action === 'backfillStock') return jsonResponse(backfillMissingStock(e.parameter.pw));
   if (action === 'ensureStockDelivery') return jsonResponse(_ensureStockDeliveryColumnApi(e.parameter.pw));
   // 見積関連API (listEstimates / getEstimateData / markTransferred / getEstimateDetails)
   // と一時API hideEstimateAll は 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md
@@ -1097,6 +1098,37 @@ function addToStockSheet(ss, data, sheetUrl) {
     applyStockCategoryValidation(s);
     applyStockCheckboxValidation(s);
   }
+}
+
+// ★ 2026-06-30: 改名で取りこぼした「発注済だが在庫管理に無い」発注を再展開(冪等)。
+//   既存行は addToStockSheet の注文No重複排除でそのまま保持(分類/入庫済み入力も維持)。
+//   doGet ?action=backfillStock&pw=... から実行。承認済(未発注完了)は対象外=設計どおり。
+function backfillMissingStock(pw) {
+  if (pw !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(INDEX_SHEET);
+  if (!s) return { success: false, error: '発注一覧がありません' };
+  var data = s.getDataRange().getValues();
+  var STOCK_DONE = { '発注済': 1, '緊急承認済': 1, '自己発注': 1, '営業自己発注': 1 };
+  var attempted = [];
+  for (var i = 1; i < data.length; i++) {
+    var status = String(data[i][10] || '');
+    if (!STOCK_DONE[status]) continue;
+    var reconLines = [];
+    try { reconLines = JSON.parse(data[i][13] || '[]'); } catch(e2) {}
+    var reconData = {
+      orderNo: data[i][1], supplier: data[i][3], branch: data[i][4],
+      siteName: data[i][5], orderer: data[i][7],
+      urgent: (String(data[i][8]) === '緊急'),
+      selfOrder: (status === '自己発注' || status === '営業自己発注'),
+      lines: reconLines
+    };
+    try {
+      addToStockSheet(ss, reconData, data[i][11] || '');  // 注文No重複は内部スキップ
+      attempted.push(String(data[i][1]));
+    } catch(e) { Logger.log('backfill エラー No.' + data[i][1] + ': ' + e.toString()); }
+  }
+  return { success: true, message: 'backfill完了(注文No重複は内部スキップ)', attemptedOrders: attempted, attemptedCount: attempted.length };
 }
 
 // ★ 既存の全発注を在庫管理シートに一括展開 (初回 or 再構築用・GASエディタで実行)
