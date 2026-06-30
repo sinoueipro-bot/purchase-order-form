@@ -1533,13 +1533,14 @@ function _syncStockAmountToIndex(e) {
   var r1 = Math.max(e.range.getRow(), 2), r2 = e.range.getLastRow();
   if (r2 < 2) return;
   var ss = e.source || SpreadsheetApp.getActiveSpreadsheet();
-  // 単価を入れたが金額が空なら 単価×数量 を自動入力(手入力済み金額は触らない)
+  var priceEdited = (c1 <= 11 && c2 >= 11);  // 単価(11)列が編集範囲に含まれるか
+  // 単価を編集したら 金額=単価×数量 を再計算(既存金額も上書き)。金額だけ直接編集したらその値を尊重。
   for (var r = r1; r <= r2; r++) {
     var qty = _stockNum(sh.getRange(r, 10).getValue());
     var price = _stockNum(sh.getRange(r, 11).getValue());
     var amtCell = sh.getRange(r, 12);
     var amtRaw = amtCell.getValue();
-    if (price > 0 && qty > 0 && (amtRaw === '' || amtRaw === null)) {
+    if (price > 0 && qty > 0 && (priceEdited || amtRaw === '' || amtRaw === null)) {
       amtCell.setValue(qty * price).setNumberFormat('#,##0');
     }
   }
