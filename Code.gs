@@ -492,7 +492,7 @@ function doGet(e) {
   if (action === 'backfillStock') return jsonResponse(backfillMissingStock(e.parameter.pw));
   if (action === 'setupTrigger') return jsonResponse(_setupTriggerApi(e.parameter.pw));
   if (action === 'recomputeTotals') return jsonResponse(recomputeAllTotals(e.parameter.pw));
-  if (action === 'deleteOrphanTabs') return jsonResponse(deleteOrphanOrderTabs(e.parameter.pw, e.parameter.dry === '1'));
+  if (action === 'deleteOrphanTabs') return jsonResponse(deleteOrphanOrderTabs(e.parameter.pw, e.parameter.dry === '1', e.parameter.hidden === '1'));
   if (action === 'ensureStockDelivery') return jsonResponse(_ensureStockDeliveryColumnApi(e.parameter.pw));
   // 見積関連API (listEstimates / getEstimateData / markTransferred / getEstimateDetails)
   // と一時API hideEstimateAll は 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md
@@ -1173,7 +1173,7 @@ function recomputeAllTotals(pw) {
 // ★ 2026-06-30: 発注一覧に紐づかない(=削除済み発注の)発注書タブを一括削除。
 //   除外: 発注一覧/在庫管理/入庫管理/見積一覧・テンプレ系・見積_系・現存発注のタブ。日付(YYYYMMDD_)タブのみ対象。
 //   doGet ?action=deleteOrphanTabs&pw=...&dry=1(プレビュー) / dry=0(実削除)
-function deleteOrphanOrderTabs(pw, dryRun) {
+function deleteOrphanOrderTabs(pw, dryRun, hiddenOnly) {
   if (pw !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var idx = ss.getSheetByName(INDEX_SHEET);
@@ -1195,6 +1195,7 @@ function deleteOrphanOrderTabs(pw, dryRun) {
     if (name.indexOf('見積') === 0) continue;         // 見積_/見積一覧 等は除外
     if (!/^\d{8}_/.test(name)) continue;              // 日付つき発注書タブのみ対象
     if (liveGids[gid]) continue;                      // 現存発注=残す
+    if (hiddenOnly && !sh.isSheetHidden()) continue;  // 非表示のみ対象(表示中タブは残す)
     targetSheets.push(sh); targetNames.push(name);
   }
   var done = [];
