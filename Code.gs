@@ -1603,8 +1603,12 @@ function _notifyStockDeliveryEdit(e) {
     } else if (hitDelivery && deliveryDate !== '' && deliveryDate !== null) {
       var dStr = (Object.prototype.toString.call(deliveryDate) === '[object Date]')
         ? Utilities.formatDate(deliveryDate, 'Asia/Tokyo', 'yyyy/MM/dd') : String(deliveryDate);
-      subj = '【納品予定日】' + (product || site || orderNo) + ' → ' + dStr;
-      body = orderer + ' 様\n\n発注された商品の納品予定日が設定されました。\n\n納品予定日: ' + dStr + '\n注文No.: ' + orderNo + '\n仕入先: ' + supplier + '\n現場名: ' + site + '\n商品: ' + product + '\n\n(在庫管理システムより自動送信)';
+      // e.oldValue(前の値)があれば=変更、無ければ=新規設定。※単一セル編集時のみ前値が取れる
+      var hadOld = (e && e.oldValue !== undefined && e.oldValue !== null && String(e.oldValue).trim() !== '');
+      var actLabel = hadOld ? '変更' : '設定';
+      var oldLine = hadOld ? ('変更前: ' + String(e.oldValue) + '\n') : '';
+      subj = '【納品予定日' + actLabel + '】' + (product || site || orderNo) + ' → ' + dStr;
+      body = orderer + ' 様\n\n発注された商品の納品予定日が' + actLabel + 'されました。\n\n' + oldLine + '納品予定日: ' + dStr + '\n注文No.: ' + orderNo + '\n仕入先: ' + supplier + '\n現場名: ' + site + '\n商品: ' + product + '\n\n(在庫管理システムより自動送信)';
     } else {
       continue;  // Q削除・R=false等は通知しない
     }
