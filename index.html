@@ -903,6 +903,7 @@ function poWizardPrev() {
 function resetPoWizard() {
   currentPoWizardStep = 1;
   goToPoWizardStep(1);
+  if (typeof _clearDuplicateBanner === 'function') _clearDuplicateBanner();
 }
 
 function focusFirstPoError() {
@@ -1629,6 +1630,7 @@ function renderOrderListArea() {
       '<div class="est-actions" style="flex-wrap:wrap">' +
       '<button class="btn-view" onclick="openEditModal(\'order\',\'' + o.id + '\')">📝 ' + (st === '申請中' ? '編集' : '詳細') + '</button>' +
       '<button class="btn-view" onclick="downloadPdfById(\'' + o.id + '\',\'order\',\'発注_' + (o.orderNo || '') + '\')" style="background:#fef7e0;color:#b06000;border-color:#f9ab00;border-width:1.5px;border-style:solid">📥 PDF</button>' +
+      '<button class="btn-view" onclick="duplicateOrder(\'' + o.id + '\')" style="background:#e8f0fe;color:#1a73e8;border:1.5px solid #1a73e8">📋 複製</button>' +
       (st === '申請中' ? '<button class="btn-transfer" onclick="approveByUI(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--success)">✅ 承認</button>' : '') +
       ((st === '承認済' || st === '緊急承認済' || st === '自己発注' || st === '営業自己発注') ? '<button class="btn-transfer" onclick="markPoCompleted(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--success)">✅ 発注完了→非表示</button>' : '') +
       (canCancel ? '<button class="btn-transfer" onclick="cancelOrderById(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--danger)">↩️ 取消</button>' : '') +
@@ -2609,6 +2611,68 @@ function resetForm() {
   addLineItem();
   validate();
   window.scrollTo(0, 0);
+}
+
+// ============ 過去発注を引用して新規作成 (2026-07-01) ============
+// 一覧の「📋 複製」から呼ぶ。getOrderDetailsで引用元を取得→新規フォームに事前入力→修正して送信。
+// コピー: 仕入先/請求先/現場名/システム入力者/承認者/発注者/明細(単価含む)/特記事項。 新規: 注文No(採番)/発行日(今日)/ステータス。
+async function duplicateOrder(id) {
+  showToast('引用元を読込中...', 'info');
+  try {
+    const res = await fetch(GAS_URL + '?action=getOrderDetails&id=' + encodeURIComponent(id));
+    const j = await res.json();
+    if (!j.success) throw new Error(j.error || '取得失敗');
+    const d = j.data;
+    switchTab('order');   // 発注フォームへ（ウィザードStep1・バナーは一旦クリアされる）
+    resetForm();          // 新規状態（新No採番・本日日付）にしてから引用値で上書き
+    // --- 基本情報 ---
+    setSupplierValue(d.supplier || '');
+    var _b = document.getElementById('branch'); if (_b) _b.value = d.branch || '';
+    var _sn2 = document.getElementById('siteName'); if (_sn2) _sn2.value = d.siteName || '';   // B: 現場名コピー
+    var _spn = document.getElementById('specialNotes'); if (_spn) _spn.value = d.notes || '';   // 特記事項コピー
+    var _od = document.getElementById('orderer'); if (_od) _od.value = d.orderer || '';          // システム入力者
+    // 承認者(名前→メール): A
+    var apEmail = (typeof APPROVERS !== 'undefined' ? ((APPROVERS.find(function(a){ return a.name === d.approverName; }) || {}).email) : '') || '';
+    var _ap = document.getElementById('approver'); if (_ap) _ap.value = apEmail;
+    // 発注者(名前→メール)
+    var opEmail = (typeof ORDER_PERSONS !== 'undefined' ? ((ORDER_PERSONS.find(function(a){ return a.name === d.orderPersonName; }) || {}).email) : '') || '';
+    var _op2 = document.getElementById('orderPerson'); if (_op2) _op2.value = opEmail;
+    if (typeof updateIrregularUI === 'function') updateIrregularUI();
+    // --- 明細を引用元で再生成: C(単価もコピー) ---
+    document.getElementById('lineItems').innerHTML = '';
+    lineItemCount = 0;
+    var _lines = (d.lines && d.lines.length) ? d.lines : [{}];
+    _lines.forEach(function(ln) {
+      addLineItem();
+      var n = lineItemCount;
+      var setV = function(pre, val){ var el = document.getElementById(pre + '-' + n); if (el) el.value = (val === undefined || val === null ? '' : val); };
+      setV('maker', ln.maker); setV('type', ln.type); setV('product', ln.product);
+      setV('model', ln.model); setV('qty', ln.qty); setV('price', ln.price);
+      calcLineAmount(n);
+    });
+    _setDuplicateBanner(d.orderNo);
+    calcTotal(); validate(); window.scrollTo(0, 0);
+    showToast('📋 No.' + d.orderNo + ' を引用しました。修正して送信してください', 'success');
+  } catch (err) {
+    showToast('引用エラー: ' + err.message, 'error');
+  }
+}
+function _setDuplicateBanner(orderNo) {
+  var host = document.getElementById('formArea');
+  if (!host) return;
+  var bar = document.getElementById('dupBanner');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'dupBanner';
+    bar.style.cssText = 'background:#e8f0fe;border:1.5px solid #1a73e8;color:#174ea6;border-radius:8px;padding:10px 12px;margin:0 0 12px;font-size:13px;font-weight:700;line-height:1.5';
+    host.insertBefore(bar, host.firstChild);
+  }
+  bar.innerHTML = '📋 No.' + (orderNo || '') + ' を引用して<u>新規作成</u>中<br><span style="font-weight:400">元の発注は変更されません。注文Noは新しく採番済み。内容を修正して送信してください。</span>';
+  bar.style.display = '';
+}
+function _clearDuplicateBanner() {
+  var bar = document.getElementById('dupBanner');
+  if (bar) bar.style.display = 'none';
 }
 
 // ============ 編集モーダル ============

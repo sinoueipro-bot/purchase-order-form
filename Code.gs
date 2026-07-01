@@ -3033,6 +3033,7 @@ function getOrderDetails(id) {
   var s = ss.getSheetByName(INDEX_SHEET);
   if (!s) return { success: false, error: '発注一覧がありません' };
   var data = s.getDataRange().getValues();
+  var opCol = _findColumnByHeader(s, '発注者');  // 発注者列(引用複製で使用・ヘッダー名検索)
   for (var i = 1; i < data.length; i++) {
     if (data[i][12] === id) {
       var linesJson = data[i][13] || '[]';
@@ -3054,7 +3055,8 @@ function getOrderDetails(id) {
           status: data[i][10],
           sheetUrl: data[i][11],
           lines: lines,
-          notes: data[i][14] || ''
+          notes: data[i][14] || '',
+          orderPersonName: (opCol > 0 && data[i][opCol - 1]) ? data[i][opCol - 1] : ''
         }
       };
     }
