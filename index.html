@@ -1633,7 +1633,8 @@ function renderOrderListArea() {
       '<button class="btn-view" onclick="duplicateOrder(\'' + o.id + '\')" style="background:#e8f0fe;color:#1a73e8;border:1.5px solid #1a73e8">📋 複製</button>' +
       (st === '申請中' ? '<button class="btn-transfer" onclick="approveByUI(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--success)">✅ 承認</button>' : '') +
       ((st === '承認済' || st === '緊急承認済' || st === '自己発注' || st === '営業自己発注') ? '<button class="btn-transfer" onclick="markPoCompleted(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--success)">✅ 発注完了→非表示</button>' : '') +
-      (canCancel ? '<button class="btn-transfer" onclick="cancelOrderById(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--danger)">↩️ 取消</button>' : '') +
+      ((st === '承認済' || st === '発注済' || st === '緊急承認済' || st === '自己発注' || st === '営業自己発注') ? '<button class="btn-transfer" onclick="cancelApprovedOrderById(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:#c5221f">✕ 取消</button>' : '') +
+      (canCancel ? '<button class="btn-transfer" onclick="cancelOrderById(\'' + o.id + '\',\'' + (o.orderNo || '') + '\')" style="background:var(--danger)">↩️ 取消(60秒)</button>' : '') +
       '</div></div>';
   });
   area.innerHTML = html;
@@ -1895,6 +1896,20 @@ async function cancelOrderById(id, orderNo) {
   } catch (err) {
     showToast('エラー: ' + err.message, 'error');
   }
+}
+
+// ★ 2026-07-13: 承認後・直接発注後の発注を一覧から取消(記録を残す)。理由入力→確認→取消。
+async function cancelApprovedOrderById(id, orderNo) {
+  var reason = prompt('注文No. ' + orderNo + ' を取消します。\n取消理由を入力してください（スプシに記録が残ります）:', '');
+  if (reason === null) return;  // 入力キャンセル
+  if (!confirm('注文No. ' + orderNo + ' を取消しますか？\n\n・ステータスが「取消」になります（記録は残ります）\n・発注書タブは非表示になります\n・理由: ' + (reason || '(未入力)'))) return;
+  showToast('取消処理中...', 'info');
+  try {
+    const res = await fetch(GAS_URL + '?action=cancelApprovedOrder&id=' + encodeURIComponent(id) + '&reason=' + encodeURIComponent(reason || ''));
+    const data = await res.json();
+    if (data.success) { showToast('✅ ' + (data.message || '取消しました'), 'success'); loadOrderList(); }
+    else { showToast('❌ ' + (data.error || '取消失敗'), 'error'); }
+  } catch (err) { showToast('エラー: ' + err.message, 'error'); }
 }
 
 // ============ メーカー別ステップ発注（2026-05-12 削除済み） ============

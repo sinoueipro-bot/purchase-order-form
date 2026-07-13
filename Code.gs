@@ -480,6 +480,7 @@ function doGet(e) {
   // 発注関連API
   if (action === 'listOrders') return jsonResponse(getOrderList());
   if (action === 'cancelOrder') return jsonResponse(cancelOrder(id));
+  if (action === 'cancelApprovedOrder') return jsonResponse(cancelApprovedOrder(id, e.parameter.reason));
   if (action === 'markOrderCompleted') return jsonResponse(markOrderCompleted(id));
   if (action === 'hideCompleted') return jsonResponse(hideCompletedSheets());
   if (action === 'showAllSheets') return jsonResponse(showAllSheets());
@@ -2931,6 +2932,56 @@ function cancelOrder(id) {
   } catch(e) { Logger.log('キャンセル通知エラー: ' + e.toString()); }
 
   return { success: true, message: '発注を取り消しました' };
+}
+
+// ★ 2026-07-13: 承認後・直接発注後の発注を「一覧から取消」(記録を残す)。60秒制限なし・タブは非表示(削除しない)。
+//   申請中は既存の却下で対応。取消/却下済みは対象外。doGet ?action=cancelApprovedOrder&id=...&reason=...
+function cancelApprovedOrder(id, reason) {
+  if (!id) return { success: false, error: 'IDが必要です' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var s = ss.getSheetByName(INDEX_SHEET);
+  if (!s) return { success: false, error: '発注一覧がありません' };
+  var data = s.getDataRange().getValues();
+  var rowIdx = -1;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][12] === id) { rowIdx = i; break; }
+  }
+  if (rowIdx === -1) return { success: false, error: '発注書が見つかりません' };
+  var status = String(data[rowIdx][10] || '').trim();
+  var CANCELLABLE = { '承認済': 1, '発注済': 1, '自己発注': 1, '営業自己発注': 1, '緊急承認済': 1 };
+  if (status === '申請中') return { success: false, error: '申請中は「却下」で対応してください' };
+  if (status === '取消' || status === '却下') return { success: false, error: '既に' + status + '済みです' };
+  if (!CANCELLABLE[status]) return { success: false, error: '取消できないステータスです(' + status + ')' };
+
+  var orderNo = data[rowIdx][1];
+  var now = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm');
+
+  // 1. ステータス → 取消 (K列)
+  applyStatusColor(s, rowIdx + 1, '取消');
+  // 2. 記録を残す: K列(ステータス)セルに 取消日時・元ステータス・理由 をメモ
+  try {
+    var note = '🗑取消 ' + now + '（元: ' + status + '）' + (reason ? '\n理由: ' + reason : '');
+    s.getRange(rowIdx + 1, 11).setNote(note);
+  } catch (e) { Logger.log('取消メモ書込エラー: ' + e.toString()); }
+  // 3. 発注書タブは非表示(削除しない=記録保持)
+  try {
+    var sheet = findSheetByUrl(ss, data[rowIdx][11]);
+    if (sheet && !sheet.isSheetHidden()) sheet.hideSheet();
+  } catch (e) { Logger.log('取消タブ非表示エラー: ' + e.toString()); }
+  // 4. 在庫管理に展開済み(発注済)なら、その注文Noの行を「取消」表示に(事務員が受領しないよう)
+  try {
+    var stock = ss.getSheetByName(STOCK_SHEET);
+    if (stock) {
+      var sv = stock.getDataRange().getValues();
+      for (var k = 1; k < sv.length; k++) {
+        if (String(sv[k][1]).trim() === String(orderNo).trim()) {
+          stock.getRange(k + 1, 15).setValue('取消').setFontColor('#c5221f').setFontWeight('bold');  // O列=ステータス
+        }
+      }
+    }
+  } catch (e) { Logger.log('在庫管理 取消反映エラー: ' + e.toString()); }
+
+  return { success: true, message: 'No.' + orderNo + ' を取消しました（記録は残ります）', orderNo: orderNo };
 }
 
 // ============ API: シートのPDFをBase64で返す ============
