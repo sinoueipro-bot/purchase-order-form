@@ -842,7 +842,9 @@ function createFromTemplate(ss, tabName, data) {
   sh.getRange('X62').setValue(today.getMonth()+1);
   sh.getRange('AA62').setValue(today.getDate());
   // ★ 2026-05-27 v82: 注文者は AJ61 (結合左上)。旧 AJ60 は結合外で表示されず空欄だった
-  try { sh.getRange('AJ61').setValue(data.orderer); } catch(e) {}
+  // ★ 2026-07-17: 辻塚さんが代理入力し「発注依頼者(営業メンバー)」を選んだ場合は、その人を注文者として表示。
+  //   未選択(空)なら従来どおりシステム入力者(data.orderer)。発注一覧のシステム入力者は辻塚さんのまま=誰が入力したかの記録は保持。
+  try { sh.getRange('AJ61').setValue(data.requesterName || data.orderer); } catch(e) {}
   try { sh.getRange('AJ60').setValue(''); } catch(e) {}  // 旧位置クリア
   // ★ 2026-05-27 v95: AF66(行66)への書き込みは廃止。
   //   行66は発注書の枠外でPDF範囲(A1:AQ64)にも含まれず実質非表示だった。
