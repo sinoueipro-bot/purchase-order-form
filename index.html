@@ -446,13 +446,7 @@ textarea { resize: vertical; min-height: 60px; }
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge">必須</span>システム入力者</div>
-    <select id="orderer" required onchange="updateIrregularUI(); updateRequesterUI(); validate()"><option value="">選択してください</option></select>
-  </div>
-  <!-- ★ 2026-07-17: システム入力者=辻塚 のときだけ表示(任意)。選ぶと発注書の「注文者」欄がこの人の名前になる -->
-  <div class="field-group" id="requesterGroup" style="display:none">
-    <div class="field-label">発注依頼者（営業メンバー）<span style="font-size:10px;color:var(--text-secondary);margin-left:4px">（任意）</span></div>
-    <select id="requester" onchange="validate()"><option value="">選択なし（注文者＝システム入力者）</option></select>
-    <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">※ 選ぶと<strong>発注書の「注文者」欄</strong>がこの人の名前になります（辻塚さんが代理入力する場合用）</div>
+    <select id="orderer" required onchange="updateIrregularUI(); validate()"><option value="">選択してください</option></select>
   </div>
   <div class="field-group">
     <div class="field-label"><span class="required-badge" id="approverReqBadge">必須</span>承認者</div>
@@ -990,7 +984,6 @@ function initAllDropdowns() {
   // 発注書
   fillSelect('branch', BRANCHES);
   fillSelect('orderer', STAFF);
-  fillSelect('requester', STAFF);  // ★ 2026-07-17 発注依頼者(システム入力者=辻塚 のときだけ表示)
   const app = document.getElementById('approver');
   APPROVERS.forEach(a => app.add(new Option(a.name + '（' + a.email + '）', a.email)));
   // 発注者(承認者4名 + 事務員 眞鍋/辻塚) 2026-06-03
@@ -1012,18 +1005,6 @@ function fillSelect(id, items) {
   const sel = document.getElementById(id);
   if (!sel) return;  // 削除済みフィールド(estBranch/estStaff等)は何もしない=初期化の中断を防ぐ (2026-06-11)
   items.forEach(v => sel.add(new Option(typeof v === 'object' ? v.name : v, typeof v === 'object' ? v.name : v)));
-}
-
-// ★ 2026-07-17: システム入力者=辻塚 のときだけ「発注依頼者(営業メンバー)」欄を表示(任意)。
-//   選ばれたら発注書の「注文者」欄(AJ61)がその人の名前になる。辻塚さん以外に切替えたら値をクリア。
-function updateRequesterUI() {
-  var g = document.getElementById('requesterGroup');
-  var od = document.getElementById('orderer');
-  var rq = document.getElementById('requester');
-  if (!g || !od) return;
-  var show = (od.value === '辻塚');
-  g.style.display = show ? '' : 'none';
-  if (!show && rq) rq.value = '';  // 辻塚さん以外なら誤って残らないようクリア
 }
 
 function setDefaultDate() {
@@ -2486,7 +2467,6 @@ function collectFormData() {
     notes: [document.getElementById('notes')?.value || '', document.getElementById('specialNotes')?.value || ''].filter(Boolean).join('\n'),  // 転記マーカー(非表示) + 特記事項(specialNotes) を結合してO列へ（二重発注検知用にマーカー保持）
     specialNotes: document.getElementById('specialNotes')?.value || '',  // ユーザー入力の特記事項のみ（印刷用 発注書C58 はこちらを使う＝マーカー混入させない）
     orderer: document.getElementById('orderer').value,
-    requesterName: document.getElementById('requester')?.value || '',  // ★ 2026-07-17 辻塚さん代理入力時の実依頼者(発注書の注文者欄に出る・未選択なら空)
     urgent: (document.getElementById('irregularType')?.value === '2'),
     selfOrder: (document.getElementById('irregularType')?.value === '3'),
     skipPurchaserNotify: (document.getElementById('irregularType')?.value === '1'),
@@ -2635,12 +2615,10 @@ function resetForm() {
   document.getElementById('notes').value = '';
   var _sn = document.getElementById('specialNotes'); if (_sn) _sn.value = '';
   document.getElementById('orderer').value = '';
-  var _rq = document.getElementById('requester'); if (_rq) _rq.value = '';  // ★ 2026-07-17 発注依頼者クリア
   document.getElementById('approver').value = '';
   var _op = document.getElementById('orderPerson'); if (_op) _op.value = '';
   var _ir = document.getElementById('irregularType'); if (_ir) _ir.value = '';
   updateIrregularUI();
-  updateRequesterUI();  // ★ 2026-07-17 依頼者欄を隠す
   document.getElementById('lineItems').innerHTML = '';
   lineItemCount = 0;
   setDefaultDate();
@@ -2675,7 +2653,6 @@ async function duplicateOrder(id) {
     var opEmail = (typeof ORDER_PERSONS !== 'undefined' ? ((ORDER_PERSONS.find(function(a){ return a.name === d.orderPersonName; }) || {}).email) : '') || '';
     var _op2 = document.getElementById('orderPerson'); if (_op2) _op2.value = opEmail;
     if (typeof updateIrregularUI === 'function') updateIrregularUI();
-    if (typeof updateRequesterUI === 'function') updateRequesterUI();  // ★ 2026-07-17 引用元がシステム入力者=辻塚なら依頼者欄を表示
     // --- 明細を引用元で再生成: C(単価もコピー) ---
     document.getElementById('lineItems').innerHTML = '';
     lineItemCount = 0;
