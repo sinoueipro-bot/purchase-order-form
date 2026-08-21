@@ -523,6 +523,7 @@ function doGet(e) {
   if (action === 'deleteAllEstimates') return jsonResponse(deleteAllEstimates(e.parameter.pw, e.parameter.dry === '1'));
   if (action === 'migrateStockSplit') return jsonResponse(migrateStockSplitByBranch(e.parameter.pw, e.parameter.dry === '1'));
   if (action === 'renameOldStock') return jsonResponse(renameOldStockSheet(e.parameter.pw));
+  if (action === 'realignStock') return jsonResponse(realignStockTabs(e.parameter.pw));
   if (action === 'ensureStockDelivery') return jsonResponse(_ensureStockDeliveryColumnApi(e.parameter.pw));
   // 見積関連API (listEstimates / getEstimateData / markTransferred / getEstimateDetails)
   // と一時API hideEstimateAll は 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md
@@ -1263,6 +1264,32 @@ function renameOldStockSheet(pw) {
   if (ss.getSheetByName('在庫管理_旧')) return { success: false, error: '「在庫管理_旧」が既に存在します' };
   old.setName('在庫管理_旧');
   return { success: true, message: '在庫管理 → 在庫管理_旧 にリネームしました' };
+}
+
+// ★ 2026-08-21: 拠点別在庫タブで、先頭に空行が溜まってデータが下に埋まっている場合に上詰めする。
+//   (移行時 getLastRow≈1000 のためデータが1001行目以降に入った不具合の修復。書式・チェックボックスは保持)
+//   doGet ?action=realignStock&pw=...
+function realignStockTabs(pw) {
+  if (pw !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var out = [];
+  _existingStockSheets(ss).forEach(function (s) {
+    var last = s.getLastRow();
+    if (last <= 1) { out.push(s.getName() + ': 空'); return; }
+    var keys = s.getRange(1, 2, last, 1).getValues();  // B列=注文No
+    var firstData = -1;
+    for (var i = 1; i < keys.length; i++) {
+      if (String(keys[i][0] || '').trim() !== '') { firstData = i + 1; break; }  // 1始まりの行番号
+    }
+    if (firstData === -1) { out.push(s.getName() + ': データなし'); return; }
+    if (firstData > 2) {
+      s.deleteRows(2, firstData - 2);  // 先頭の空行(2〜firstData-1)を一括削除→データが上詰め
+      out.push(s.getName() + ': ' + (firstData - 2) + '空行削除→上詰め');
+    } else {
+      out.push(s.getName() + ': 既に上詰め済み');
+    }
+  });
+  return { success: true, result: out };
 }
 
 // ★ 2026-06-30: 発注一覧に紐づかない(=削除済み発注の)発注書タブを一括削除。
