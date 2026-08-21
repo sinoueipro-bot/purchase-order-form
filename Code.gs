@@ -13,8 +13,34 @@
 var INDEX_SHEET = '発注一覧';
 var EST_INDEX_SHEET = '見積一覧';
 // ★ 2026-05-29 在庫管理タブ: 発注を「商品1行ずつ」に展開し、在庫管理担当が分類をプルダウンで選ぶ
-var STOCK_SHEET = '在庫管理';
+var STOCK_SHEET = '在庫管理';  // 旧・単一在庫管理(移行元)。移行後は「在庫管理_旧」にリネーム。新規は拠点別へ書く。
 var STOCK_CATEGORIES = ['保安費', '器具仕入れ', '消耗品費', '顧客設備'];
+
+// ★ 2026-08-21: 在庫管理を拠点別タブに分割（本社/福岡）。事業所で自動振り分け。
+var STOCK_SHEET_HONSHA = '在庫管理_本社';
+var STOCK_SHEET_FUKUOKA = '在庫管理_福岡';
+// 事業所名 → 在庫管理タブ名。「福岡店」だけ福岡、それ以外(本社/空/不明)は本社に寄せる(井上さん判断D)。
+function _stockSheetName(branch) {
+  return (String(branch || '').trim() === '福岡店') ? STOCK_SHEET_FUKUOKA : STOCK_SHEET_HONSHA;
+}
+function _allStockSheetNames() { return [STOCK_SHEET_HONSHA, STOCK_SHEET_FUKUOKA]; }
+// 在庫管理タブ(拠点別 or 旧)か判定。onEdit等のガードに使用。
+function _isStockSheetName(name) {
+  return name === STOCK_SHEET_HONSHA || name === STOCK_SHEET_FUKUOKA || name === STOCK_SHEET;
+}
+// 事業所に対応する在庫管理シートを取得(無ければ拠点別に作成)
+function _getStockSheet(ss, branch) {
+  var nm = _stockSheetName(branch);
+  var s = ss.getSheetByName(nm);
+  if (!s) { initStockSheetNamed(nm); s = ss.getSheetByName(nm); }
+  return s;
+}
+// 実在する拠点別在庫管理シート配列(集計/取消/再展開などで両タブを走査するのに使う)
+function _existingStockSheets(ss) {
+  var out = [];
+  _allStockSheetNames().forEach(function (nm) { var s = ss.getSheetByName(nm); if (s) out.push(s); });
+  return out;
+}
 
 // ★ 運用切替フラグ（true = 新フロー / 個別シート作らない、false = 旧フロー）
 // 問題があればこれをfalseに戻すだけで旧動作に戻る
@@ -495,6 +521,8 @@ function doGet(e) {
   if (action === 'recomputeTotals') return jsonResponse(recomputeAllTotals(e.parameter.pw));
   if (action === 'deleteOrphanTabs') return jsonResponse(deleteOrphanOrderTabs(e.parameter.pw, e.parameter.dry === '1', e.parameter.hidden === '1'));
   if (action === 'deleteAllEstimates') return jsonResponse(deleteAllEstimates(e.parameter.pw, e.parameter.dry === '1'));
+  if (action === 'migrateStockSplit') return jsonResponse(migrateStockSplitByBranch(e.parameter.pw, e.parameter.dry === '1'));
+  if (action === 'renameOldStock') return jsonResponse(renameOldStockSheet(e.parameter.pw));
   if (action === 'ensureStockDelivery') return jsonResponse(_ensureStockDeliveryColumnApi(e.parameter.pw));
   // 見積関連API (listEstimates / getEstimateData / markTransferred / getEstimateDetails)
   // と一時API hideEstimateAll は 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md
@@ -941,10 +969,15 @@ function addToIndex(ss, data, os, uniqueId) {
 
 // ============ ★ 在庫管理シート (2026-05-29) ============
 // 発注を「商品1行ずつ」に展開。在庫管理担当が 分類列(P) をプルダウンで選び経理へ渡す。
-function initStockSheet() {
+function initStockSheet() {  // ★ 2026-08-21: 拠点別2タブ(本社/福岡)を両方初期化
+  initStockSheetNamed(STOCK_SHEET_HONSHA);
+  initStockSheetNamed(STOCK_SHEET_FUKUOKA);
+}
+// 指定名の在庫管理タブを初期化(拠点別対応)
+function initStockSheetNamed(name) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var s = ss.getSheetByName(STOCK_SHEET);
-  if (!s) s = ss.insertSheet(STOCK_SHEET);
+  var s = ss.getSheetByName(name);
+  if (!s) s = ss.insertSheet(name);
   // ★ 2026-06-04: 18列構成 (無償Nの右に「ステータス」O列追加・分類P/入庫済みQ/シートURLR に移動)
   var headers = ['受付日時','注文No.','仕入先','事業所','現場名','注文者','メーカー','商品名','型式','数量','単価','金額','備考','無償(M)','ステータス','分類','納品予定日','入庫済み','メモ','シートURL'];
   s.getRange(1,1,1,headers.length).setValues([headers]);
@@ -1059,8 +1092,7 @@ function applyStockCheckboxValidation(s) {
 
 // 発注1件の商品を在庫管理シートに追記 (addToIndex から呼ばれる)
 function addToStockSheet(ss, data, sheetUrl) {
-  var s = ss.getSheetByName(STOCK_SHEET);
-  if (!s) { initStockSheet(); s = ss.getSheetByName(STOCK_SHEET); }
+  var s = _getStockSheet(ss, data.branch);  // ★ 2026-08-21: 事業所で拠点別タブ(本社/福岡)に振り分け
   _ensureStockMemoColumn(s);  // メモ列が無ければ挿入してから書く (2026-06-11)
   _ensureStockDeliveryColumn(s);  // 納品予定日列が無ければ挿入してから書く (2026-06-16)
   // ★ 2026-06-04: 同一注文No が既に在庫管理にあれば二重追加しない(移行期・発注完了の再クリック対策)
@@ -1151,15 +1183,16 @@ function _setupTriggerApi(pw) {
 function recomputeAllTotals(pw) {
   if (pw !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var stock = ss.getSheetByName(STOCK_SHEET);
   var idx = ss.getSheetByName(INDEX_SHEET);
-  if (!stock || !idx) return { success: false, error: 'シートがありません' };
-  var sv = stock.getDataRange().getValues();
+  if (!idx) return { success: false, error: 'シートがありません' };
   var sums = {};
-  for (var i = 1; i < sv.length; i++) {
-    var no = String(sv[i][1] || '').trim(); if (!no) continue;
-    sums[no] = (sums[no] || 0) + _stockNum(sv[i][11]);
-  }
+  _existingStockSheets(ss).forEach(function (stock) {  // ★ 2026-08-21: 拠点別両タブを合算
+    var sv = stock.getDataRange().getValues();
+    for (var i = 1; i < sv.length; i++) {
+      var no = String(sv[i][1] || '').trim(); if (!no) continue;
+      sums[no] = (sums[no] || 0) + _stockNum(sv[i][11]);
+    }
+  });
   var iv = idx.getDataRange().getValues();
   var updated = [];
   for (var j = 1; j < iv.length; j++) {
@@ -1170,6 +1203,65 @@ function recomputeAllTotals(pw) {
     }
   }
   return { success: true, message: '合計金額 再集計完了', updatedOrders: updated, updatedCount: updated.length };
+}
+
+// ★ 2026-08-21: 旧「在庫管理」の全行を事業所で本社/福岡タブに振り分けてコピー(全列保持・冪等)。
+//   doGet ?action=migrateStockSplit&pw=...&dry=1(プレビュー)/dry=0(実行)。移行後は renameOldStock で旧タブ退避。
+function migrateStockSplitByBranch(pw, dryRun) {
+  if (pw !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var old = ss.getSheetByName(STOCK_SHEET);
+  if (!old) return { success: false, error: '旧「在庫管理」タブがありません(移行済みの可能性)' };
+  initStockSheetNamed(STOCK_SHEET_HONSHA);
+  initStockSheetNamed(STOCK_SHEET_FUKUOKA);
+  var honsha = ss.getSheetByName(STOCK_SHEET_HONSHA);
+  var fukuoka = ss.getSheetByName(STOCK_SHEET_FUKUOKA);
+  function keyset(sheet) {
+    var set = {}, v = sheet.getDataRange().getValues();
+    for (var i = 1; i < v.length; i++) {
+      if (!String(v[i][1] || '').trim() && !String(v[i][7] || '').trim()) continue;
+      set[[v[i][0], v[i][1], v[i][7]].join('|')] = 1;  // 受付日時|注文No|商品名
+    }
+    return set;
+  }
+  var kH = keyset(honsha), kF = keyset(fukuoka);
+  var ov = old.getDataRange().getValues();
+  var toH = [], toF = [];
+  for (var i = 1; i < ov.length; i++) {
+    var r = ov[i];
+    if (!String(r[1] || '').trim() && !String(r[7] || '').trim()) continue;  // 空行スキップ
+    var key = [r[0], r[1], r[7]].join('|');
+    var row20 = r.slice(0, 20); while (row20.length < 20) row20.push('');
+    if (String(r[3] || '').trim() === '福岡店') { if (!kF[key]) { toF.push(row20); kF[key] = 1; } }
+    else { if (!kH[key]) { toH.push(row20); kH[key] = 1; } }  // 本社 or 不明→本社
+  }
+  if (!dryRun) {
+    if (toH.length) {
+      var sh = honsha.getLastRow() + 1;
+      honsha.getRange(sh, 1, toH.length, 20).setValues(toH);
+      honsha.getRange(sh, 11, toH.length, 2).setNumberFormat('#,##0');
+    }
+    if (toF.length) {
+      var sf = fukuoka.getLastRow() + 1;
+      fukuoka.getRange(sf, 1, toF.length, 20).setValues(toF);
+      fukuoka.getRange(sf, 11, toF.length, 2).setNumberFormat('#,##0');
+    }
+    applyStockCategoryValidation(honsha); applyStockCheckboxValidation(honsha);
+    applyStockCategoryValidation(fukuoka); applyStockCheckboxValidation(fukuoka);
+  }
+  return { success: true, dryRun: !!dryRun, movedHonsha: toH.length, movedFukuoka: toF.length,
+           note: dryRun ? 'プレビュー(未書込)' : '移行完了。確認後 renameOldStock で旧タブ退避を' };
+}
+
+// ★ 2026-08-21: 移行確認後、旧「在庫管理」→「在庫管理_旧」にリネームして退避。doGet ?action=renameOldStock&pw=...
+function renameOldStockSheet(pw) {
+  if (pw !== APPROVAL_PASSWORD) return { success: false, error: 'パスワードが違います' };
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var old = ss.getSheetByName(STOCK_SHEET);
+  if (!old) return { success: false, error: '「在庫管理」タブがありません' };
+  if (ss.getSheetByName('在庫管理_旧')) return { success: false, error: '「在庫管理_旧」が既に存在します' };
+  old.setName('在庫管理_旧');
+  return { success: true, message: '在庫管理 → 在庫管理_旧 にリネームしました' };
 }
 
 // ★ 2026-06-30: 発注一覧に紐づかない(=削除済み発注の)発注書タブを一括削除。
@@ -1186,7 +1278,7 @@ function deleteOrphanOrderTabs(pw, dryRun, hiddenOnly) {
     var m = String(iv[i][11] || '').match(/gid=(\d+)/);
     if (m) liveGids[m[1]] = true;
   }
-  var KEEP = { '発注一覧': 1, '在庫管理': 1, '入庫管理': 1, '見積一覧': 1 };
+  var KEEP = { '発注一覧': 1, '在庫管理': 1, '在庫管理_本社': 1, '在庫管理_福岡': 1, '在庫管理_旧': 1, '入庫管理': 1, '見積一覧': 1 };
   try { ss.setActiveSheet(idx); } catch (e) {}
   var targetSheets = [], targetNames = [];
   var sheets = ss.getSheets();
@@ -1531,7 +1623,7 @@ function setupEditTrigger() {
 //   在庫管理の 単価/金額 手入力 → 発注一覧の合計金額を自動集計。同一スプシの読み書きのみなので簡易トリガーで可。
 function onEdit(e) {
   try {
-    if (!e || !e.range || e.range.getSheet().getName() !== STOCK_SHEET) return;
+    if (!e || !e.range || !_isStockSheetName(e.range.getSheet().getName())) return;
     _syncStockAmountToIndex(e);
   } catch (err) {}
 }
@@ -1543,7 +1635,7 @@ function onEditInstallable(e) {
     var sheet = e.range.getSheet();
     var _nm = sheet.getName();
     // ★ 2026-06-30: 在庫管理で 単価/金額 を手入力 → 発注一覧の該当合計金額を自動集計・転記
-    if (_nm === STOCK_SHEET) { _syncStockAmountToIndex(e); _notifyStockDeliveryEdit(e); return; }
+    if (_isStockSheetName(_nm)) { _syncStockAmountToIndex(e); _notifyStockDeliveryEdit(e); return; }
     if (!_isOrderSheet(_nm)) return;  // 発注書シート以外は無視
     var row = e.range.getRow();
     if (row < 18 || row > 49) return;             // 明細・集計部の編集のみ対象
@@ -1704,7 +1796,7 @@ function syncFromOrderSheet(sheet) {
 
 // 在庫管理シートの該当発注行を更新 (分類O列は保持)
 function _resyncStockForOrder(ss, orderNo, idxRowData, lines) {
-  var s = ss.getSheetByName(STOCK_SHEET);
+  var s = _getStockSheet(ss, idxRowData[4]);  // ★ 2026-08-21: 発注一覧E列=事業所 で拠点別タブを選択
   if (!s) return;
   _ensureStockMemoColumn(s);  // メモ列保証 (2026-06-11)
   _ensureStockDeliveryColumn(s);  // 納品予定日列保証 (2026-06-16)
@@ -2970,15 +3062,14 @@ function cancelApprovedOrder(id, reason) {
   } catch (e) { Logger.log('取消タブ非表示エラー: ' + e.toString()); }
   // 4. 在庫管理に展開済み(発注済)なら、その注文Noの行を「取消」表示に(事務員が受領しないよう)
   try {
-    var stock = ss.getSheetByName(STOCK_SHEET);
-    if (stock) {
+    _existingStockSheets(ss).forEach(function (stock) {  // ★ 2026-08-21: 拠点別両タブを走査
       var sv = stock.getDataRange().getValues();
       for (var k = 1; k < sv.length; k++) {
         if (String(sv[k][1]).trim() === String(orderNo).trim()) {
           stock.getRange(k + 1, 15).setValue('取消').setFontColor('#c5221f').setFontWeight('bold');  // O列=ステータス
         }
       }
-    }
+    });
   } catch (e) { Logger.log('在庫管理 取消反映エラー: ' + e.toString()); }
 
   return { success: true, message: 'No.' + orderNo + ' を取消しました（記録は残ります）', orderNo: orderNo };
