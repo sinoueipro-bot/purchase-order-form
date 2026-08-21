@@ -1232,8 +1232,9 @@ function migrateStockSplitByBranch(pw, dryRun) {
     if (!String(r[1] || '').trim() && !String(r[7] || '').trim()) continue;  // 空行スキップ
     var key = [r[0], r[1], r[7]].join('|');
     var row20 = r.slice(0, 20); while (row20.length < 20) row20.push('');
-    if (String(r[3] || '').trim() === '福岡店') { if (!kF[key]) { toF.push(row20); kF[key] = 1; } }
-    else { if (!kH[key]) { toH.push(row20); kH[key] = 1; } }  // 本社 or 不明→本社
+    // ★ 同一移行内では重複排除しない(同一発注の同名明細を潰さない)。キーは【移行前の】ターゲットにある分だけスキップ=再実行時の二重防止のみ。
+    if (String(r[3] || '').trim() === '福岡店') { if (!kF[key]) toF.push(row20); }
+    else { if (!kH[key]) toH.push(row20); }  // 本社 or 不明→本社
   }
   if (!dryRun) {
     if (toH.length) {
