@@ -202,6 +202,9 @@ function fixIndexSheet() {
 // 2026-05-12 発注専用化で削除。復元は docs/RESTORE_ESTIMATE.md 参照
 function doPost(e) {
   try {
+    // ★ 2026-08-29: LINE / LINE WORKS の受信Webhook (?hook=line|lineworks&token=...) は
+    //   専用処理へ委譲(Dashboard.gs)。フォーム送信のJSON処理には一切入らない。
+    if (e && e.parameter && e.parameter.hook) return handleInboundWebhook(e);
     // (2026-05-27 v75) クリティカル調査用: 受信した生データを丸ごとログ出力
     Logger.log('====== doPost 受信 ======');
     Logger.log('postData.contents: ' + (e && e.postData ? e.postData.contents : '<null>'));
@@ -502,6 +505,9 @@ function jsonResponse(obj) {
 function doGet(e) {
   var action = e.parameter.action;
   var id = e.parameter.id;
+
+  // ★ 2026-08-29: 統合ダッシュボード画面 (?page=dashboard&key=...) → Dashboard.gs
+  if (e.parameter.page === 'dashboard') return serveDashboardPage(e);
 
   // 発注関連API
   if (action === 'listOrders') return jsonResponse(getOrderList());
